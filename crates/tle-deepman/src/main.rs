@@ -884,13 +884,20 @@ fn respond_what_is(
         // Find sentence with "is" or "are"
         for sent in &sentences {
             if sent.contains(" is ") || sent.contains(" are ") {
-                println!("  {} [{:?}]", capitalize(sent), start.elapsed());
-                return;
+                // Limit to first sentence (up to first period)
+                let first_sent = sent.split('.').next().unwrap_or(sent);
+                if first_sent.len() < 200 {
+                    println!("  {}. [{:?}]", capitalize(first_sent.trim()), start.elapsed());
+                    return;
+                }
             }
         }
-        // Show first sentence
-        println!("  {} [{:?}]", capitalize(sentences[0]), start.elapsed());
-        return;
+        // Show first sentence of first entry
+        let first = sentences[0].split('.').next().unwrap_or(sentences[0]);
+        if first.len() < 200 {
+            println!("  {}. [{:?}]", capitalize(first.trim()), start.elapsed());
+            return;
+        }
     }
 
     // Priority 3: Engram-based generation
@@ -1171,7 +1178,13 @@ fn respond_question(
 
     if let Some(sent) = best_sentence {
         if best_score >= 2 {
-            println!("  {} [{:?}]", capitalize(sent), start.elapsed());
+            // Limit to first sentence
+            let first = sent.split('.').next().unwrap_or(sent);
+            if first.len() < 200 {
+                println!("  {}. [{:?}]", capitalize(first.trim()), start.elapsed());
+            } else {
+                println!("  {}... [{:?}]", capitalize(&first[..150]), start.elapsed());
+            }
             return;
         }
     }
