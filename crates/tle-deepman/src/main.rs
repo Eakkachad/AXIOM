@@ -699,7 +699,9 @@ fn handle_teach(
     // Also add to AXIOM-Gen knowledge graph (for compositional generation)
     // Re-extract subject/relation/object for axiom_gen
     let lower = trimmed.to_lowercase();
-    for pattern in &[" is ", " are ", " has ", " have ", " can ", " causes ", " makes "] {
+    for pattern in &[" is ", " are ", " has ", " have ", " can ", " causes ", " makes ",
+                     " produces ", " leads to ", " comes from ", " results in ",
+                     " contains ", " requires ", " enables ", " creates "] {
         if let Some(pos) = lower.find(pattern) {
             let subj = &lower[..pos];
             let rel = pattern.trim();

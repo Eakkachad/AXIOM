@@ -58,14 +58,21 @@ fn relation_to_template(relation: &str) -> &str {
     match relation {
         "is" => "is",
         "is_a" => "is a",
+        "are" => "are",
         "has" => "has",
         "has_a" => "has a",
+        "have" => "have",
+        "can" => "can",
         "contains" => "contains",
         "causes" => "causes",
         "caused_by" => "is caused by",
         "scatters" => "scatters",
         "produces" => "produces",
-        "leads_to" => "leads to",
+        "makes" => "makes",
+        "creates" => "creates",
+        "leads to" => "leads to",
+        "comes from" => "comes from",
+        "results in" => "results in",
         "part_of" => "is part of",
         "made_of" => "is made of",
         "located_in" => "is located in",
@@ -75,7 +82,6 @@ fn relation_to_template(relation: &str) -> &str {
         "requires" => "requires",
         "used_for" => "is used for",
         "defined_as" => "is defined as",
-        "results_in" => "results in",
         _ => relation,
     }
 }
@@ -99,12 +105,36 @@ fn article_for(word: &str) -> &'static str {
 /// Insert an appropriate article before a noun if it's first occurrence.
 fn with_article(entity: &str, seen: &mut HashSet<String>) -> String {
     let text = entity_to_text(entity);
+
+    // Skip articles for:
+    // - Entities that already start with an article
+    // - Plural nouns (ending in 's')
+    // - Proper-looking nouns (original starts with uppercase — but we lowercased)
+    // - Mass nouns and multi-word phrases
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let starts_with_article = matches!(words.first(), Some(&"a") | Some(&"an") | Some(&"the"));
+    let is_plural = text.ends_with('s') && !text.ends_with("ss");
+    let is_multi_word = words.len() > 2;
+
+    if starts_with_article || is_multi_word {
+        // Already has article or is a phrase — use as-is
+        if seen.contains(&text) {
+            return text;
+        }
+        seen.insert(text.clone());
+        return text;
+    }
+
     if seen.contains(&text) {
         format!("the {}", text)
     } else {
         seen.insert(text.clone());
-        let article = article_for(&text);
-        format!("{} {}", article, text)
+        if is_plural {
+            text // plurals don't need articles: "clouds", "animals"
+        } else {
+            let article = article_for(&text);
+            format!("{} {}", article, text)
+        }
     }
 }
 
