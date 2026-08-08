@@ -34,6 +34,7 @@ pub mod incremental;
 pub mod morph_tokenizer;
 pub mod node;
 pub mod nodes;
+pub mod paragraph;
 pub mod vsa_intent;
 
 pub use analogy::AnalogicalEngine;
