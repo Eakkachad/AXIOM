@@ -81,13 +81,13 @@ impl Default for DeepManConfig {
             alpha_engram: 1.0,
             beta_transition: 0.3,
             gamma_context: 0.2,
-            delta_repetition: 2.0,
-            epsilon_diversity: 0.15,
+            delta_repetition: 3.0,
+            epsilon_diversity: 0.2,
 
-            max_gen_tokens: 20,
+            max_gen_tokens: 30,
             engram_confidence_threshold: 0.4,
             context_decay: 0.7,
-            repetition_window: 5,
+            repetition_window: 8,
         }
     }
 }
@@ -352,12 +352,29 @@ impl DeepManEngine {
                 }
             }
 
-            // === Repetition penalty ===
+            // === Repetition penalty (strengthened) ===
             let window_start = context.len().saturating_sub(self.config.repetition_window);
             let recent = &context[window_start..];
             for &recent_id in recent {
                 if (recent_id as usize) < scores.len() {
                     scores[recent_id as usize] -= self.config.delta_repetition;
+                }
+            }
+
+            // Bigram repetition: if last 2 tokens appeared as a bigram before, penalize
+            if context.len() >= 2 {
+                let last_bigram = (context[context.len() - 2], context[context.len() - 1]);
+                // Check if any candidate would form a repeated bigram
+                for i in 0..vocab_size.min(scores.len()) {
+                    let candidate_id = i as u16;
+                    // Would selecting this create a bigram we've seen in last 10 tokens?
+                    let recent_start = context.len().saturating_sub(10);
+                    for w in context[recent_start..].windows(2) {
+                        if w[0] == context[context.len() - 1] && w[1] == candidate_id {
+                            scores[i] -= self.config.delta_repetition * 1.5;
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -373,6 +390,13 @@ impl DeepManEngine {
             }
 
             // === Argmax selection (deterministic) ===
+            // Block <unk> and special tokens
+            for blocked in &["<unk>", "=", "@-@", "@.@"] {
+                if let Some(id) = self.vocab.get_id(blocked) {
+                    scores[id as usize] = f32::NEG_INFINITY;
+                }
+            }
+
             let best_idx = scores
                 .iter()
                 .enumerate()
@@ -381,6 +405,15 @@ impl DeepManEngine {
                 .unwrap_or(0);
 
             let best_id = best_idx as u16;
+
+            // End-of-sentence detection: stop after generating a sentence-ending token
+            if let Some(token) = self.vocab.get_token(best_id) {
+                if token == "." || token == "!" || token == "?" {
+                    generated.push(best_id);
+                    self.stats.total_tokens_generated += 1;
+                    break;
+                }
+            }
 
             // Update state
             context.push(best_id);
