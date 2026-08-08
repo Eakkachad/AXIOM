@@ -33,6 +33,7 @@ pub mod incremental;
 pub mod morph_tokenizer;
 pub mod node;
 pub mod nodes;
+pub mod vsa_intent;
 
 pub use analogy::AnalogicalEngine;
 pub use combinators::{ConditionalFlow, ParallelFlow, SequentialFlow};
@@ -40,6 +41,7 @@ pub use delta_mem::DeltaMem;
 pub use energy::{CompositeEnergyFlow, EnergyConfig};
 pub use morph_tokenizer::MorphTokenizer;
 pub use graph::FlowGraph;
+pub use vsa_intent::{VsaIntentDetector, VsaIntent};
 pub use incremental::IncrementalStore;
 pub use node::{FlowNode, FlowState};
 pub use nodes::{
