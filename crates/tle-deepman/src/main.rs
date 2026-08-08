@@ -751,42 +751,44 @@ fn respond_what_is(
     subject: &str,
     start: Instant,
 ) {
-    // Try KG query first: subject "is" ?
-    if let Some((answer, conf)) = store.query_fact(subject, "is") {
-        if conf > 0.05 {
-            println!("  {} is {}. [{:?}]", capitalize(subject), answer, start.elapsed());
-            return;
+    // Priority 1: Exact fact store (always correct if taught)
+    let subject_clean = subject
+        .trim_start_matches("the ")
+        .trim_start_matches("a ")
+        .trim_start_matches("an ");
+    let facts = store.get_facts(subject_clean);
+    let facts = if facts.is_empty() { store.get_facts(subject) } else { facts };
+    if !facts.is_empty() {
+        // Find the "is" or "are" fact
+        for (rel, obj) in &facts {
+            if *rel == "is" || *rel == "are" {
+                println!("  {} {} {}. [{:?}]", capitalize(subject), rel, obj, start.elapsed());
+                return;
+            }
         }
+        // Show first available fact
+        let (rel, obj) = &facts[0];
+        println!("  {} {} {}. [{:?}]", capitalize(subject), rel, obj, start.elapsed());
+        return;
     }
 
-    // Try N-gram prediction: "subject is ..." from learned data
-    let context_tokens: Vec<&str> = vec![subject, "is"];
-    let predictions = store.predict_next(&context_tokens);
-    if !predictions.is_empty() {
-        // Build response from top predictions
-        let mut response_tokens: Vec<String> = vec![subject.to_string(), "is".to_string()];
-        // Chain predictions
-        let mut ctx: Vec<&str> = vec![subject, "is"];
-        for _ in 0..10 {
-            let preds = store.predict_next(&ctx);
-            if preds.is_empty() {
-                break;
+    // Priority 2: Sentence memory (exact recall of taught sentences)
+    let sentences = store.get_sentences(subject_clean);
+    let sentences = if sentences.is_empty() { store.get_sentences(subject) } else { sentences };
+    if !sentences.is_empty() {
+        // Find sentence with "is" or "are"
+        for sent in &sentences {
+            if sent.contains(" is ") || sent.contains(" are ") {
+                println!("  {} [{:?}]", capitalize(sent), start.elapsed());
+                return;
             }
-            let next = &preds[0].0;
-            response_tokens.push(next.clone());
-            if next == "." || next == "!" || next == "?" {
-                break;
-            }
-            ctx.push(Box::leak(next.clone().into_boxed_str())); // extend context
         }
-        if response_tokens.len() > 2 {
-            let response = capitalize(&response_tokens.join(" "));
-            println!("  {} [{:?}]", response, start.elapsed());
-            return;
-        }
+        // Show first sentence
+        println!("  {} [{:?}]", capitalize(sentences[0]), start.elapsed());
+        return;
     }
 
-    // Fallback: generate from Engram
+    // Priority 3: Engram-based generation
     let prompt = format!("{} is", subject);
     let (generated, gen_time) = engine.generate(&prompt);
     let output = engine.decode(&generated);
@@ -794,13 +796,7 @@ fn respond_what_is(
     if !output.is_empty() {
         println!("  {} is {} [{:?}]", capitalize(subject), output, gen_time);
     } else {
-        let (gen2, time2) = engine.generate(subject);
-        let out2 = engine.decode(&gen2);
-        if !out2.is_empty() {
-            println!("  {} {} [{:?}]", capitalize(subject), out2, time2);
-        } else {
-            println!("  I don't know about '{}' yet. Teach me with /teach!", subject);
-        }
+        println!("  I don't know about '{}' yet. Teach me with /teach!", subject);
     }
 }
 
@@ -811,17 +807,25 @@ fn respond_where_is(
     subject: &str,
     start: Instant,
 ) {
-    // Try KG: subject "located_in" ? or subject "in" ?
-    for rel in &["located_in", "in", "is"] {
-        if let Some((answer, conf)) = store.query_fact(subject, rel) {
-            if conf > 0.01 {
-                println!("  {} is in {}. [{:?}]", capitalize(subject), answer, start.elapsed());
-                return;
-            }
+    // Check fact store for location-related facts
+    let facts = store.get_facts(subject);
+    for (rel, obj) in &facts {
+        if rel.contains("in") || rel.contains("located") || rel.contains("capital") {
+            println!("  {} is in {}. [{:?}]", capitalize(subject), obj, start.elapsed());
+            return;
         }
     }
 
-    // Generate from "[subject] is located in"
+    // Check sentence memory
+    let sentences = store.get_sentences(subject);
+    for sent in &sentences {
+        if sent.contains(" in ") || sent.contains(" at ") || sent.contains(" located ") {
+            println!("  {} [{:?}]", capitalize(sent), start.elapsed());
+            return;
+        }
+    }
+
+    // Generate from Engram
     let prompt = format!("{} is located in", subject);
     let (generated, gen_time) = engine.generate(&prompt);
     let output = engine.decode(&generated);

@@ -31,6 +31,10 @@ pub struct IncrementalStore {
     pub codebook: Codebook,
     /// Vocabulary
     pub vocab: IncrVocab,
+    /// Exact sentence memory: keyword → full sentences containing that keyword
+    sentence_memory: HashMap<String, Vec<String>>,
+    /// Fact store: subject → list of (relation, object) pairs
+    fact_store: HashMap<String, Vec<(String, String)>>,
     /// Configuration
     config: IncrConfig,
     /// Statistics
@@ -127,6 +131,8 @@ impl IncrementalStore {
             kg_memory: HyperVector::zeros(dim),
             codebook,
             vocab: IncrVocab::new(),
+            sentence_memory: HashMap::new(),
+            fact_store: HashMap::new(),
             config,
             stats: IncrStats::default(),
         }
@@ -140,6 +146,23 @@ impl IncrementalStore {
         let tokens: Vec<&str> = text.split_whitespace().collect();
         if tokens.len() < 2 {
             return;
+        }
+
+        // Store full sentence indexed by each keyword (for exact recall)
+        let text_lower = text.to_lowercase();
+        for token in &tokens {
+            let key = token.to_lowercase();
+            if key.len() > 2 {
+                self.sentence_memory
+                    .entry(key)
+                    .or_default()
+                    .push(text_lower.clone());
+                // Keep max 10 sentences per keyword
+                let entries = self.sentence_memory.get_mut(&token.to_lowercase()).unwrap();
+                if entries.len() > 10 {
+                    entries.remove(0);
+                }
+            }
         }
 
         // Tokenize
@@ -203,6 +226,12 @@ impl IncrementalStore {
         let rel_lower = relation.to_lowercase();
         let obj_lower = object.to_lowercase();
 
+        // Store in explicit fact store (for exact retrieval)
+        self.fact_store
+            .entry(subj_lower.clone())
+            .or_default()
+            .push((rel_lower.clone(), obj_lower.clone()));
+
         // Ensure all are in codebook
         self.codebook.get_or_insert(&subj_lower);
         self.codebook.get_or_insert(&rel_lower);
@@ -224,6 +253,27 @@ impl IncrementalStore {
         // Also add as text transition for generation
         let sentence = format!("{} {} {}", subject, relation, object);
         self.learn_text(&sentence);
+    }
+
+    /// Retrieve exact facts about a subject from the fact store.
+    ///
+    /// Returns all (relation, object) pairs for the given subject.
+    /// This is O(1) HashMap lookup — always correct if taught.
+    pub fn get_facts(&self, subject: &str) -> Vec<(&str, &str)> {
+        match self.fact_store.get(&subject.to_lowercase()) {
+            Some(facts) => facts.iter().map(|(r, o)| (r.as_str(), o.as_str())).collect(),
+            None => Vec::new(),
+        }
+    }
+
+    /// Retrieve sentences containing a keyword.
+    ///
+    /// Returns stored sentences that mention this keyword.
+    pub fn get_sentences(&self, keyword: &str) -> Vec<&str> {
+        match self.sentence_memory.get(&keyword.to_lowercase()) {
+            Some(sentences) => sentences.iter().map(|s| s.as_str()).collect(),
+            None => Vec::new(),
+        }
     }
 
     /// Query the knowledge graph: given (subject, relation), retrieve object.
