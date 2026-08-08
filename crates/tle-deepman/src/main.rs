@@ -988,7 +988,15 @@ fn respond_yes_no(
         return;
     }
 
-    // 3. Check sentence memory
+    // 3. Multi-hop transitive reasoning
+    //    "does cat have a heart?" → cat is_a animal, animal has heart → YES
+    let hop_result = try_multi_hop(store, &subject, &relation, &object);
+    if let Some((answer, chain)) = hop_result {
+        println!("  {} (Reasoning: {}) [{:?}]", answer, chain, start.elapsed());
+        return;
+    }
+
+    // 4. Check sentence memory
     let sentences = store.get_sentences(&subject);
     for sent in &sentences {
         if !relation.is_empty() && sent.contains(&relation) {
@@ -1000,7 +1008,78 @@ fn respond_yes_no(
     println!("  I don't have enough information to answer that. Teach me more about {}!", subject);
 }
 
-/// Parse a yes/no question into (subject, relation, object).
+/// Try multi-hop transitive reasoning.
+///
+/// Pattern: subject → is_a → category → has/can → object
+/// Example: "cat" → is "an animal" → check if "animal" has "heart"
+fn try_multi_hop(
+    store: &tle_afc::IncrementalStore,
+    subject: &str,
+    relation: &str,
+    object: &str,
+) -> Option<(String, String)> {
+    let subject_lower = subject.to_lowercase();
+
+    // Get facts about the subject
+    let subject_facts = store.get_facts(&subject_lower);
+    if subject_facts.is_empty() {
+        return None;
+    }
+
+    // For each "is" or "are" fact of the subject, check if that category has the property
+    for (rel, category) in &subject_facts {
+        if *rel != "is" && *rel != "are" {
+            continue;
+        }
+
+        // Extract category words, strip articles
+        let category_clean = category
+            .trim_start_matches("a ")
+            .trim_start_matches("an ")
+            .trim_start_matches("the ");
+
+        // Try: the exact category, singular, plural
+        let candidates = vec![
+            category_clean.to_string(),
+            format!("{}s", category_clean),    // plural
+            category_clean.trim_end_matches('s').to_string(), // singular
+        ];
+
+        for cat_key in &candidates {
+            let cat_facts = store.get_facts(cat_key);
+            for (cat_rel, cat_obj) in &cat_facts {
+                if relation_matches_loose(cat_rel, relation) {
+                    // Normalize object for comparison (strip articles, try plural/singular)
+                    let obj_clean = object.to_lowercase()
+                        .replace("a ", "").replace("an ", "").replace("the ", "");
+                    let obj_variants = vec![
+                        obj_clean.clone(),
+                        format!("{}s", obj_clean),
+                        obj_clean.trim_end_matches('s').to_string(),
+                    ];
+
+                    let matches = object.is_empty() || obj_variants.iter().any(|v| {
+                        cat_obj.contains(v.as_str()) || v.contains(&**cat_obj)
+                    });
+
+                    if matches {
+                        let chain = format!(
+                            "{} {} {}, and {} {} {}",
+                            subject, rel, category, cat_key, cat_rel, cat_obj
+                        );
+                        let answer = format!(
+                            "Yes! Because {} {} {}, and {} {} {}.",
+                            subject, rel, category, cat_key, cat_rel, cat_obj
+                        );
+                        return Some((answer, chain));
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
 fn parse_yes_no_question(words: &[&str]) -> (String, String, String) {
     if words.len() < 3 {
         return (String::new(), String::new(), String::new());
