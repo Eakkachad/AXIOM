@@ -560,7 +560,7 @@ fn main() {
 /// Handle /teach command — learn facts and text.
 fn handle_teach(
     store: &mut tle_afc::IncrementalStore,
-    engine: &mut DeepManEngine,
+    _engine: &mut DeepManEngine,
     fact_text: &str,
 ) {
     let trimmed = fact_text.trim();
@@ -569,29 +569,79 @@ fn handle_teach(
         return;
     }
 
-    // Try to parse as triple: "X is Y" / "X is_a Y" / "X relation Y"
-    let parts: Vec<&str> = trimmed.splitn(3, ' ').collect();
+    // Extract structured facts from common patterns
+    let lower = trimmed.to_lowercase();
+    let mut extracted = false;
 
-    if parts.len() >= 3 {
-        // Check for common patterns
-        let (subject, relation, object) = if parts[1] == "is" || parts[1] == "are" {
-            // "Bangkok is the capital of Thailand" → subject=Bangkok, rel=is, obj=rest
-            (parts[0], parts[1], parts[2..].join(" "))
-        } else {
-            (parts[0], parts[1], parts[2..].join(" "))
-        };
-
-        // Learn as structured fact
-        store.learn_fact(subject, relation, &object);
-        println!("  ✓ Fact: {} {} {}", subject, relation, object);
+    // Pattern: "X is Y" / "X is a Y" / "X is the Y"
+    if let Some(pos) = lower.find(" is ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 4..];
+        store.learn_fact(subject, "is", object);
+        println!("  ✓ Fact: {} → is → {}", subject, object);
+        extracted = true;
+    }
+    // Pattern: "X are Y"
+    else if let Some(pos) = lower.find(" are ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 5..];
+        store.learn_fact(subject, "are", object);
+        println!("  ✓ Fact: {} → are → {}", subject, object);
+        extracted = true;
+    }
+    // Pattern: "X has Y" / "X have Y"
+    else if let Some(pos) = lower.find(" has ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 5..];
+        store.learn_fact(subject, "has", object);
+        println!("  ✓ Fact: {} → has → {}", subject, object);
+        extracted = true;
+    }
+    else if let Some(pos) = lower.find(" have ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 6..];
+        store.learn_fact(subject, "have", object);
+        println!("  ✓ Fact: {} → have → {}", subject, object);
+        extracted = true;
+    }
+    // Pattern: "X can Y"
+    else if let Some(pos) = lower.find(" can ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 5..];
+        store.learn_fact(subject, "can", object);
+        println!("  ✓ Fact: {} → can → {}", subject, object);
+        extracted = true;
+    }
+    // Pattern: "X lives in Y" / "X located in Y"
+    else if let Some(pos) = lower.find(" lives in ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 10..];
+        store.learn_fact(subject, "lives_in", object);
+        println!("  ✓ Fact: {} → lives_in → {}", subject, object);
+        extracted = true;
+    }
+    else if let Some(pos) = lower.find(" located in ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 12..];
+        store.learn_fact(subject, "located_in", object);
+        println!("  ✓ Fact: {} → located_in → {}", subject, object);
+        extracted = true;
+    }
+    // Pattern: "X was born in Y"
+    else if let Some(pos) = lower.find(" was born in ") {
+        let subject = &trimmed[..pos];
+        let object = &trimmed[pos + 13..];
+        store.learn_fact(subject, "born_in", object);
+        println!("  ✓ Fact: {} → born_in → {}", subject, object);
+        extracted = true;
     }
 
-    // Always also learn as text (for N-gram + TBA)
+    // Always learn as text (for N-gram + TBA + sentence memory)
     store.learn_text(trimmed);
 
-    // Update engine's Engram inline (add to N-gram counts)
-    // For now, the IncrementalStore handles prediction independently
-    println!("  ✓ Learned: \"{}\"", trimmed);
+    if !extracted {
+        println!("  ✓ Learned: \"{}\"", trimmed);
+    }
 }
 
 /// Handle /ask command — query the knowledge graph.
@@ -842,21 +892,53 @@ fn respond_question(
     engine: &mut DeepManEngine,
     store: &tle_afc::IncrementalStore,
     topic: &str,
-    full_input: &str,
+    _full_input: &str,
     start: Instant,
 ) {
-    // Extract key words and try KG
     let words: Vec<&str> = topic.split_whitespace().collect();
 
-    // Try N-gram prediction from question words
-    let predictions = store.predict_next(&words);
-    if !predictions.is_empty() {
-        let answer: Vec<&str> = predictions.iter().take(6).map(|(t, _)| t.as_str()).collect();
-        println!("  {} [{:?}]", answer.join(" "), start.elapsed());
-        return;
+    // Try to find relevant sentences using multiple keywords
+    let mut best_sentence: Option<&str> = None;
+    let mut best_score = 0;
+
+    for word in &words {
+        if word.len() <= 2 { continue; }
+        let sentences = store.get_sentences(word);
+        for sent in &sentences {
+            // Score by how many query words appear in the sentence
+            let score: usize = words.iter()
+                .filter(|w| w.len() > 2 && sent.contains(&w.to_lowercase()))
+                .count();
+            if score > best_score {
+                best_score = score;
+                best_sentence = Some(sent);
+            }
+        }
     }
 
-    // Generate continuation from the question topic
+    if let Some(sent) = best_sentence {
+        if best_score >= 2 {
+            println!("  {} [{:?}]", capitalize(sent), start.elapsed());
+            return;
+        }
+    }
+
+    // Try fact store with first meaningful word
+    for word in &words {
+        if word.len() <= 2 { continue; }
+        let clean = word.trim_start_matches("the ").trim_start_matches("a ");
+        let facts = store.get_facts(clean);
+        if !facts.is_empty() {
+            let mut response_parts: Vec<String> = Vec::new();
+            for (rel, obj) in facts.iter().take(3) {
+                response_parts.push(format!("{} {} {}", clean, rel, obj));
+            }
+            println!("  {} [{:?}]", capitalize(&response_parts.join(". ")), start.elapsed());
+            return;
+        }
+    }
+
+    // Fallback: generate from Engram
     let (generated, gen_time) = engine.generate(topic);
     let output = engine.decode(&generated);
 
