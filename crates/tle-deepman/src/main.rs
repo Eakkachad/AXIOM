@@ -485,9 +485,12 @@ fn main() {
     println!("\n── Commands ──");
     println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
+    println!("  /load <file.txt>    Load and learn from a text file");
+    println!("  /save <file.json>   Save learned knowledge to file");
+    println!("  /restore <file.json> Restore previously saved knowledge");
     println!("  /stats              Show engine statistics");
     println!("  /quit               Exit");
-    println!("  <anything else>     Generate continuation from your input");
+    println!("  <anything else>     Chat — ask questions or generate text");
     println!("────────────────────────────────────────────────────────────\n");
 
     // REPL loop
@@ -526,6 +529,21 @@ fn main() {
 
         if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
             handle_teach(&mut store, &mut engine, fact_text);
+            continue;
+        }
+
+        if let Some(file_path) = trimmed.strip_prefix("/load ") {
+            handle_load(&mut store, file_path.trim());
+            continue;
+        }
+
+        if let Some(file_path) = trimmed.strip_prefix("/save ") {
+            handle_save(&store, file_path.trim());
+            continue;
+        }
+
+        if let Some(file_path) = trimmed.strip_prefix("/restore ") {
+            handle_restore(&mut store, file_path.trim());
             continue;
         }
 
@@ -868,6 +886,136 @@ fn respond_generate(
     } else {
         println!("  (I need more context. Try a longer phrase or teach me with /teach!)");
     }
+}
+
+/// Handle /load command — ingest a text file.
+fn handle_load(store: &mut tle_afc::IncrementalStore, path: &str) {
+    let start = Instant::now();
+    match fs::read_to_string(path) {
+        Ok(content) => {
+            let mut line_count = 0;
+            let mut fact_count = 0;
+
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.len() < 5 {
+                    continue;
+                }
+
+                // Learn as text
+                store.learn_text(trimmed);
+                line_count += 1;
+
+                // Try to extract facts from simple patterns:
+                // "X is Y", "X are Y", "X has Y", "X can Y"
+                let lower = trimmed.to_lowercase();
+                for pattern in &[" is ", " are ", " has ", " can ", " was "] {
+                    if let Some(pos) = lower.find(pattern) {
+                        let subject = &trimmed[..pos];
+                        let relation = pattern.trim();
+                        let object = &trimmed[pos + pattern.len()..];
+                        if subject.len() > 1 && object.len() > 1 {
+                            store.learn_fact(subject, relation, object);
+                            fact_count += 1;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            println!("  ✓ Loaded '{}': {} lines, {} facts extracted [{:?}]",
+                path, line_count, fact_count, start.elapsed());
+        }
+        Err(e) => {
+            println!("  ✗ Error loading '{}': {}", path, e);
+        }
+    }
+}
+
+/// Handle /save command — save learned knowledge to JSON.
+fn handle_save(store: &tle_afc::IncrementalStore, path: &str) {
+    let start = Instant::now();
+
+    // Serialize the IncrementalStore's vocabulary and stats
+    let stats = store.stats();
+    let save_data = format!(
+        "{{\"axiom_version\": \"0.1.0\", \"facts\": {}, \"tokens\": {}, \"transitions\": {}, \"vocab_size\": {}}}",
+        stats.facts_added, stats.tokens_ingested, stats.transitions_added, stats.vocab_size
+    );
+
+    // Save transition memory as binary
+    let tm_path = format!("{}.tm", path);
+    let tm_data: Vec<u8> = store.transition_memory.data
+        .iter()
+        .flat_map(|&f| f.to_le_bytes())
+        .collect();
+
+    // Save KG memory
+    let kg_path = format!("{}.kg", path);
+    let kg_data: Vec<u8> = store.kg_memory.data
+        .iter()
+        .flat_map(|&f| f.to_le_bytes())
+        .collect();
+
+    match fs::write(path, &save_data) {
+        Ok(_) => {
+            let _ = fs::write(&tm_path, &tm_data);
+            let _ = fs::write(&kg_path, &kg_data);
+            println!("  ✓ Saved to '{}' (+.tm +.kg) [{:?}]", path, start.elapsed());
+            println!("    {} facts, {} tokens, {} transitions",
+                stats.facts_added, stats.tokens_ingested, stats.transitions_added);
+        }
+        Err(e) => {
+            println!("  ✗ Error saving to '{}': {}", path, e);
+        }
+    }
+}
+
+/// Handle /restore command — restore knowledge from saved files.
+fn handle_restore(store: &mut tle_afc::IncrementalStore, path: &str) {
+    let start = Instant::now();
+
+    // Restore transition memory
+    let tm_path = format!("{}.tm", path);
+    match fs::read(&tm_path) {
+        Ok(data) => {
+            let dim = store.transition_memory.data.len();
+            if data.len() == dim * 4 {
+                let floats: Vec<f32> = data
+                    .chunks_exact(4)
+                    .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect();
+                store.transition_memory = HyperVector::new(floats);
+                println!("  ✓ Restored transition memory from '{}' [{:?}]", tm_path, start.elapsed());
+            } else {
+                println!("  ⚠ TM dimension mismatch (expected {}, got {})", dim * 4, data.len());
+            }
+        }
+        Err(e) => {
+            println!("  ✗ Cannot restore '{}': {}", tm_path, e);
+        }
+    }
+
+    // Restore KG memory
+    let kg_path = format!("{}.kg", path);
+    match fs::read(&kg_path) {
+        Ok(data) => {
+            let dim = store.kg_memory.data.len();
+            if data.len() == dim * 4 {
+                let floats: Vec<f32> = data
+                    .chunks_exact(4)
+                    .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect();
+                store.kg_memory = HyperVector::new(floats);
+                println!("  ✓ Restored KG memory from '{}'", kg_path);
+            }
+        }
+        Err(_) => {} // KG is optional
+    }
+
+    // Note: N-gram counts are NOT restored (they're in the HashMap, would need full serialization)
+    // For now, TM + KG give the VSA-based retrieval back
+    println!("  Note: N-gram counts need re-learning from text (VSA memories restored)");
 }
 
 /// Capitalize first letter of a string.
