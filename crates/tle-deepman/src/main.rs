@@ -496,7 +496,7 @@ fn main() {
     let paragraph_gen = tle_afc::paragraph::ParagraphGenerator::new();
 
     // Initialize Morphological Tokenizer (VSA subword composition)
-    let _morph_tokenizer = tle_afc::MorphTokenizer::new();
+    let morph_tokenizer = tle_afc::MorphTokenizer::new();
 
     // Initialize Attractor Reasoner (iterative refinement)
     let mut attractor = tle_afc::attractor::AttractorReasoner::new();
@@ -549,12 +549,12 @@ fn main() {
         if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
             handle_teach(&mut store, &mut engine, &mut axiom_gen, fact_text);
             delta_mem.update_topic(fact_text);
-            // Add subject as attractor basin for reasoning
+            // Add subject as attractor basin for reasoning (using morphological encoding)
             let lower = fact_text.to_lowercase();
             if let Some(pos) = lower.find(' ') {
                 let subject = &lower[..pos];
                 if subject.len() > 2 {
-                    let subj_vec = intent_codebook.get_or_insert(subject).clone();
+                    let subj_vec = morph_tokenizer.encode(subject, &mut intent_codebook);
                     attractor.add_attractor(subject, subj_vec);
                 }
             }

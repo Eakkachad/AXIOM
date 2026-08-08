@@ -45,21 +45,28 @@ Context: "the president of the"
 
 | Metric | Value |
 |--------|-------|
-| Generation speed | **1,531 tokens/sec** |
+| Generation speed | **22,000 tok/s** (Engram path) |
+| Compositional generation | **350-630 µs** (multi-hop KG) |
+| Fact recall | **2-11 µs** (exact taught facts) |
+| Paragraph generation | **155-235 µs** (multi-sentence) |
 | Engram hit rate | 99.5% |
 | Determinism | 100% (verified 100 runs) |
 | Training | Zero |
-| Memory | ~18 MB (264K N-gram contexts) |
-| Corpus | WikiText-2 (2M tokens) |
+| Memory | ~18 MB |
+| Tests passing | 139+ |
+| Crates | 17 |
 
 ## Crate Structure
 
 ```
 crates/
 ├── tle-vsa/          Core VSA operations (D=10,240 bipolar hypervectors)
-├── tle-afc/          Algebraic Flow Composition (composable generation pipelines)
+├── tle-afc/          Algebraic Flow Composition + IncrementalStore + DeltaMem
+│                     + MorphTokenizer + VsaIntent + Analogy + Attractor + Paragraph
 ├── tle-engram/       Multi-head N-gram hash table (Layer 1: O(1) lookup)
-├── tle-deepman/      Unified AXIOM orchestrator (Engram + TBA + AFC)
+├── tle-axiom-gen/    Compositional generation (energy-guided KG beam search + templates)
+├── tle-deepman/      Unified AXIOM REPL (interactive binary)
+├── tle-knowledge/    Compressed Knowledge Representation (Bloom + VSA bundles)
 ├── tle-transition/   Transition Binding Algebra (T(A→X) = π(A)⊗X)
 ├── tle-resonator/    Resonator Networks (iterative cleanup)
 ├── tle-clifford/     Clifford Algebra (syntactic transformations)
@@ -68,7 +75,7 @@ crates/
 ├── tle-decoder/      Token decoding & vocabulary management
 ├── tle-pipeline/     Full pipeline orchestration
 ├── tle-bench/        Benchmark suite
-├── tle-chat/         Interactive chat interface
+├── tle-chat/         Original chat interface
 ├── tle-reservoir/    Echo State Network experiments
 └── tle-gen/          KN-5 language model (ppl=67.4)
 ```

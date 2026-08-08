@@ -24,6 +24,7 @@ use tle_vsa::{Codebook, HyperVector};
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
 use crate::linearize::{classify_intent, linearize};
+use crate::templates::TemplateBank;
 use crate::search::{beam_search, SearchConfig};
 
 /// The result of a generation query.
@@ -49,6 +50,8 @@ pub struct AxiomGen {
     pub energy_config: EnergyConfig,
     /// Beam search configuration.
     pub search_config: SearchConfig,
+    /// Template bank for varied linearization.
+    pub template_bank: TemplateBank,
 }
 
 impl AxiomGen {
@@ -59,6 +62,7 @@ impl AxiomGen {
             codebook: Codebook::new(dim, 0xA10A_CAFE_BEAD_0001),
             energy_config: EnergyConfig::default(),
             search_config: SearchConfig::default(),
+            template_bank: TemplateBank::new(),
         }
     }
 
@@ -73,6 +77,7 @@ impl AxiomGen {
             codebook: Codebook::new(dim, 0xA10A_CAFE_BEAD_0001),
             energy_config,
             search_config,
+            template_bank: TemplateBank::new(),
         }
     }
 
@@ -164,12 +169,18 @@ impl AxiomGen {
             .collect();
 
         // Linearize path to natural language
-        let sentence = linearize(
-            &path_triples,
-            &self.graph.entities,
-            &self.graph.relations,
-            intent,
-        );
+        // Try TemplateBank first for varied output, fallback to default linearizer
+        let sentence = if path_triples.len() == 1 {
+            // Single triple — try template
+            let t = &path_triples[0];
+            let subj = self.graph.entity_name(t.subject_id);
+            let rel = self.graph.relation_name(t.relation_id);
+            let obj = self.graph.entity_name(t.object_id);
+            self.template_bank.generate(subj, rel, obj)
+                .unwrap_or_else(|| linearize(&path_triples, &self.graph.entities, &self.graph.relations, intent))
+        } else {
+            linearize(&path_triples, &self.graph.entities, &self.graph.relations, intent)
+        };
 
         GenerationResult {
             sentence,
