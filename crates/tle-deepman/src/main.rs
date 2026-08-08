@@ -488,6 +488,13 @@ fn main() {
     // Initialize Delta Memory for conversation context
     let mut delta_mem = tle_afc::DeltaMem::new(2048);
 
+    // Initialize VSA Intent Detector (replaces rule-based)
+    let mut intent_codebook = tle_vsa::Codebook::new(2048, 0x1A7E_CAFE_0001);
+    let vsa_intent_detector = tle_afc::VsaIntentDetector::build(&mut intent_codebook);
+
+    // Initialize Paragraph Generator
+    let paragraph_gen = tle_afc::paragraph::ParagraphGenerator::new();
+
     println!("\n── Commands ──");
     println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
@@ -571,9 +578,37 @@ fn main() {
         // Track topic for future pronoun resolution
         delta_mem.update_topic(trimmed);
 
-        // Process through intent detection with resolved input
+        // Process through intent detection (VSA-based with rule-based fallback)
         let start = Instant::now();
-        let intent = detect_intent(&effective_input);
+
+        // Try VSA intent detection first
+        let (vsa_intent, vsa_confidence) = vsa_intent_detector.detect(&effective_input, &mut intent_codebook);
+        let intent = if vsa_confidence > 0.1 {
+            // Map VsaIntent → local Intent enum
+            match vsa_intent {
+                tle_afc::VsaIntent::Why | tle_afc::VsaIntent::How => {
+                    // Try AXIOM-Gen for compositional answer
+                    let gen_result = axiom_gen.generate(&effective_input);
+                    if gen_result.path_length >= 2 {
+                        println!("  {} [{:?}]", gen_result.sentence, start.elapsed());
+                        if !gen_result.reasoning.is_empty() {
+                            println!("  [Reasoning: {}]", gen_result.reasoning.join(" → "));
+                        }
+                        continue;
+                    }
+                    detect_intent(&effective_input)
+                }
+                tle_afc::VsaIntent::What => detect_intent(&effective_input),
+                tle_afc::VsaIntent::Where => detect_intent(&effective_input),
+                tle_afc::VsaIntent::Who => detect_intent(&effective_input),
+                tle_afc::VsaIntent::YesNo => Intent::YesNo(effective_input.clone()),
+                tle_afc::VsaIntent::Greeting => Intent::Greeting,
+                tle_afc::VsaIntent::Thanks => Intent::Thanks,
+                _ => detect_intent(&effective_input),
+            }
+        } else {
+            detect_intent(&effective_input)
+        };
 
         match intent {
             Intent::Greeting => {
@@ -894,7 +929,17 @@ fn respond_what_is(
     let facts = store.get_facts(subject_clean);
     let facts = if facts.is_empty() { store.get_facts(subject) } else { facts };
     if !facts.is_empty() {
-        // Find the "is" or "are" fact
+        if facts.len() >= 2 {
+            // Multiple facts → use ParagraphGenerator
+            let para_gen = tle_afc::paragraph::ParagraphGenerator::new();
+            let owned_facts: Vec<(String, String)> = facts.iter()
+                .map(|(r, o)| (r.to_string(), o.to_string()))
+                .collect();
+            let paragraph = para_gen.generate(subject_clean, &owned_facts);
+            println!("  {} [{:?}]", paragraph, start.elapsed());
+            return;
+        }
+        // Single fact
         for (rel, obj) in &facts {
             if *rel == "is" || *rel == "are" {
                 println!("  {} {} {}. [{:?}]", capitalize(subject), rel, obj, start.elapsed());
@@ -998,13 +1043,23 @@ fn respond_yes_no(
         return;
     }
 
-    // 1. Check direct facts
-    let facts = store.get_facts(&subject);
-    for (rel, obj) in &facts {
-        if relation_matches_loose(rel, &relation) {
-            if object.is_empty() || obj.contains(&object) || object.contains(&**obj) {
-                println!("  Yes! {} {} {}. [{:?}]", capitalize(&subject), rel, obj, start.elapsed());
-                return;
+    // 1. Check direct facts (try singular, plural, and original)
+    let subject_variants = vec![
+        subject.clone(),
+        format!("{}s", subject),                           // add s
+        subject.trim_end_matches('s').to_string(),         // remove s
+        format!("{}es", subject),                          // add es
+        subject.trim_end_matches("es").to_string(),        // remove es
+    ];
+
+    for subj_v in &subject_variants {
+        let facts = store.get_facts(subj_v);
+        for (rel, obj) in &facts {
+            if relation_matches_loose(rel, &relation) {
+                if object.is_empty() || obj.contains(&object) || object.contains(&**obj) {
+                    println!("  Yes! {} {} {}. [{:?}]", capitalize(subj_v), rel, obj, start.elapsed());
+                    return;
+                }
             }
         }
     }
@@ -1057,8 +1112,24 @@ fn try_multi_hop(
 ) -> Option<(String, String)> {
     let subject_lower = subject.to_lowercase();
 
-    // Get facts about the subject
-    let subject_facts = store.get_facts(&subject_lower);
+    // Try subject variants (singular/plural)
+    let variants = vec![
+        subject_lower.clone(),
+        format!("{}s", subject_lower),
+        subject_lower.trim_end_matches('s').to_string(),
+    ];
+
+    let mut subject_facts: Vec<(&str, &str)> = Vec::new();
+    let mut matched_subject = subject_lower.clone();
+    for v in &variants {
+        let facts = store.get_facts(v);
+        if !facts.is_empty() {
+            subject_facts = facts;
+            matched_subject = v.clone();
+            break;
+        }
+    }
+
     if subject_facts.is_empty() {
         return None;
     }
