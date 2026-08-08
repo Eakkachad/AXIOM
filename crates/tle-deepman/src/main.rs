@@ -261,65 +261,93 @@ impl DeepManEngine {
         // Generation loop
         for _step in 0..self.config.max_gen_tokens {
             let vocab_size = self.vocab.len();
-            let mut scores = vec![0.0f32; vocab_size];
 
-            // === Layer 1: Engram query ===
-            let engram_fused = {
-                // Query engram - collect results to owned data to release borrow
-                let mut head_hits: Vec<(usize, f32, Vec<u16>, Vec<f32>)> = Vec::new();
-                for (head_idx, key) in self.engram_hasher.hash_all_heads(&context) {
-                    let order = head_idx + 1;
-                    if let Some(entry) = self.engram_tables[head_idx].lookup(key) {
-                        let confidence = entry.confidence(3.0);
-                        if confidence > self.config.engram_confidence_threshold || order >= 3 {
-                            head_hits.push((
-                                order,
-                                confidence,
-                                entry.candidates.clone(),
-                                entry.scores.clone(),
-                            ));
-                        }
+            // === Layer 1: Engram query (sparse — only get candidates) ===
+            let mut sparse_candidates: Vec<u16> = Vec::new();
+            let mut sparse_scores: Vec<f32> = Vec::new();
+
+            let mut head_hits: Vec<(usize, f32, Vec<u16>, Vec<f32>)> = Vec::new();
+            for (head_idx, key) in self.engram_hasher.hash_all_heads(&context) {
+                let order = head_idx + 1;
+                if let Some(entry) = self.engram_tables[head_idx].lookup(key) {
+                    let confidence = entry.confidence(3.0);
+                    if confidence > self.config.engram_confidence_threshold || order >= 3 {
+                        head_hits.push((
+                            order,
+                            confidence,
+                            entry.candidates.clone(),
+                            entry.scores.clone(),
+                        ));
                     }
                 }
+            }
 
-                if !head_hits.is_empty() {
-                    // Manually fuse scores (avoid borrowing entry references)
-                    let mut fused = vec![0.0f32; vocab_size];
-                    for (order, confidence, candidates, entry_scores) in &head_hits {
-                        let gate = sigmoid(
-                            *confidence + 0.5 * (*order as f32 - 1.0),
-                        );
-                        for (i, &token_id) in candidates.iter().enumerate() {
-                            if (token_id as usize) < vocab_size {
-                                let log_prob = entry_scores.get(i).copied().unwrap_or(-10.0);
-                                fused[token_id as usize] += gate * log_prob.exp();
-                            }
-                        }
-                    }
-                    Some(fused)
-                } else {
-                    None
-                }
-            };
-            let engram_confident = engram_fused.is_some();
+            let engram_confident = !head_hits.is_empty();
 
             if engram_confident {
                 self.stats.engram_hits += 1;
-            } else {
-                self.stats.engram_misses += 1;
-            }
 
-            if let Some(ref fused) = engram_fused {
-                for (i, &s) in fused.iter().enumerate() {
-                    if i < vocab_size {
-                        scores[i] += self.config.alpha_engram * s;
+                // Collect unique candidate IDs from all heads
+                let mut candidate_set: HashMap<u16, f32> = HashMap::new();
+                for (order, confidence, candidates, entry_scores) in &head_hits {
+                    let gate = sigmoid(*confidence + 0.5 * (*order as f32 - 1.0));
+                    for (i, &token_id) in candidates.iter().enumerate() {
+                        let log_prob = entry_scores.get(i).copied().unwrap_or(-10.0);
+                        *candidate_set.entry(token_id).or_insert(0.0) +=
+                            self.config.alpha_engram * gate * log_prob.exp();
                     }
                 }
-            }
 
-            // === Layer 2: TBA fallback (only when Engram misses or low confidence) ===
-            if !engram_confident {
+                // Apply penalties ONLY to these sparse candidates
+                let window_start = context.len().saturating_sub(self.config.repetition_window);
+                let recent = &context[window_start..];
+
+                let mut freq_map: HashMap<u16, usize> = HashMap::new();
+                for &id in generated.iter() {
+                    *freq_map.entry(id).or_insert(0) += 1;
+                }
+
+                for (&token_id, score) in candidate_set.iter_mut() {
+                    // Repetition penalty
+                    if recent.contains(&token_id) {
+                        *score -= self.config.delta_repetition;
+                    }
+
+                    // Bigram repetition
+                    if context.len() >= 2 {
+                        let last = context[context.len() - 1];
+                        let recent_start = context.len().saturating_sub(10);
+                        for w in context[recent_start..].windows(2) {
+                            if w[0] == last && w[1] == token_id {
+                                *score -= self.config.delta_repetition * 1.5;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Diversity penalty
+                    if let Some(&count) = freq_map.get(&token_id) {
+                        *score -= self.config.epsilon_diversity * (1.0 + count as f32).ln();
+                    }
+
+                    // Block special tokens
+                    if let Some(token) = self.vocab.get_token(token_id) {
+                        if token == "<unk>" || token == "=" || token == "@-@" || token == "@.@" {
+                            *score = f32::NEG_INFINITY;
+                        }
+                    }
+                }
+
+                // Convert to sparse arrays
+                for (&id, &score) in &candidate_set {
+                    sparse_candidates.push(id);
+                    sparse_scores.push(score);
+                }
+            } else {
+                // === Engram miss → TBA fallback (scan limited vocab) ===
+                self.stats.engram_misses += 1;
                 let tba_weight = self.config.beta_transition * 2.0;
+                let scan_limit = 500; // scan top-500 vocab only
 
                 if let Some(current_token) = context.last().and_then(|&id| self.vocab.get_token(id)) {
                     if let Some(current_vec) = self.codebook.get(current_token).cloned() {
@@ -327,12 +355,21 @@ impl DeepManEngine {
                         let shifted = current_vec.permute(1);
                         let predicted = shifted.hadamard(&self.transition_memory);
 
-                        // Score only top candidates (not full vocab) for speed
-                        for i in 0..vocab_size.min(scores.len()).min(1000) {
+                        for i in 0..vocab_size.min(scan_limit) {
                             if let Some(token) = self.vocab.get_token(i as u16) {
+                                if token == "<unk>" || token == "=" {
+                                    continue;
+                                }
                                 if let Some(candidate_vec) = self.codebook.get(token) {
-                                    let sim = cosine_similarity(&predicted, candidate_vec);
-                                    scores[i] += tba_weight * sim;
+                                    let mut score = tba_weight * cosine_similarity(&predicted, candidate_vec);
+
+                                    // Context coherence
+                                    if context_vec.norm() > 0.01 {
+                                        score += self.config.gamma_context * cosine_similarity(&context_vec, candidate_vec);
+                                    }
+
+                                    sparse_candidates.push(i as u16);
+                                    sparse_scores.push(score);
                                 }
                             }
                         }
@@ -340,72 +377,21 @@ impl DeepManEngine {
                 }
             }
 
-            // === Context coherence scoring (only when TBA is active — helps disambiguate) ===
-            if !engram_confident && context_vec.norm() > 0.01 {
-                for i in 0..vocab_size.min(scores.len()).min(1000) {
-                    if let Some(token) = self.vocab.get_token(i as u16) {
-                        if let Some(candidate_vec) = self.codebook.get(token) {
-                            let sim = cosine_similarity(&context_vec, candidate_vec);
-                            scores[i] += self.config.gamma_context * sim;
-                        }
-                    }
-                }
+            // === Argmax over sparse candidates (deterministic) ===
+            if sparse_candidates.is_empty() {
+                break;
             }
 
-            // === Repetition penalty (strengthened) ===
-            let window_start = context.len().saturating_sub(self.config.repetition_window);
-            let recent = &context[window_start..];
-            for &recent_id in recent {
-                if (recent_id as usize) < scores.len() {
-                    scores[recent_id as usize] -= self.config.delta_repetition;
-                }
-            }
-
-            // Bigram repetition: if last 2 tokens appeared as a bigram before, penalize
-            if context.len() >= 2 {
-                // Check if any candidate would form a repeated bigram
-                for i in 0..vocab_size.min(scores.len()) {
-                    let candidate_id = i as u16;
-                    // Would selecting this create a bigram we've seen in last 10 tokens?
-                    let recent_start = context.len().saturating_sub(10);
-                    for w in context[recent_start..].windows(2) {
-                        if w[0] == context[context.len() - 1] && w[1] == candidate_id {
-                            scores[i] -= self.config.delta_repetition * 1.5;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // === Diversity penalty ===
-            let mut freq_map: HashMap<u16, usize> = HashMap::new();
-            for &id in generated.iter() {
-                *freq_map.entry(id).or_insert(0) += 1;
-            }
-            for (&id, &count) in &freq_map {
-                if (id as usize) < scores.len() {
-                    scores[id as usize] -= self.config.epsilon_diversity * (1.0 + count as f32).ln();
-                }
-            }
-
-            // === Argmax selection (deterministic) ===
-            // Block <unk> and special tokens
-            for blocked in &["<unk>", "=", "@-@", "@.@"] {
-                if let Some(id) = self.vocab.get_id(blocked) {
-                    scores[id as usize] = f32::NEG_INFINITY;
-                }
-            }
-
-            let best_idx = scores
+            let best_pos = sparse_scores
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(i, _)| i)
                 .unwrap_or(0);
 
-            let best_id = best_idx as u16;
+            let best_id = sparse_candidates[best_pos];
 
-            // End-of-sentence detection: stop after generating a sentence-ending token
+            // End-of-sentence detection
             if let Some(token) = self.vocab.get_token(best_id) {
                 if token == "." || token == "!" || token == "?" {
                     generated.push(best_id);
