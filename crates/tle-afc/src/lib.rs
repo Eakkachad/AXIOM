@@ -35,6 +35,6 @@ pub use energy::{CompositeEnergyFlow, EnergyConfig};
 pub use graph::FlowGraph;
 pub use node::{FlowNode, FlowState};
 pub use nodes::{
-    BindNode, ContextAccumNode, DiversityPenaltyNode, PermuteNode, RepetitionPenaltyNode,
-    TransitionScoreNode,
+    BindNode, ContextAccumNode, DiversityPenaltyNode, MultiHopNode, PermuteNode,
+    RepetitionPenaltyNode, TransitionScoreNode, compose_transition_chain,
 };
