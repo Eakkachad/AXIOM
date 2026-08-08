@@ -142,6 +142,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tle-axiom-gen"
+version = "0.1.0"
+dependencies = [
+ "tle-vsa",
+]
+
+[[package]]
 name = "tle-bench"
 version = "0.1.0"
 dependencies = [

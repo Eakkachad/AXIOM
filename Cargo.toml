@@ -16,6 +16,7 @@ members = [
     "crates/tle-afc",
     "crates/tle-engram",
     "crates/tle-deepman",
+    "crates/tle-axiom-gen",
 ]
 
 [workspace.package]
