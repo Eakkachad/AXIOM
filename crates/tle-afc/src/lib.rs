@@ -25,6 +25,7 @@
 //!   accumulated scores (composite energy).
 
 pub mod analogy;
+pub mod attractor;
 pub mod combinators;
 pub mod delta_mem;
 pub mod energy;
