@@ -27,12 +27,14 @@
 pub mod combinators;
 pub mod energy;
 pub mod graph;
+pub mod incremental;
 pub mod node;
 pub mod nodes;
 
 pub use combinators::{ConditionalFlow, ParallelFlow, SequentialFlow};
 pub use energy::{CompositeEnergyFlow, EnergyConfig};
 pub use graph::FlowGraph;
+pub use incremental::IncrementalStore;
 pub use node::{FlowNode, FlowState};
 pub use nodes::{
     BindNode, ContextAccumNode, DiversityPenaltyNode, MultiHopNode, PermuteNode,
