@@ -363,7 +363,6 @@ impl DeepManEngine {
 
             // Bigram repetition: if last 2 tokens appeared as a bigram before, penalize
             if context.len() >= 2 {
-                let last_bigram = (context[context.len() - 2], context[context.len() - 1]);
                 // Check if any candidate would form a repeated bigram
                 for i in 0..vocab_size.min(scores.len()) {
                     let candidate_id = i as u16;
@@ -459,7 +458,7 @@ impl DeepManEngine {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MAIN — DEMO
+// MAIN — INTERACTIVE REPL
 // ═══════════════════════════════════════════════════════════════════════
 
 fn main() {
@@ -470,7 +469,7 @@ fn main() {
     println!("║                                                          ║");
     println!("║   Layer 1: Engram (O(1) hash)                           ║");
     println!("║   Layer 2: TBA (VSA transitions)                        ║");
-    println!("║   Scorer: AFC (composite energy)                        ║");
+    println!("║   Layer 3: KG (algebraic fact store)                    ║");
     println!("║   Training: ZERO | Deterministic: 100%                  ║");
     println!("╚══════════════════════════════════════════════════════════╝\n");
 
@@ -479,65 +478,176 @@ fn main() {
     let data = match fs::read_to_string(data_path) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("Error loading {}: {}", data_path, e);
-            eprintln!("Using small built-in corpus...");
+            eprintln!("  Note: {} not found ({}), using built-in corpus.", data_path, e);
             FALLBACK_CORPUS.to_string()
         }
     };
 
     // Build engine
-    println!("[1] Building Deep Man engine...\n");
+    println!("[*] Building AXIOM engine...");
     let build_start = Instant::now();
     let config = DeepManConfig::default();
     let mut engine = DeepManEngine::build_from_corpus(&data, config);
     let build_time = build_start.elapsed();
-    println!("\n  Total build time: {:?}\n", build_time);
+    println!("  Ready in {:?} | Vocab: {} | Engram contexts: {}",
+        build_time, engine.vocab.len(),
+        engine.engram_tables.iter().map(|t| t.len()).sum::<usize>());
 
-    // Generation demo
-    println!("[2] Generation demo (Engram + TBA + AFC fused):\n");
+    // Initialize IncrementalStore for live learning
+    let mut store = tle_afc::IncrementalStore::new();
 
-    let prompts = vec![
-        "the president of the",
-        "in the united states",
-        "he was the first",
-        "the city of new",
-        "it was released in",
-        "the album was",
-        "she was born in",
-        "the team won the",
-        "according to the",
-        "at the end of the",
-    ];
+    println!("\n── Commands ──");
+    println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
+    println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
+    println!("  /stats              Show engine statistics");
+    println!("  /quit               Exit");
+    println!("  <anything else>     Generate continuation from your input");
+    println!("────────────────────────────────────────────────────────────\n");
 
-    let mut total_gen_time = std::time::Duration::ZERO;
-    let mut total_gen_tokens = 0;
+    // REPL loop
+    let stdin = std::io::stdin();
+    loop {
+        // Prompt
+        eprint!("AXIOM> ");
+        use std::io::Write;
+        std::io::stderr().flush().ok();
 
-    for prompt in &prompts {
-        let (generated, gen_time) = engine.generate(prompt);
-        total_gen_time += gen_time;
-        total_gen_tokens += generated.len();
+        let mut input = String::new();
+        match stdin.read_line(&mut input) {
+            Ok(0) => break, // EOF
+            Ok(_) => {}
+            Err(_) => break,
+        }
 
-        let output = engine.decode(&generated);
-        println!("  \"{}\"", prompt);
-        println!("    → {} [{:?}]\n", output, gen_time);
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Parse commands
+        if trimmed == "/quit" || trimmed == "/exit" || trimmed == "/q" {
+            println!("  Goodbye!");
+            break;
+        }
+
+        if trimmed == "/stats" {
+            engine.print_stats();
+            let st = store.stats();
+            println!("  Incremental: {} facts, {} tokens learned, {} transitions",
+                st.facts_added, st.tokens_ingested, st.transitions_added);
+            continue;
+        }
+
+        if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
+            handle_teach(&mut store, &mut engine, fact_text);
+            continue;
+        }
+
+        if let Some(query_text) = trimmed.strip_prefix("/ask ") {
+            handle_ask(&store, query_text);
+            continue;
+        }
+
+        // Default: generate continuation
+        handle_generate(&mut engine, &store, trimmed);
+    }
+}
+
+/// Handle /teach command — learn facts and text.
+fn handle_teach(
+    store: &mut tle_afc::IncrementalStore,
+    engine: &mut DeepManEngine,
+    fact_text: &str,
+) {
+    let trimmed = fact_text.trim();
+    if trimmed.is_empty() {
+        println!("  Usage: /teach <sentence or fact>");
+        return;
     }
 
-    // Benchmark: hit rate analysis
-    println!("[3] Coverage analysis:\n");
-    engine.print_stats();
+    // Try to parse as triple: "X is Y" / "X is_a Y" / "X relation Y"
+    let parts: Vec<&str> = trimmed.splitn(3, ' ').collect();
 
-    println!("\n── Performance ──");
-    println!("  Total generation time: {:?}", total_gen_time);
-    println!("  Total tokens generated: {}", total_gen_tokens);
-    if total_gen_tokens > 0 {
-        let ms_per_token = total_gen_time.as_secs_f64() * 1000.0 / total_gen_tokens as f64;
-        let tokens_per_sec = total_gen_tokens as f64 / total_gen_time.as_secs_f64();
-        println!("  Speed: {:.2} ms/token ({:.0} tokens/sec)", ms_per_token, tokens_per_sec);
+    if parts.len() >= 3 {
+        // Check for common patterns
+        let (subject, relation, object) = if parts[1] == "is" || parts[1] == "are" {
+            // "Bangkok is the capital of Thailand" → subject=Bangkok, rel=is, obj=rest
+            (parts[0], parts[1], parts[2..].join(" "))
+        } else {
+            (parts[0], parts[1], parts[2..].join(" "))
+        };
+
+        // Learn as structured fact
+        store.learn_fact(subject, relation, &object);
+        println!("  ✓ Fact: {} {} {}", subject, relation, object);
     }
-    println!("\n  Architecture: Engram (Layer 1) + TBA (Layer 2) + AFC (Energy Scoring)");
-    println!("  Deterministic: YES (run again → identical output)");
-    println!("  Training: NONE (single-pass counting + VSA encoding)");
-    println!("  GPU: NOT NEEDED");
+
+    // Always also learn as text (for N-gram + TBA)
+    store.learn_text(trimmed);
+
+    // Update engine's Engram inline (add to N-gram counts)
+    // For now, the IncrementalStore handles prediction independently
+    println!("  ✓ Learned: \"{}\"", trimmed);
+}
+
+/// Handle /ask command — query the knowledge graph.
+fn handle_ask(store: &tle_afc::IncrementalStore, query_text: &str) {
+    let parts: Vec<&str> = query_text.trim().split_whitespace().collect();
+
+    if parts.len() < 2 {
+        println!("  Usage: /ask <subject> <relation>");
+        println!("  Example: /ask bangkok capital_of");
+        return;
+    }
+
+    let subject = parts[0];
+    let relation = parts[1];
+
+    match store.query_fact(subject, relation) {
+        Some((answer, confidence)) => {
+            println!("  → {} {} {} (confidence: {:.3})", subject, relation, answer, confidence);
+        }
+        None => {
+            // Try N-gram prediction as fallback
+            let context: Vec<&str> = parts.iter().copied().collect();
+            let predictions = store.predict_next(&context);
+            if !predictions.is_empty() {
+                let top: Vec<String> = predictions.iter().take(5)
+                    .map(|(t, s)| format!("{} ({:.2})", t, s))
+                    .collect();
+                println!("  → N-gram predictions: {}", top.join(", "));
+            } else {
+                println!("  → I don't know about '{}' '{}' yet. Teach me with /teach!", subject, relation);
+            }
+        }
+    }
+}
+
+/// Handle chat input — generate continuation using AXIOM engine + IncrementalStore.
+fn handle_generate(
+    engine: &mut DeepManEngine,
+    store: &tle_afc::IncrementalStore,
+    input: &str,
+) {
+    let start = Instant::now();
+
+    // First check if IncrementalStore has a direct answer
+    let input_tokens: Vec<&str> = input.split_whitespace().collect();
+    let incr_predictions = store.predict_next(&input_tokens);
+
+    // Generate from main engine
+    let (generated, gen_time) = engine.generate(input);
+    let output = engine.decode(&generated);
+
+    if !output.is_empty() {
+        println!("  {} [{:?}]", output, gen_time);
+    } else if !incr_predictions.is_empty() {
+        // Fallback to incremental predictions
+        let predicted: Vec<&str> = incr_predictions.iter().take(8).map(|(t, _)| t.as_str()).collect();
+        println!("  {} [{:?}]", predicted.join(" "), start.elapsed());
+    } else {
+        println!("  (no prediction available — teach me more with /teach!)");
+    }
 }
 
 const FALLBACK_CORPUS: &str = "\
