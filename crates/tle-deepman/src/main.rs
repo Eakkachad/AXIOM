@@ -609,15 +609,250 @@ fn handle_ask(store: &tle_afc::IncrementalStore, query_text: &str) {
     }
 }
 
-/// Handle chat input — generate continuation using AXIOM engine + IncrementalStore.
+/// Handle chat input — detect intent and respond appropriately.
 fn handle_generate(
     engine: &mut DeepManEngine,
     store: &tle_afc::IncrementalStore,
     input: &str,
 ) {
+    let lower = input.trim().to_lowercase();
     let start = Instant::now();
 
-    // First check if IncrementalStore has a direct answer
+    // === Intent Detection ===
+    let intent = detect_intent(&lower);
+
+    match intent {
+        Intent::Greeting => {
+            println!("  Hello! I'm AXIOM. Ask me anything, or teach me with /teach.");
+        }
+        Intent::Thanks => {
+            println!("  You're welcome! Ask me more or teach me something new.");
+        }
+        Intent::WhatIs(subject) => {
+            respond_what_is(engine, store, &subject, start);
+        }
+        Intent::WhoIs(subject) => {
+            respond_what_is(engine, store, &subject, start);
+        }
+        Intent::WhereIs(subject) => {
+            respond_where_is(engine, store, &subject, start);
+        }
+        Intent::Question(topic) => {
+            respond_question(engine, store, &topic, &lower, start);
+        }
+        Intent::Generate => {
+            respond_generate(engine, store, &lower, start);
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CONVERSATION ENGINE
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug)]
+enum Intent {
+    Greeting,
+    Thanks,
+    WhatIs(String),
+    WhoIs(String),
+    WhereIs(String),
+    Question(String),
+    Generate,
+}
+
+/// Detect user intent from input.
+fn detect_intent(input: &str) -> Intent {
+    let words: Vec<&str> = input.split_whitespace().collect();
+
+    // Greetings
+    if matches!(words.first(), Some(&"hello") | Some(&"hi") | Some(&"hey") | Some(&"howdy")) {
+        return Intent::Greeting;
+    }
+
+    // Thanks
+    if input.contains("thank") || input.contains("thanks") || input == "ok" {
+        return Intent::Thanks;
+    }
+
+    // "what is X?" / "what are X?"
+    if input.starts_with("what is ") || input.starts_with("what's ") {
+        let subject = input
+            .trim_start_matches("what is ")
+            .trim_start_matches("what's ")
+            .trim_end_matches('?')
+            .trim();
+        return Intent::WhatIs(subject.to_string());
+    }
+
+    if input.starts_with("what are ") {
+        let subject = input.trim_start_matches("what are ").trim_end_matches('?').trim();
+        return Intent::WhatIs(subject.to_string());
+    }
+
+    // "who is X?"
+    if input.starts_with("who is ") || input.starts_with("who's ") {
+        let subject = input
+            .trim_start_matches("who is ")
+            .trim_start_matches("who's ")
+            .trim_end_matches('?')
+            .trim();
+        return Intent::WhoIs(subject.to_string());
+    }
+
+    // "where is X?"
+    if input.starts_with("where is ") || input.starts_with("where's ") {
+        let subject = input
+            .trim_start_matches("where is ")
+            .trim_start_matches("where's ")
+            .trim_end_matches('?')
+            .trim();
+        return Intent::WhereIs(subject.to_string());
+    }
+
+    // General questions (contains ?)
+    if input.contains('?') {
+        let topic = input.trim_end_matches('?').trim().to_string();
+        return Intent::Question(topic);
+    }
+
+    // "tell me about X"
+    if input.starts_with("tell me about ") {
+        let subject = input.trim_start_matches("tell me about ").trim();
+        return Intent::WhatIs(subject.to_string());
+    }
+
+    // Default: generate continuation
+    Intent::Generate
+}
+
+/// Respond to "what is X?" questions.
+fn respond_what_is(
+    engine: &mut DeepManEngine,
+    store: &tle_afc::IncrementalStore,
+    subject: &str,
+    start: Instant,
+) {
+    // Try KG query first: subject "is" ?
+    if let Some((answer, conf)) = store.query_fact(subject, "is") {
+        if conf > 0.05 {
+            println!("  {} is {}. [{:?}]", capitalize(subject), answer, start.elapsed());
+            return;
+        }
+    }
+
+    // Try N-gram prediction: "subject is ..." from learned data
+    let context_tokens: Vec<&str> = vec![subject, "is"];
+    let predictions = store.predict_next(&context_tokens);
+    if !predictions.is_empty() {
+        // Build response from top predictions
+        let mut response_tokens: Vec<String> = vec![subject.to_string(), "is".to_string()];
+        // Chain predictions
+        let mut ctx: Vec<&str> = vec![subject, "is"];
+        for _ in 0..10 {
+            let preds = store.predict_next(&ctx);
+            if preds.is_empty() {
+                break;
+            }
+            let next = &preds[0].0;
+            response_tokens.push(next.clone());
+            if next == "." || next == "!" || next == "?" {
+                break;
+            }
+            ctx.push(Box::leak(next.clone().into_boxed_str())); // extend context
+        }
+        if response_tokens.len() > 2 {
+            let response = capitalize(&response_tokens.join(" "));
+            println!("  {} [{:?}]", response, start.elapsed());
+            return;
+        }
+    }
+
+    // Fallback: generate from Engram
+    let prompt = format!("{} is", subject);
+    let (generated, gen_time) = engine.generate(&prompt);
+    let output = engine.decode(&generated);
+
+    if !output.is_empty() {
+        println!("  {} is {} [{:?}]", capitalize(subject), output, gen_time);
+    } else {
+        let (gen2, time2) = engine.generate(subject);
+        let out2 = engine.decode(&gen2);
+        if !out2.is_empty() {
+            println!("  {} {} [{:?}]", capitalize(subject), out2, time2);
+        } else {
+            println!("  I don't know about '{}' yet. Teach me with /teach!", subject);
+        }
+    }
+}
+
+/// Respond to "where is X?" questions.
+fn respond_where_is(
+    engine: &mut DeepManEngine,
+    store: &tle_afc::IncrementalStore,
+    subject: &str,
+    start: Instant,
+) {
+    // Try KG: subject "located_in" ? or subject "in" ?
+    for rel in &["located_in", "in", "is"] {
+        if let Some((answer, conf)) = store.query_fact(subject, rel) {
+            if conf > 0.01 {
+                println!("  {} is in {}. [{:?}]", capitalize(subject), answer, start.elapsed());
+                return;
+            }
+        }
+    }
+
+    // Generate from "[subject] is located in"
+    let prompt = format!("{} is located in", subject);
+    let (generated, gen_time) = engine.generate(&prompt);
+    let output = engine.decode(&generated);
+
+    if !output.is_empty() {
+        println!("  {} is located in {} [{:?}]", capitalize(subject), output, gen_time);
+    } else {
+        println!("  I don't know where '{}' is. Teach me with /teach!", subject);
+    }
+}
+
+/// Respond to general questions.
+fn respond_question(
+    engine: &mut DeepManEngine,
+    store: &tle_afc::IncrementalStore,
+    topic: &str,
+    full_input: &str,
+    start: Instant,
+) {
+    // Extract key words and try KG
+    let words: Vec<&str> = topic.split_whitespace().collect();
+
+    // Try N-gram prediction from question words
+    let predictions = store.predict_next(&words);
+    if !predictions.is_empty() {
+        let answer: Vec<&str> = predictions.iter().take(6).map(|(t, _)| t.as_str()).collect();
+        println!("  {} [{:?}]", answer.join(" "), start.elapsed());
+        return;
+    }
+
+    // Generate continuation from the question topic
+    let (generated, gen_time) = engine.generate(topic);
+    let output = engine.decode(&generated);
+
+    if !output.is_empty() {
+        println!("  {} [{:?}]", output, gen_time);
+    } else {
+        println!("  I'm not sure about that. Teach me with /teach!");
+    }
+}
+
+/// Generate text continuation (default mode).
+fn respond_generate(
+    engine: &mut DeepManEngine,
+    store: &tle_afc::IncrementalStore,
+    input: &str,
+    start: Instant,
+) {
+    // Check incremental store first
     let input_tokens: Vec<&str> = input.split_whitespace().collect();
     let incr_predictions = store.predict_next(&input_tokens);
 
@@ -628,11 +863,19 @@ fn handle_generate(
     if !output.is_empty() {
         println!("  {} [{:?}]", output, gen_time);
     } else if !incr_predictions.is_empty() {
-        // Fallback to incremental predictions
         let predicted: Vec<&str> = incr_predictions.iter().take(8).map(|(t, _)| t.as_str()).collect();
         println!("  {} [{:?}]", predicted.join(" "), start.elapsed());
     } else {
-        println!("  (no prediction available — teach me more with /teach!)");
+        println!("  (I need more context. Try a longer phrase or teach me with /teach!)");
+    }
+}
+
+/// Capitalize first letter of a string.
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
     }
 }
 
