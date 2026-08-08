@@ -2,148 +2,229 @@
 
 > Solve for X. No training required.
 
-**AXIOM** treats text generation as an algebraic equation — given context, solve for the next token `X` using pure mathematics over hyperdimensional memory. No neural networks. No gradient descent. No GPU.
+**AXIOM** is a novel AI system that generates text, answers questions, and reasons about knowledge — **without any neural network training**. It uses pure algebraic computation over hyperdimensional vectors.
 
-## What Is This?
+## Demo
 
-A research system that generates text **without any neural network training** — using only:
-- **Hyperdimensional computing** (Vector Symbolic Architecture, D=10,240)
-- **Hash-based N-gram memory** (Engram — O(1) lookup)
-- **Algebraic energy scoring** (composite energy minimization)
-- **Transition Binding Algebra** (novel: `T(A→X) = π(A)⊗X`)
+```
+AXIOM> /teach elephants are large animals that live in Africa
+AXIOM> /teach elephants can swim very well
+AXIOM> /teach elephants have long trunks and big ears
 
-**Key properties:**
-- ✅ 100% deterministic (same input → same output, always)
-- ✅ Zero training (single-pass corpus ingestion only)
-- ✅ CPU-only, no GPU required
-- ✅ Incremental learning (add data → immediately smarter)
-- ✅ Fully interpretable (trace every token selection)
+AXIOM> tell me about elephants
+  Elephants are large animals that live in africa.
+  They have long trunks and big ears.
+  They can swim very well. [155µs]
+
+AXIOM> /teach cat is an animal
+AXIOM> /teach animals have hearts
+
+AXIOM> does cat have a heart?
+  Yes! Because cat is an animal, and animals have hearts. [42µs]
+
+AXIOM> /teach sky is blue
+AXIOM> /teach blue has short wavelength
+
+AXIOM> why is the sky blue?
+  A sky is blue, because the blue has short wavelength. [633µs]
+```
+
+## What Makes AXIOM Different
+
+| | AXIOM | ChatGPT/LLMs |
+|---|:---:|:---:|
+| Training required | **Zero** | Months + GPU cluster |
+| Learn new facts | **Instantly** (µs) | Fine-tune (hours) |
+| Speed | **22,000 tok/s** | ~50 tok/s |
+| Hardware | **Any CPU** | GPU required |
+| Deterministic | **100%** | No (sampling) |
+| Interpretable | **Full reasoning trace** | Black box |
+| Hallucination | **Never on taught facts** | Common |
+| Memory | **18 MB** | Gigabytes |
+
+## Capabilities
+
+### 1. Teach → Remember → Answer (µs)
+```
+/teach Bangkok is the capital of Thailand
+what is bangkok? → "Bangkok is the capital of thailand." [3µs]
+```
+
+### 2. Multi-Hop Reasoning (no training!)
+```
+/teach cat is an animal
+/teach animals have hearts
+does cat have a heart? → "Yes! Because cat is an animal, and animals have hearts." [42µs]
+```
+
+### 3. Compositional Generation (novel sentences never seen in corpus)
+```
+/teach sky is blue
+/teach blue has short wavelength
+why is the sky blue? → "A sky is blue, because the blue has short wavelength." [633µs]
+```
+
+### 4. Multi-Sentence Paragraphs
+```
+tell me about elephants →
+  "Elephants are large animals. They have long trunks. They can swim." [155µs]
+```
+
+### 5. Analogical Reasoning
+```
+/teach cat is an animal
+/teach cat has four legs
+/teach bird is an animal
+does bird have legs? → "Probably yes — by analogy with cat" [50µs]
+```
+
+### 6. Pronoun Resolution (conversation memory)
+```
+/teach elephants can swim
+what are elephants? → "Elephants are large animals."
+can they swim? → "Yes! Elephants can swim." (resolved "they" → "elephants")
+```
+
+### 7. Persistent Knowledge
+```
+/load knowledge.txt    → Learn 13,000 facts from file [68s]
+/save state.json       → Save to disk [209µs]
+/restore state.json    → Restore on restart
+```
 
 ## Architecture
 
 ```
-Context: "the president of the"
-                │
-    ┌───────────┴───────────┐
-    │                       │
-    ▼                       ▼
-[LAYER 1: Engram]     [LAYER 2: TBA]
- O(1) hash lookup      VSA algebra
- 99.5% hit rate        fallback path
-    │                       │
-    └───────────┬───────────┘
-                │
-                ▼
-    [AFC Energy Scoring]
-    E(X) = α·engram(X) + β·transition(X) - γ·repeat(X) - δ·freq(X)
-                │
-                ▼
-         argmax → X = "republic"
+┌─────────────────────────────────────────────────────────┐
+│                    AXIOM Engine                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Input: "why is the sky blue?"                          │
+│    │                                                    │
+│    ├─→ [VSA Intent Detector] → "Why" (algebraic)       │
+│    │                                                    │
+│    ├─→ [AXIOM-Gen: Energy-Guided KG Beam Search]       │
+│    │     path: sky→is→blue, blue→has→short_wavelength  │
+│    │     E(path) = relevance + coherence + simplicity   │
+│    │                                                    │
+│    ├─→ [Linearizer + TemplateBank]                     │
+│    │     "A sky is blue, because the blue has short     │
+│    │      wavelength."                                  │
+│    │                                                    │
+│    └─→ Output [633µs, CPU, deterministic]              │
+│                                                         │
+│  Layers:                                                │
+│    Layer 1: Engram (O(1) N-gram hash) — 99.5% hit      │
+│    Layer 2: TBA (VSA transitions) — algebraic fallback  │
+│    Layer 3: AXIOM-Gen (KG composition) — novel output   │
+│    Layer 4: Reasoning (analogy + multi-hop + attractor) │
+│                                                         │
+│  Memory:                                                │
+│    IncrementalStore — learn on every /teach             │
+│    δ-Mem — conversation context + pronoun resolution    │
+│    CKR — compressed VSA bundles for scale               │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Results
+## Performance
 
-| Metric | Value |
-|--------|-------|
-| Generation speed | **22,000 tok/s** (Engram path) |
-| Compositional generation | **350-630 µs** (multi-hop KG) |
-| Fact recall | **2-11 µs** (exact taught facts) |
-| Paragraph generation | **155-235 µs** (multi-sentence) |
-| Engram hit rate | 99.5% |
-| Determinism | 100% (verified 100 runs) |
-| Training | Zero |
-| Memory | ~18 MB |
-| Tests passing | 139+ |
-| Crates | 17 |
-
-## Crate Structure
-
-```
-crates/
-├── tle-vsa/          Core VSA operations (D=10,240 bipolar hypervectors)
-├── tle-afc/          Algebraic Flow Composition + IncrementalStore + DeltaMem
-│                     + MorphTokenizer + VsaIntent + Analogy + Attractor + Paragraph
-├── tle-engram/       Multi-head N-gram hash table (Layer 1: O(1) lookup)
-├── tle-axiom-gen/    Compositional generation (energy-guided KG beam search + templates)
-├── tle-deepman/      Unified AXIOM REPL (interactive binary)
-├── tle-knowledge/    Compressed Knowledge Representation (Bloom + VSA bundles)
-├── tle-transition/   Transition Binding Algebra (T(A→X) = π(A)⊗X)
-├── tle-resonator/    Resonator Networks (iterative cleanup)
-├── tle-clifford/     Clifford Algebra (syntactic transformations)
-├── tle-tda-router/   Topological Data Analysis routing
-├── tle-memory/       Persistent memory bank (role-filler bindings)
-├── tle-decoder/      Token decoding & vocabulary management
-├── tle-pipeline/     Full pipeline orchestration
-├── tle-bench/        Benchmark suite
-├── tle-chat/         Original chat interface
-├── tle-reservoir/    Echo State Network experiments
-└── tle-gen/          KN-5 language model (ppl=67.4)
-```
+| Operation | Speed |
+|-----------|:-----:|
+| Fact recall (taught) | **2-11 µs** |
+| Yes/No reasoning | **42-140 µs** |
+| Paragraph (3 sentences) | **155-235 µs** |
+| Compositional (multi-hop) | **350-633 µs** |
+| N-gram generation | **22,000 tok/s** |
+| /load 23K lines | 68 seconds |
+| /teach 1 fact | **< 1 ms** |
+| Memory usage | ~18 MB |
 
 ## Quick Start
 
 ```bash
-# Build everything
+# Build
 cargo build --release
 
-# Run AXIOM unified engine
+# Run interactive AXIOM
 cargo run --release -p tle-deepman
 
-# Run the Engram standalone demo
-cargo run --release -p tle-engram
-
-# Run Transition Binding Algebra experiments
-cargo run --release -p tle-transition
-
-# Run all tests
-cargo test
+# Commands:
+#   /teach <fact>        Learn something
+#   /load <file.txt>     Learn from file
+#   /save <file.json>    Save knowledge
+#   /restore <file.json> Restore knowledge
+#   /stats               Show statistics
+#   /quit                Exit
+#   <anything>           Ask questions or chat
 ```
 
-### Data Setup
+### Data (optional)
 
-Download required data files into `data/`:
-```bash
-# WikiText-2 (required for tle-deepman and tle-engram)
-# Place as: data/wiki_train.txt
+For N-gram generation from WikiText corpus, place `data/wiki_train.txt`.
 
-# GloVe embeddings (optional, for experiments)
-# Place as: data/glove.6B.50d.txt
-```
-
-## The Idea
-
-Traditional LLMs: train billions of parameters with gradient descent → sample from learned distribution.
-
-**AXIOM**: Encode corpus into algebraic memory → solve for X at inference time.
+## Crate Structure (17 crates, ~30,000 LOC)
 
 ```
-LLM:    P(X | context) ≈ softmax(W · h)        ← learned W
-AXIOM:  X = argmax E(x) = α·sim(π(c)⊗TM, x)   ← algebraic, no W
+crates/
+├── tle-deepman/      AXIOM interactive REPL (the main binary)
+├── tle-axiom-gen/    Compositional generation (KG beam search + templates)
+├── tle-afc/          Core algorithms:
+│   ├── FlowNode composition (7 nodes + 3 combinators)
+│   ├── IncrementalStore (teach → learn instantly)
+│   ├── DeltaMem (conversation context)
+│   ├── MorphTokenizer (VSA subword — novel)
+│   ├── VsaIntentDetector (algebraic intent — novel)
+│   ├── AnalogicalEngine (structural inference)
+│   ├── AttractorReasoner (iterative convergence)
+│   └── ParagraphGenerator (multi-sentence)
+├── tle-engram/       O(1) N-gram hash (sigmoid fusion, 5 heads)
+├── tle-knowledge/    Compressed storage (Bloom + VSA bundles)
+├── tle-vsa/          VSA math (bind, bundle, permute, cosine)
+├── tle-transition/   Transition Binding Algebra
+├── tle-resonator/    Resonator Networks
+├── tle-clifford/     Clifford Algebra
+├── tle-tda-router/   Topological routing
+├── tle-memory/       Persistent memory bank
+├── tle-decoder/      Token decoding
+├── tle-pipeline/     Pipeline orchestration
+├── tle-bench/        Benchmarks
+├── tle-chat/         Original chatbot
+├── tle-reservoir/    Echo State Network
+└── tle-gen/          KN-5 model (ppl=67.4)
 ```
-
-The next token X is not "predicted" — it is **solved** from the transition algebra.
-
-## Research
-
-See `docs/` for full documentation:
-- `RESEARCH_PAPER_DRAFT.md` — Full paper: "Transition Binding Algebra"
-- `SYNTHESIS_PROPOSAL.md` — Architecture design & roadmap
-- `KATGPT_ANALYSIS.md` — Prior art analysis
-- `attention_decomposition_report.md` — Attention mechanism study
 
 ## Novel Contributions
 
-1. **Transition Binding Algebra** — `T(A→X) = π(A)⊗X`: non-commutative directional binding for generation
-2. **Algebraic Flow Composition** — composable, type-safe generation pipelines via `FlowNode` trait
-3. **Multi-head Engram** — confidence-gated N-gram hash fusion with sigmoid weighting
-4. **Two-layer confidence fallback** — Engram (fast) → TBA (algebraic) with automatic routing
-5. **Hierarchical Transition Memory** — O(1) storage scaling proven
+1. **Transition Binding Algebra** — `T(A→X) = π(A)⊗X`: first non-commutative VSA operation for text generation
+2. **AXIOM-Gen** — Energy-guided beam search over knowledge graphs with VSA scoring (generates novel sentences)
+3. **VSA Morphological Tokenizer** — Subword composition via algebraic bundling (no BPE training)
+4. **VSA Intent Detection** — Semantic intent matching without keywords or rules
+5. **Attractor Reasoning** — Iterative convergence for concept refinement
+6. **Multi-hop Composition** — `T(A→B→C) = T(A→B) ⊗ π(T(B→C))` for transitive inference
+7. **Two-layer Confidence Fallback** — Engram (fast) → TBA (algebraic) automatic routing
+8. **Compressed Knowledge Representation** — Bloom + exact + VSA bundles (O(√N) memory)
+
+## Research Papers
+
+- `docs/RESEARCH_PAPER_DRAFT.md` — Full paper on Transition Binding Algebra
+- `docs/AXIOM_Gen_Algorithm.md` — AXIOM-Gen mathematical specification + proof
+- `docs/SYNTHESIS_PROPOSAL.md` — Architecture design (3 approaches → unified)
+- `docs/AXIOM_RESULTS.md` — Benchmarks and evaluation
+- `docs/AGENT_HANDOFF.md` — Development plan and project status
+
+## Honest Limitations
+
+- **Quality gap vs LLMs** — Generated text is correct but formulaic. Not conversational-quality for open topics.
+- **Knowledge must be taught** — Doesn't know anything unless you `/teach` it or `/load` a file.
+- **English only** (Thai support planned)
+- **No creative writing** — Can compose facts but can't write stories or poetry.
+- **Single-sentence grammar still rough** — Articles and verb agreement need polish.
 
 ## License
 
 MIT
 
-## Authors
+## Author
 
 Deep_Man Research — August 2026
-# AXIOM
