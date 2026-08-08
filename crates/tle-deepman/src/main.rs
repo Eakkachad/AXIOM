@@ -495,6 +495,12 @@ fn main() {
     // Initialize Paragraph Generator
     let paragraph_gen = tle_afc::paragraph::ParagraphGenerator::new();
 
+    // Initialize Morphological Tokenizer (VSA subword composition)
+    let _morph_tokenizer = tle_afc::MorphTokenizer::new();
+
+    // Initialize Attractor Reasoner (iterative refinement)
+    let mut attractor = tle_afc::attractor::AttractorReasoner::new();
+
     println!("\n── Commands ──");
     println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
@@ -543,6 +549,15 @@ fn main() {
         if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
             handle_teach(&mut store, &mut engine, &mut axiom_gen, fact_text);
             delta_mem.update_topic(fact_text);
+            // Add subject as attractor basin for reasoning
+            let lower = fact_text.to_lowercase();
+            if let Some(pos) = lower.find(' ') {
+                let subject = &lower[..pos];
+                if subject.len() > 2 {
+                    let subj_vec = intent_codebook.get_or_insert(subject).clone();
+                    attractor.add_attractor(subject, subj_vec);
+                }
+            }
             continue;
         }
 
