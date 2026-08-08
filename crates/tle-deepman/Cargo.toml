@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Deep Man — Unified deterministic generation engine combining Engram + TBA + AFC"
+description = "AXIOM unified engine — Algebraic neXt-token Inference On Memory"
 
 [[bin]]
 name = "tle-deepman"

@@ -23,7 +23,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Deep_Man Research"]
-description = "Model-less Non-Parametric Multi-Node Latent Execution Engine"
+description = "AXIOM — Algebraic neXt-token Inference On Memory"
 
 [workspace.dependencies]
 # Internal crates

@@ -1,4 +1,6 @@
-//! # Deep Man — Unified Deterministic Generation Engine
+//! # AXIOM — Algebraic neXt-token Inference On Memory
+//!
+//! Solve for X. No training required.
 //!
 //! Combines:
 //! - **Layer 1 (Engram)**: O(1) multi-head N-gram hash lookup — fast path
@@ -429,8 +431,9 @@ impl DeepManEngine {
 
 fn main() {
     println!("╔══════════════════════════════════════════════════════════╗");
-    println!("║   DEEP MAN — Deterministic Engram-Addressed Memory      ║");
-    println!("║   with Algebraic Navigation                             ║");
+    println!("║   AXIOM — Algebraic neXt-token Inference On Memory       ║");
+    println!("║                                                          ║");
+    println!("║   Solve for X. No training required.                     ║");
     println!("║                                                          ║");
     println!("║   Layer 1: Engram (O(1) hash)                           ║");
     println!("║   Layer 2: TBA (VSA transitions)                        ║");

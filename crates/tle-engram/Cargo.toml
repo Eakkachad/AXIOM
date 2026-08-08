@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Multi-head N-gram hash table for O(1) factual retrieval — core of Deep Man architecture"
+description = "AXIOM Layer 1 — Multi-head N-gram hash table for O(1) factual retrieval"
 
 [[bin]]
 name = "tle-engram"

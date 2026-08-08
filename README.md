@@ -1,14 +1,16 @@
-# Deep Man — Deterministic Engram-Addressed Memory with Algebraic Navigation
+# AXIOM — Algebraic neXt-token Inference On Memory
 
-> Model-less, training-free, deterministic text generation via Vector Symbolic Architectures.
+> Solve for X. No training required.
+
+**AXIOM** treats text generation as an algebraic equation — given context, solve for the next token `X` using pure mathematics over hyperdimensional memory. No neural networks. No gradient descent. No GPU.
 
 ## What Is This?
 
 A research system that generates text **without any neural network training** — using only:
-- **Hyperdimensional computing** (Vector Symbolic Architecture)
-- **Hash-based N-gram memory** (Engram)
+- **Hyperdimensional computing** (Vector Symbolic Architecture, D=10,240)
+- **Hash-based N-gram memory** (Engram — O(1) lookup)
 - **Algebraic energy scoring** (composite energy minimization)
-- **Transition Binding Algebra** (novel non-commutative VSA operation)
+- **Transition Binding Algebra** (novel: `T(A→X) = π(A)⊗X`)
 
 **Key properties:**
 - ✅ 100% deterministic (same input → same output, always)
@@ -20,17 +22,23 @@ A research system that generates text **without any neural network training** �
 ## Architecture
 
 ```
-Input: "the president of the"
-  │
-  ├─→ [LAYER 1: Engram]   O(1) hash lookup → candidates + confidence
-  │     hit rate: 99.5%     (~6ms for 20 tokens)
-  │
-  ├─→ [LAYER 2: TBA]      VSA transition memory → fallback candidates
-  │     (only on Engram miss)
-  │
-  └─→ [AFC Energy Scoring]
-        E(token) = α·engram + β·transition - γ·repetition - δ·diversity
-        argmax → next token (deterministic)
+Context: "the president of the"
+                │
+    ┌───────────┴───────────┐
+    │                       │
+    ▼                       ▼
+[LAYER 1: Engram]     [LAYER 2: TBA]
+ O(1) hash lookup      VSA algebra
+ 99.5% hit rate        fallback path
+    │                       │
+    └───────────┬───────────┘
+                │
+                ▼
+    [AFC Energy Scoring]
+    E(X) = α·engram(X) + β·transition(X) - γ·repeat(X) - δ·freq(X)
+                │
+                ▼
+         argmax → X = "republic"
 ```
 
 ## Results
@@ -51,8 +59,8 @@ crates/
 ├── tle-vsa/          Core VSA operations (D=10,240 bipolar hypervectors)
 ├── tle-afc/          Algebraic Flow Composition (composable generation pipelines)
 ├── tle-engram/       Multi-head N-gram hash table (Layer 1: O(1) lookup)
-├── tle-deepman/      Unified orchestrator (Engram + TBA + AFC)
-├── tle-transition/   Transition Binding Algebra (T(A→B) = π(A)⊗B)
+├── tle-deepman/      Unified AXIOM orchestrator (Engram + TBA + AFC)
+├── tle-transition/   Transition Binding Algebra (T(A→X) = π(A)⊗X)
 ├── tle-resonator/    Resonator Networks (iterative cleanup)
 ├── tle-clifford/     Clifford Algebra (syntactic transformations)
 ├── tle-tda-router/   Topological Data Analysis routing
@@ -71,16 +79,16 @@ crates/
 # Build everything
 cargo build --release
 
-# Run the unified Deep Man engine
+# Run AXIOM unified engine
 cargo run --release -p tle-deepman
 
-# Run the Engram demo
+# Run the Engram standalone demo
 cargo run --release -p tle-engram
 
-# Run TBA experiments
+# Run Transition Binding Algebra experiments
 cargo run --release -p tle-transition
 
-# Run tests
+# Run all tests
 cargo test
 ```
 
@@ -95,14 +103,30 @@ Download required data files into `data/`:
 # Place as: data/glove.6B.50d.txt
 ```
 
-## Research Paper
+## The Idea
 
-See `../RESEARCH_PAPER_DRAFT.md` for the full paper:
-**"Transition Binding Algebra: Deterministic Sequential Generation via Energy-Minimizing Traversal in Hyperdimensional Space"**
+Traditional LLMs: train billions of parameters with gradient descent → sample from learned distribution.
+
+**AXIOM**: Encode corpus into algebraic memory → solve for X at inference time.
+
+```
+LLM:    P(X | context) ≈ softmax(W · h)        ← learned W
+AXIOM:  X = argmax E(x) = α·sim(π(c)⊗TM, x)   ← algebraic, no W
+```
+
+The next token X is not "predicted" — it is **solved** from the transition algebra.
+
+## Research
+
+See `docs/` for full documentation:
+- `RESEARCH_PAPER_DRAFT.md` — Full paper: "Transition Binding Algebra"
+- `SYNTHESIS_PROPOSAL.md` — Architecture design & roadmap
+- `KATGPT_ANALYSIS.md` — Prior art analysis
+- `attention_decomposition_report.md` — Attention mechanism study
 
 ## Novel Contributions
 
-1. **Transition Binding Algebra** — `T(A→B) = π(A)⊗B`: non-commutative directional binding enabling VSA-based generation
+1. **Transition Binding Algebra** — `T(A→X) = π(A)⊗X`: non-commutative directional binding for generation
 2. **Algebraic Flow Composition** — composable, type-safe generation pipelines via `FlowNode` trait
 3. **Multi-head Engram** — confidence-gated N-gram hash fusion with sigmoid weighting
 4. **Two-layer confidence fallback** — Engram (fast) → TBA (algebraic) with automatic routing
