@@ -482,6 +482,9 @@ fn main() {
     // Initialize IncrementalStore for live learning
     let mut store = tle_afc::IncrementalStore::new();
 
+    // Initialize Delta Memory for conversation context
+    let mut delta_mem = tle_afc::DeltaMem::new(2048);
+
     println!("\n── Commands ──");
     println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
@@ -529,6 +532,7 @@ fn main() {
 
         if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
             handle_teach(&mut store, &mut engine, fact_text);
+            delta_mem.update_topic(fact_text);
             continue;
         }
 
@@ -552,8 +556,48 @@ fn main() {
             continue;
         }
 
-        // Default: generate continuation
-        handle_generate(&mut engine, &store, trimmed);
+        // Default: generate/conversation
+        // First: resolve pronouns using conversation memory
+        let resolved = delta_mem.resolve_pronoun(trimmed);
+        let effective_input = if resolved != trimmed.to_lowercase() {
+            resolved.clone()
+        } else {
+            trimmed.to_lowercase()
+        };
+
+        // Track topic for future pronoun resolution
+        delta_mem.update_topic(trimmed);
+
+        // Process through intent detection with resolved input
+        let start = Instant::now();
+        let intent = detect_intent(&effective_input);
+
+        match intent {
+            Intent::Greeting => {
+                println!("  Hello! I'm AXIOM. Ask me anything, or teach me with /teach.");
+            }
+            Intent::Thanks => {
+                println!("  You're welcome! Ask me more or teach me something new.");
+            }
+            Intent::WhatIs(subject) => {
+                respond_what_is(&mut engine, &store, &subject, start);
+            }
+            Intent::WhoIs(subject) => {
+                respond_what_is(&mut engine, &store, &subject, start);
+            }
+            Intent::WhereIs(subject) => {
+                respond_where_is(&mut engine, &store, &subject, start);
+            }
+            Intent::YesNo(question) => {
+                respond_yes_no(&store, &question, start);
+            }
+            Intent::Question(topic) => {
+                respond_question(&mut engine, &store, &topic, &effective_input, start);
+            }
+            Intent::Generate => {
+                respond_generate(&mut engine, &store, &effective_input, start);
+            }
+        }
     }
 }
 

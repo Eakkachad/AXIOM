@@ -26,6 +26,7 @@
 
 pub mod analogy;
 pub mod combinators;
+pub mod delta_mem;
 pub mod energy;
 pub mod graph;
 pub mod incremental;
@@ -34,6 +35,7 @@ pub mod nodes;
 
 pub use analogy::AnalogicalEngine;
 pub use combinators::{ConditionalFlow, ParallelFlow, SequentialFlow};
+pub use delta_mem::DeltaMem;
 pub use energy::{CompositeEnergyFlow, EnergyConfig};
 pub use graph::FlowGraph;
 pub use incremental::IncrementalStore;
