@@ -1,0 +1,69 @@
+{
+  "config": {
+    "D": 4096,
+    "clusters": 64,
+    "tier1_k": 2048
+  },
+  "scaling_results": [
+    {
+      "sentences": 100,
+      "transitions": 570,
+      "vocab_size": 106,
+      "storage_kb": 2082.298828125,
+      "storage_baseline_kb": 16.0,
+      "coherence_hierarchical": 0.78,
+      "coherence_single": 0.41
+    },
+    {
+      "sentences": 500,
+      "transitions": 2850,
+      "vocab_size": 111,
+      "storage_kb": 2117.630859375,
+      "storage_baseline_kb": 16.0,
+      "coherence_hierarchical": 0.7,
+      "coherence_single": 0.295
+    },
+    {
+      "sentences": 1000,
+      "transitions": 5700,
+      "vocab_size": 111,
+      "storage_kb": 2141.466796875,
+      "storage_baseline_kb": 16.0,
+      "coherence_hierarchical": 0.7,
+      "coherence_single": 0.275
+    },
+    {
+      "sentences": 2000,
+      "transitions": 11400,
+      "vocab_size": 111,
+      "storage_kb": 2164.880859375,
+      "storage_baseline_kb": 16.0,
+      "coherence_hierarchical": 0.695,
+      "coherence_single": 0.31
+    },
+    {
+      "sentences": 5000,
+      "transitions": 28500,
+      "vocab_size": 111,
+      "storage_kb": 2185.921875,
+      "storage_baseline_kb": 16.0,
+      "coherence_hierarchical": 0.695,
+      "coherence_single": 0.275
+    }
+  ],
+  "storage_is_fixed": true,
+  "final_stats": {
+    "total_transitions": 28500,
+    "vocab_size": 111,
+    "tier1_exact_entries": 1815,
+    "tier2_avg_items_per_cluster": 445.3125,
+    "tier2_max_items_per_cluster": 7305,
+    "storage": {
+      "tier1": 124848,
+      "tier2": 1048576,
+      "centroids": 1048576,
+      "tier3": 16384,
+      "total": 2238384
+    }
+  }
+}

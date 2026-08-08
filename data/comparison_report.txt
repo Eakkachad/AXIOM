@@ -1,0 +1,8 @@
+=== Hypothesis 3: Method A vs Method C Comparison ===
+
+Method A (LLM Weights + MLP layer 14): 3/80 (3%)
+Method C (Text Corpus bigrams): 18/80 (22%)
+
+Conclusion: Text corpus bigrams provide more direct sequential information.
+Weight extraction gives semantic neighbors; corpus gives actual next-word patterns.
+RECOMMENDATION: Use corpus transitions as primary, weight semantics as secondary.

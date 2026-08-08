@@ -1,0 +1,19 @@
+=== Hypothesis 3: LLM Weight Extraction Report ===
+
+Model: Qwen3-1.7B
+Method: cosine(lm_head, embed) - no forward pass
+Vocab extracted: 34274 English words
+Transitions per word: 10
+Semantic accuracy: 36%
+
+Sample transitions:
+  the → ['to', 'this', 'that', 'and', 'these']
+  cat → ['cats', 'kitten', 'cath', 'cater', 'kitty']
+  dog → ['dogs', 'canine', 'puppy', 'puppies', 'pupper']
+  is → ['in', 'isn', 'as', 'on', 'at']
+  love → ['loves', 'loved', 'loving', 'lovers', 'lov']
+  big → ['bigger', 'biggest', 'grandes', 'huge', 'grande']
+  sun → ['sunlight', 'solar', 'sunshine', 'sunny', 'sunscreen']
+  run → ['runs', 'running', 'ran', 'runner', 'runners']
+  happy → ['happier', 'happiness', 'unhappy', 'feliz', 'happiest']
+  water → ['agua', 'waters', 'watermark', 'watering', 'ewater']

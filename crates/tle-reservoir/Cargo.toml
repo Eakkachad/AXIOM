@@ -1,0 +1,19 @@
+[package]
+name = "tle-reservoir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Holographic Reservoir Born Machine: closed-form language generation via echo state + ridge readout"
+
+[dependencies]
+tle-vsa = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+
+[[bin]]
+name = "tle-reservoir-proof"
+path = "src/main.rs"
+
+[[bin]]
+name = "tle-reservoir-v2"
+path = "src/v2.rs"

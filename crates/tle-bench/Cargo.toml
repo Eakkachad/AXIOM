@@ -1,0 +1,21 @@
+[package]
+name = "tle-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Benchmarking and verification suite for the Topological Latent Engine"
+
+[dependencies]
+tle-vsa = { workspace = true }
+tle-resonator = { workspace = true }
+tle-clifford = { workspace = true }
+tle-tda-router = { workspace = true }
+tle-memory = { workspace = true }
+tle-decoder = { workspace = true }
+tle-pipeline = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+
+[[bin]]
+name = "tle-bench"
+path = "src/main.rs"

@@ -1,0 +1,11 @@
+[package]
+name = "tle-decoder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Latent-to-English symbolic lookup decoder"
+
+[dependencies]
+tle-vsa = { workspace = true }
+tle-resonator = { workspace = true }
+tle-memory = { workspace = true }

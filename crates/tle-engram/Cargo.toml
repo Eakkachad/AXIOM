@@ -1,0 +1,15 @@
+[package]
+name = "tle-engram"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Multi-head N-gram hash table for O(1) factual retrieval — core of Deep Man architecture"
+
+[[bin]]
+name = "tle-engram"
+path = "src/main.rs"
+
+[dependencies]
+tle-vsa = { workspace = true }
+tle-afc = { path = "../tle-afc" }

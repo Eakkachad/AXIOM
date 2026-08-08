@@ -1,0 +1,1932 @@
+{
+  "a": [
+    {
+      "word": "new",
+      "score": 0.13333333333333333
+    },
+    {
+      "word": "good",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "beautiful",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "solution",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "question",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "different",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "letter",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "coin",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "sandcastle",
+      "score": 0.06666666666666667
+    },
+    {
+      "word": "loud",
+      "score": 0.06666666666666667
+    }
+  ],
+  "about": [
+    {
+      "word": "the",
+      "score": 0.6666666666666666
+    },
+    {
+      "word": "everything",
+      "score": 0.3333333333333333
+    }
+  ],
+  "across": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "all": [
+    {
+      "word": "night",
+      "score": 0.6666666666666666
+    },
+    {
+      "word": "their",
+      "score": 0.3333333333333333
+    }
+  ],
+  "along": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "always": [
+    {
+      "word": "drinks",
+      "score": 1.0
+    }
+  ],
+  "and": [
+    {
+      "word": "clear",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "walked",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "fresh",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "energetic",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "said",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "called",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "winding",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "noisy",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "slept",
+      "score": 0.07142857142857142
+    },
+    {
+      "word": "dog",
+      "score": 0.07142857142857142
+    }
+  ],
+  "anyone": [
+    {
+      "word": "else",
+      "score": 1.0
+    }
+  ],
+  "are": [
+    {
+      "word": "happy",
+      "score": 1.0
+    }
+  ],
+  "argued": [
+    {
+      "word": "about",
+      "score": 1.0
+    }
+  ],
+  "around": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "arrived": [
+    {
+      "word": "at",
+      "score": 1.0
+    }
+  ],
+  "asked": [
+    {
+      "word": "a",
+      "score": 0.5
+    },
+    {
+      "word": "him",
+      "score": 0.5
+    }
+  ],
+  "at": [
+    {
+      "word": "the",
+      "score": 0.6666666666666666
+    },
+    {
+      "word": "midnight",
+      "score": 0.16666666666666666
+    },
+    {
+      "word": "home",
+      "score": 0.16666666666666666
+    }
+  ],
+  "ate": [
+    {
+      "word": "breakfast",
+      "score": 1.0
+    }
+  ],
+  "baby": [
+    {
+      "word": "cried",
+      "score": 1.0
+    }
+  ],
+  "back": [
+    {
+      "word": "soon",
+      "score": 1.0
+    }
+  ],
+  "ball": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "beautiful": [
+    {
+      "word": "day",
+      "score": 0.5
+    },
+    {
+      "word": "flowers",
+      "score": 0.5
+    }
+  ],
+  "became": [
+    {
+      "word": "friends",
+      "score": 1.0
+    }
+  ],
+  "before": [
+    {
+      "word": "the",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "dinner",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "going",
+      "score": 0.3333333333333333
+    }
+  ],
+  "best": [
+    {
+      "word": "solution",
+      "score": 1.0
+    }
+  ],
+  "bird": [
+    {
+      "word": "flew",
+      "score": 1.0
+    }
+  ],
+  "birthday": [
+    {
+      "word": "with",
+      "score": 1.0
+    }
+  ],
+  "blew": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "bloom": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "boat": [
+    {
+      "word": "sailed",
+      "score": 1.0
+    }
+  ],
+  "book": [
+    {
+      "word": "is",
+      "score": 0.5
+    },
+    {
+      "word": "from",
+      "score": 0.5
+    }
+  ],
+  "borrowed": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "bought": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "box": [
+    {
+      "word": "upstairs",
+      "score": 1.0
+    }
+  ],
+  "breakfast": [
+    {
+      "word": "before",
+      "score": 1.0
+    }
+  ],
+  "bridge": [
+    {
+      "word": "connects",
+      "score": 1.0
+    }
+  ],
+  "bright": [
+    {
+      "word": "today",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "blue",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "in",
+      "score": 0.3333333333333333
+    }
+  ],
+  "broken": [
+    {
+      "word": "window",
+      "score": 1.0
+    }
+  ],
+  "building": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "built": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "bus": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "but": [
+    {
+      "word": "long",
+      "score": 1.0
+    }
+  ],
+  "cake": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "car": [
+    {
+      "word": "stopped",
+      "score": 0.5
+    },
+    {
+      "word": "to",
+      "score": 0.5
+    }
+  ],
+  "carried": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "cat": [
+    {
+      "word": "sat",
+      "score": 0.2
+    },
+    {
+      "word": "very",
+      "score": 0.2
+    },
+    {
+      "word": "chased",
+      "score": 0.2
+    },
+    {
+      "word": "is",
+      "score": 0.2
+    },
+    {
+      "word": "and",
+      "score": 0.2
+    }
+  ],
+  "celebrated": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "chased": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "children": [
+    {
+      "word": "played",
+      "score": 1.0
+    }
+  ],
+  "city": [
+    {
+      "word": "together",
+      "score": 1.0
+    }
+  ],
+  "cleaned": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "clock": [
+    {
+      "word": "struck",
+      "score": 1.0
+    }
+  ],
+  "coffee": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "coin": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "cold": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "come": [
+    {
+      "word": "back",
+      "score": 1.0
+    }
+  ],
+  "connects": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "cooked": [
+    {
+      "word": "dinner",
+      "score": 1.0
+    }
+  ],
+  "covered": [
+    {
+      "word": "with",
+      "score": 0.5
+    },
+    {
+      "word": "the",
+      "score": 0.5
+    }
+  ],
+  "cried": [
+    {
+      "word": "all",
+      "score": 1.0
+    }
+  ],
+  "crowded": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "danced": [
+    {
+      "word": "all",
+      "score": 1.0
+    }
+  ],
+  "dark": [
+    {
+      "word": "before",
+      "score": 1.0
+    }
+  ],
+  "decided": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "delicious": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "different": [
+    {
+      "word": "approach",
+      "score": 0.5
+    },
+    {
+      "word": "countries",
+      "score": 0.5
+    }
+  ],
+  "difficult": [
+    {
+      "word": "question",
+      "score": 1.0
+    }
+  ],
+  "dinner": [
+    {
+      "word": "for",
+      "score": 1.0
+    }
+  ],
+  "dog": [
+    {
+      "word": "ran",
+      "score": 0.5
+    },
+    {
+      "word": "became",
+      "score": 0.5
+    }
+  ],
+  "door": [
+    {
+      "word": "and",
+      "score": 0.5
+    },
+    {
+      "word": "opened",
+      "score": 0.5
+    }
+  ],
+  "drinks": [
+    {
+      "word": "coffee",
+      "score": 1.0
+    }
+  ],
+  "drove": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "early": [
+    {
+      "word": "every",
+      "score": 1.0
+    }
+  ],
+  "enough": [
+    {
+      "word": "money",
+      "score": 1.0
+    }
+  ],
+  "every": [
+    {
+      "word": "day",
+      "score": 0.5
+    },
+    {
+      "word": "morning",
+      "score": 0.5
+    }
+  ],
+  "explained": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "faster": [
+    {
+      "word": "than",
+      "score": 1.0
+    }
+  ],
+  "fence": [
+    {
+      "word": "quickly",
+      "score": 1.0
+    }
+  ],
+  "find": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "finished": [
+    {
+      "word": "his",
+      "score": 0.5
+    },
+    {
+      "word": "the",
+      "score": 0.5
+    }
+  ],
+  "fish": [
+    {
+      "word": "jumped",
+      "score": 1.0
+    }
+  ],
+  "fixed": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "flew": [
+    {
+      "word": "over",
+      "score": 1.0
+    }
+  ],
+  "flowers": [
+    {
+      "word": "bloom",
+      "score": 1.0
+    }
+  ],
+  "flows": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "food": [
+    {
+      "word": "was",
+      "score": 0.5
+    },
+    {
+      "word": "with",
+      "score": 0.5
+    }
+  ],
+  "football": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "for": [
+    {
+      "word": "the",
+      "score": 0.75
+    },
+    {
+      "word": "a",
+      "score": 0.25
+    }
+  ],
+  "forgot": [
+    {
+      "word": "his",
+      "score": 1.0
+    }
+  ],
+  "found": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "friends": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "from": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "full": [
+    {
+      "word": "of",
+      "score": 1.0
+    }
+  ],
+  "garden": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "gift": [
+    {
+      "word": "carefully",
+      "score": 1.0
+    }
+  ],
+  "go": [
+    {
+      "word": "home",
+      "score": 1.0
+    }
+  ],
+  "going": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "good": [
+    {
+      "word": "person",
+      "score": 1.0
+    }
+  ],
+  "ground": [
+    {
+      "word": "completely",
+      "score": 1.0
+    }
+  ],
+  "had": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "happy": [
+    {
+      "word": "together",
+      "score": 0.5
+    },
+    {
+      "word": "ending",
+      "score": 0.5
+    }
+  ],
+  "hard": [
+    {
+      "word": "for",
+      "score": 1.0
+    }
+  ],
+  "he": [
+    {
+      "word": "is",
+      "score": 0.05
+    },
+    {
+      "word": "was",
+      "score": 0.05
+    },
+    {
+      "word": "went",
+      "score": 0.05
+    },
+    {
+      "word": "told",
+      "score": 0.05
+    },
+    {
+      "word": "finished",
+      "score": 0.05
+    },
+    {
+      "word": "always",
+      "score": 0.05
+    },
+    {
+      "word": "read",
+      "score": 0.05
+    },
+    {
+      "word": "fixed",
+      "score": 0.05
+    },
+    {
+      "word": "painted",
+      "score": 0.05
+    },
+    {
+      "word": "carried",
+      "score": 0.05
+    }
+  ],
+  "heavy": [
+    {
+      "word": "box",
+      "score": 1.0
+    }
+  ],
+  "her": [
+    {
+      "word": "about",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "friend",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "wallet",
+      "score": 0.3333333333333333
+    }
+  ],
+  "him": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "his": [
+    {
+      "word": "work",
+      "score": 0.5
+    },
+    {
+      "word": "keys",
+      "score": 0.5
+    }
+  ],
+  "home": [
+    {
+      "word": "early",
+      "score": 1.0
+    }
+  ],
+  "hospital": [
+    {
+      "word": "yesterday",
+      "score": 1.0
+    }
+  ],
+  "house": [
+    {
+      "word": "last",
+      "score": 0.5
+    },
+    {
+      "word": "before",
+      "score": 0.5
+    }
+  ],
+  "i": [
+    {
+      "word": "love",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "think",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "want",
+      "score": 0.3333333333333333
+    }
+  ],
+  "in": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "interesting": [
+    {
+      "word": "but",
+      "score": 1.0
+    }
+  ],
+  "invited": [
+    {
+      "word": "all",
+      "score": 1.0
+    }
+  ],
+  "is": [
+    {
+      "word": "very",
+      "score": 0.2222222222222222
+    },
+    {
+      "word": "a",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "bright",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "cold",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "on",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "covered",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "sleeping",
+      "score": 0.1111111111111111
+    },
+    {
+      "word": "full",
+      "score": 0.1111111111111111
+    }
+  ],
+  "it": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "jumped": [
+    {
+      "word": "out",
+      "score": 0.5
+    },
+    {
+      "word": "over",
+      "score": 0.5
+    }
+  ],
+  "keys": [
+    {
+      "word": "at",
+      "score": 1.0
+    }
+  ],
+  "last": [
+    {
+      "word": "year",
+      "score": 0.5
+    },
+    {
+      "word": "summer",
+      "score": 0.5
+    }
+  ],
+  "learn": [
+    {
+      "word": "something",
+      "score": 1.0
+    }
+  ],
+  "learned": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "leaves": [
+    {
+      "word": "away",
+      "score": 1.0
+    }
+  ],
+  "letter": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "light": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "long": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "lost": [
+    {
+      "word": "her",
+      "score": 1.0
+    }
+  ],
+  "loud": [
+    {
+      "word": "and",
+      "score": 0.5
+    },
+    {
+      "word": "creak",
+      "score": 0.5
+    }
+  ],
+  "love": [
+    {
+      "word": "my",
+      "score": 1.0
+    }
+  ],
+  "man": [
+    {
+      "word": "sat",
+      "score": 1.0
+    }
+  ],
+  "many": [
+    {
+      "word": "different",
+      "score": 1.0
+    }
+  ],
+  "market": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "middle": [
+    {
+      "word": "of",
+      "score": 1.0
+    }
+  ],
+  "money": [
+    {
+      "word": "for",
+      "score": 1.0
+    }
+  ],
+  "mountain": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "mouse": [
+    {
+      "word": "around",
+      "score": 1.0
+    }
+  ],
+  "moved": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "movie": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "music": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "my": [
+    {
+      "word": "cat",
+      "score": 1.0
+    }
+  ],
+  "need": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "new": [
+    {
+      "word": "house",
+      "score": 0.5
+    },
+    {
+      "word": "city",
+      "score": 0.5
+    }
+  ],
+  "newspaper": [
+    {
+      "word": "every",
+      "score": 1.0
+    }
+  ],
+  "night": [
+    {
+      "word": "long",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "at",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "was",
+      "score": 0.3333333333333333
+    }
+  ],
+  "of": [
+    {
+      "word": "the",
+      "score": 0.6666666666666666
+    },
+    {
+      "word": "beautiful",
+      "score": 0.3333333333333333
+    }
+  ],
+  "off": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "old": [
+    {
+      "word": "man",
+      "score": 1.0
+    }
+  ],
+  "on": [
+    {
+      "word": "the",
+      "score": 0.75
+    },
+    {
+      "word": "time",
+      "score": 0.25
+    }
+  ],
+  "opened": [
+    {
+      "word": "the",
+      "score": 0.5
+    },
+    {
+      "word": "with",
+      "score": 0.5
+    }
+  ],
+  "out": [
+    {
+      "word": "of",
+      "score": 1.0
+    }
+  ],
+  "over": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "painted": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "phone": [
+    {
+      "word": "rang",
+      "score": 0.5
+    },
+    {
+      "word": "and",
+      "score": 0.5
+    }
+  ],
+  "picked": [
+    {
+      "word": "up",
+      "score": 1.0
+    }
+  ],
+  "planted": [
+    {
+      "word": "trees",
+      "score": 1.0
+    }
+  ],
+  "played": [
+    {
+      "word": "in",
+      "score": 0.5
+    },
+    {
+      "word": "football",
+      "score": 0.5
+    }
+  ],
+  "professor": [
+    {
+      "word": "explained",
+      "score": 1.0
+    }
+  ],
+  "project": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "promised": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "quiet": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "rain": [
+    {
+      "word": "started",
+      "score": 1.0
+    }
+  ],
+  "ran": [
+    {
+      "word": "in",
+      "score": 0.5
+    },
+    {
+      "word": "faster",
+      "score": 0.5
+    }
+  ],
+  "rang": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "read": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "river": [
+    {
+      "word": "flows",
+      "score": 0.5
+    },
+    {
+      "word": "bank",
+      "score": 0.5
+    }
+  ],
+  "road": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "said": [
+    {
+      "word": "that",
+      "score": 0.5
+    },
+    {
+      "word": "hello",
+      "score": 0.5
+    }
+  ],
+  "sailed": [
+    {
+      "word": "across",
+      "score": 1.0
+    }
+  ],
+  "sandcastle": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "sang": [
+    {
+      "word": "songs",
+      "score": 1.0
+    }
+  ],
+  "sat": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "saved": [
+    {
+      "word": "enough",
+      "score": 1.0
+    }
+  ],
+  "saw": [
+    {
+      "word": "her",
+      "score": 1.0
+    }
+  ],
+  "shared": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "she": [
+    {
+      "word": "walked",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "said",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "opened",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "smiled",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "studied",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "cooked",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "wrote",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "planted",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "found",
+      "score": 0.05263157894736842
+    },
+    {
+      "word": "cleaned",
+      "score": 0.05263157894736842
+    }
+  ],
+  "shine": [
+    {
+      "word": "bright",
+      "score": 1.0
+    }
+  ],
+  "should": [
+    {
+      "word": "try",
+      "score": 1.0
+    }
+  ],
+  "sky": [
+    {
+      "word": "turned",
+      "score": 1.0
+    }
+  ],
+  "sleeping": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "smiled": [
+    {
+      "word": "and",
+      "score": 0.5
+    },
+    {
+      "word": "when",
+      "score": 0.5
+    }
+  ],
+  "snow": [
+    {
+      "word": "covered",
+      "score": 1.0
+    }
+  ],
+  "something": [
+    {
+      "word": "new",
+      "score": 1.0
+    }
+  ],
+  "songs": [
+    {
+      "word": "around",
+      "score": 1.0
+    }
+  ],
+  "stars": [
+    {
+      "word": "shine",
+      "score": 1.0
+    }
+  ],
+  "started": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "stopped": [
+    {
+      "word": "at",
+      "score": 1.0
+    }
+  ],
+  "story": [
+    {
+      "word": "had",
+      "score": 1.0
+    }
+  ],
+  "struck": [
+    {
+      "word": "twelve",
+      "score": 1.0
+    }
+  ],
+  "studied": [
+    {
+      "word": "hard",
+      "score": 1.0
+    }
+  ],
+  "sun": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "sunset": [
+    {
+      "word": "from",
+      "score": 1.0
+    }
+  ],
+  "sweet": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "swim": [
+    {
+      "word": "last",
+      "score": 1.0
+    }
+  ],
+  "tall": [
+    {
+      "word": "and",
+      "score": 1.0
+    }
+  ],
+  "teacher": [
+    {
+      "word": "asked",
+      "score": 1.0
+    }
+  ],
+  "than": [
+    {
+      "word": "anyone",
+      "score": 1.0
+    }
+  ],
+  "that": [
+    {
+      "word": "he",
+      "score": 1.0
+    }
+  ],
+  "the": [
+    {
+      "word": "cat",
+      "score": 0.038834951456310676
+    },
+    {
+      "word": "dog",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "beach",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "water",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "garden",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "car",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "light",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "door",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "food",
+      "score": 0.019417475728155338
+    },
+    {
+      "word": "rain",
+      "score": 0.019417475728155338
+    }
+  ],
+  "their": [
+    {
+      "word": "friends",
+      "score": 1.0
+    }
+  ],
+  "theory": [
+    {
+      "word": "clearly",
+      "score": 1.0
+    }
+  ],
+  "they": [
+    {
+      "word": "are",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "decided",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "bought",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "traveled",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "played",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "celebrated",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "watched",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "danced",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "built",
+      "score": 0.058823529411764705
+    },
+    {
+      "word": "shared",
+      "score": 0.058823529411764705
+    }
+  ],
+  "think": [
+    {
+      "word": "this",
+      "score": 1.0
+    }
+  ],
+  "this": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "threw": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "to": [
+    {
+      "word": "the",
+      "score": 0.375
+    },
+    {
+      "word": "find",
+      "score": 0.0625
+    },
+    {
+      "word": "go",
+      "score": 0.0625
+    },
+    {
+      "word": "learn",
+      "score": 0.0625
+    },
+    {
+      "word": "many",
+      "score": 0.0625
+    },
+    {
+      "word": "her",
+      "score": 0.0625
+    },
+    {
+      "word": "come",
+      "score": 0.0625
+    },
+    {
+      "word": "swim",
+      "score": 0.0625
+    },
+    {
+      "word": "work",
+      "score": 0.0625
+    },
+    {
+      "word": "a",
+      "score": 0.0625
+    }
+  ],
+  "told": [
+    {
+      "word": "her",
+      "score": 0.5
+    },
+    {
+      "word": "the",
+      "score": 0.5
+    }
+  ],
+  "train": [
+    {
+      "word": "arrived",
+      "score": 1.0
+    }
+  ],
+  "traveled": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "trees": [
+    {
+      "word": "in",
+      "score": 1.0
+    }
+  ],
+  "truth": [
+    {
+      "word": "about",
+      "score": 1.0
+    }
+  ],
+  "try": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ],
+  "turned": [
+    {
+      "word": "dark",
+      "score": 0.5
+    },
+    {
+      "word": "off",
+      "score": 0.5
+    }
+  ],
+  "twelve": [
+    {
+      "word": "at",
+      "score": 1.0
+    }
+  ],
+  "two": [
+    {
+      "word": "islands",
+      "score": 1.0
+    }
+  ],
+  "up": [
+    {
+      "word": "the",
+      "score": 0.5
+    },
+    {
+      "word": "early",
+      "score": 0.5
+    }
+  ],
+  "very": [
+    {
+      "word": "much",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "important",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "tall",
+      "score": 0.3333333333333333
+    }
+  ],
+  "waited": [
+    {
+      "word": "for",
+      "score": 1.0
+    }
+  ],
+  "walked": [
+    {
+      "word": "to",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "in",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "along",
+      "score": 0.3333333333333333
+    }
+  ],
+  "wall": [
+    {
+      "word": "bright",
+      "score": 1.0
+    }
+  ],
+  "wallet": [
+    {
+      "word": "at",
+      "score": 1.0
+    }
+  ],
+  "want": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "was": [
+    {
+      "word": "long",
+      "score": 0.2
+    },
+    {
+      "word": "a",
+      "score": 0.1
+    },
+    {
+      "word": "right",
+      "score": 0.1
+    },
+    {
+      "word": "delicious",
+      "score": 0.1
+    },
+    {
+      "word": "loud",
+      "score": 0.1
+    },
+    {
+      "word": "interesting",
+      "score": 0.1
+    },
+    {
+      "word": "crowded",
+      "score": 0.1
+    },
+    {
+      "word": "sweet",
+      "score": 0.1
+    },
+    {
+      "word": "quiet",
+      "score": 0.1
+    }
+  ],
+  "watched": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "water": [
+    {
+      "word": "is",
+      "score": 1.0
+    }
+  ],
+  "we": [
+    {
+      "word": "went",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "need",
+      "score": 0.3333333333333333
+    },
+    {
+      "word": "should",
+      "score": 0.3333333333333333
+    }
+  ],
+  "went": [
+    {
+      "word": "to",
+      "score": 1.0
+    }
+  ],
+  "when": [
+    {
+      "word": "he",
+      "score": 1.0
+    }
+  ],
+  "wind": [
+    {
+      "word": "blew",
+      "score": 1.0
+    }
+  ],
+  "window": [
+    {
+      "word": "yesterday",
+      "score": 1.0
+    }
+  ],
+  "winter": [
+    {
+      "word": "was",
+      "score": 1.0
+    }
+  ],
+  "with": [
+    {
+      "word": "cake",
+      "score": 0.25
+    },
+    {
+      "word": "snow",
+      "score": 0.25
+    },
+    {
+      "word": "everyone",
+      "score": 0.25
+    },
+    {
+      "word": "a",
+      "score": 0.25
+    }
+  ],
+  "woke": [
+    {
+      "word": "up",
+      "score": 1.0
+    }
+  ],
+  "work": [
+    {
+      "word": "on",
+      "score": 1.0
+    }
+  ],
+  "wrapped": [
+    {
+      "word": "the",
+      "score": 1.0
+    }
+  ],
+  "wrote": [
+    {
+      "word": "a",
+      "score": 1.0
+    }
+  ]
+}

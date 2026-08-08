@@ -1,0 +1,9 @@
+[package]
+name = "tle-clifford"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Clifford/Geometric Algebra syntax engine for deterministic linguistic transformations"
+
+[dependencies]
+tle-vsa = { workspace = true }

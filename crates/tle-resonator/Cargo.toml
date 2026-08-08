@@ -1,0 +1,9 @@
+[package]
+name = "tle-resonator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Resonator Networks for non-linear cleanup of VSA crosstalk noise"
+
+[dependencies]
+tle-vsa = { workspace = true }

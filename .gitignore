@@ -1,0 +1,25 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# Data files (large, download separately)
+/data/glove.6B.50d.txt
+/data/wiki_train.txt
+/data/transitions.json
+/data/transitions_mlp.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

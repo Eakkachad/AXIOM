@@ -1,0 +1,13 @@
+[package]
+name = "tle-transition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transition Binding Algebra: deterministic sequential generation via VSA"
+
+[dependencies]
+tle-vsa = { workspace = true }
+
+[[bin]]
+name = "tle-transition-proof"
+path = "src/main.rs"

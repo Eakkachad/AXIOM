@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tle-vsa",
+    "crates/tle-resonator",
+    "crates/tle-clifford",
+    "crates/tle-tda-router",
+    "crates/tle-memory",
+    "crates/tle-decoder",
+    "crates/tle-pipeline",
+    "crates/tle-bench",
+    "crates/tle-chat",
+    "crates/tle-transition",
+    "crates/tle-reservoir",
+    "crates/tle-gen",
+    "crates/tle-afc",
+    "crates/tle-engram",
+    "crates/tle-deepman",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Deep_Man Research"]
+description = "Model-less Non-Parametric Multi-Node Latent Execution Engine"
+
+[workspace.dependencies]
+# Internal crates
+tle-vsa = { path = "crates/tle-vsa" }
+tle-resonator = { path = "crates/tle-resonator" }
+tle-clifford = { path = "crates/tle-clifford" }
+tle-tda-router = { path = "crates/tle-tda-router" }
+tle-memory = { path = "crates/tle-memory" }
+tle-decoder = { path = "crates/tle-decoder" }
+tle-pipeline = { path = "crates/tle-pipeline" }
+tle-afc = { path = "crates/tle-afc" }
+tle-engram = { path = "crates/tle-engram" }
+
+# External dependencies (pinned versions)
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+criterion = "0.5.1"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+rayon = "1.10.0"

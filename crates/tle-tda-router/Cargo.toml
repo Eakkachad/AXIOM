@@ -1,0 +1,11 @@
+[package]
+name = "tle-tda-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Topological Data Analysis Mapper router for deterministic MoE path selection"
+
+[dependencies]
+tle-vsa = { workspace = true }
+tle-resonator = { workspace = true }
+tle-clifford = { workspace = true }

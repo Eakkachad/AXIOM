@@ -1,0 +1,10 @@
+[package]
+name = "tle-memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Explicit Latent Memory Weaver - persistent VSA-bundled memory bank"
+
+[dependencies]
+tle-vsa = { workspace = true }
+tle-resonator = { workspace = true }
