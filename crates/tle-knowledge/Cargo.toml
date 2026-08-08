@@ -1,0 +1,10 @@
+[package]
+name = "tle-knowledge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Compressed Knowledge Representation — hierarchical VSA bundles for O(√N) memory scaling"
+
+[dependencies]
+tle-vsa = { workspace = true }

@@ -215,6 +215,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tle-knowledge"
+version = "0.1.0"
+dependencies = [
+ "tle-vsa",
+]
+
+[[package]]
 name = "tle-memory"
 version = "0.1.0"
 dependencies = [
