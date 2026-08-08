@@ -14,3 +14,4 @@ path = "src/main.rs"
 tle-vsa = { workspace = true }
 tle-afc = { path = "../tle-afc" }
 tle-engram = { path = "../tle-engram" }
+tle-axiom-gen = { path = "../tle-axiom-gen" }

@@ -193,6 +193,7 @@ name = "tle-deepman"
 version = "0.1.0"
 dependencies = [
  "tle-afc",
+ "tle-axiom-gen",
  "tle-engram",
  "tle-vsa",
 ]

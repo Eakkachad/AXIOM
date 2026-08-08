@@ -482,6 +482,9 @@ fn main() {
     // Initialize IncrementalStore for live learning
     let mut store = tle_afc::IncrementalStore::new();
 
+    // Initialize AXIOM-Gen for compositional generation
+    let mut axiom_gen = tle_axiom_gen::AxiomGen::new(2048);
+
     // Initialize Delta Memory for conversation context
     let mut delta_mem = tle_afc::DeltaMem::new(2048);
 
@@ -531,7 +534,7 @@ fn main() {
         }
 
         if let Some(fact_text) = trimmed.strip_prefix("/teach ") {
-            handle_teach(&mut store, &mut engine, fact_text);
+            handle_teach(&mut store, &mut engine, &mut axiom_gen, fact_text);
             delta_mem.update_topic(fact_text);
             continue;
         }
@@ -592,7 +595,16 @@ fn main() {
                 respond_yes_no(&store, &question, start);
             }
             Intent::Question(topic) => {
-                respond_question(&mut engine, &store, &topic, &effective_input, start);
+                // Try AXIOM-Gen compositional generation first
+                let gen_result = axiom_gen.generate(&effective_input);
+                if gen_result.path_length >= 2 {
+                    println!("  {} [{:?}]", gen_result.sentence, start.elapsed());
+                    if !gen_result.reasoning.is_empty() {
+                        println!("  [Reasoning: {}]", gen_result.reasoning.join(" → "));
+                    }
+                } else {
+                    respond_question(&mut engine, &store, &topic, &effective_input, start);
+                }
             }
             Intent::Generate => {
                 respond_generate(&mut engine, &store, &effective_input, start);
@@ -605,6 +617,7 @@ fn main() {
 fn handle_teach(
     store: &mut tle_afc::IncrementalStore,
     _engine: &mut DeepManEngine,
+    axiom_gen: &mut tle_axiom_gen::AxiomGen,
     fact_text: &str,
 ) {
     let trimmed = fact_text.trim();
@@ -682,6 +695,21 @@ fn handle_teach(
 
     // Always learn as text (for N-gram + TBA + sentence memory)
     store.learn_text(trimmed);
+
+    // Also add to AXIOM-Gen knowledge graph (for compositional generation)
+    // Re-extract subject/relation/object for axiom_gen
+    let lower = trimmed.to_lowercase();
+    for pattern in &[" is ", " are ", " has ", " have ", " can ", " causes ", " makes "] {
+        if let Some(pos) = lower.find(pattern) {
+            let subj = &lower[..pos];
+            let rel = pattern.trim();
+            let obj = &lower[pos + pattern.len()..];
+            if subj.len() > 1 && obj.len() > 1 {
+                axiom_gen.add_fact(subj, rel, obj);
+            }
+            break;
+        }
+    }
 
     if !extracted {
         println!("  ✓ Learned: \"{}\"", trimmed);
