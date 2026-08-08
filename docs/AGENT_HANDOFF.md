@@ -116,7 +116,20 @@ cargo test -p tle-engram      # 19 tests - N-gram hash
 
 ---
 
-## 12-WEEK DEVELOPMENT PLAN
+## 14-WEEK DEVELOPMENT PLAN (Revised)
+
+### System Classification: **Algebraic-Symbolic AI** (not rule-based, not neural)
+
+```
+Current composition:
+  Layer 1 (Engram):    Statistical (N-gram counts)
+  Layer 2 (TBA):       Algebraic (VSA permutation-binding)
+  Layer 3 (AXIOM-Gen): Algebraic + Graph (energy beam search)
+  Layer 4 (Reasoning): Algebraic (multi-hop, analogy)
+  Conversation:        Rule-based ← TO BE REPLACED with algebraic
+
+Goal: 100% Algebraic — zero rule-based, zero neural
+```
 
 ### Phase 1: Knowledge Infrastructure (Week 1-3) ← START HERE
 
@@ -128,35 +141,37 @@ cargo test -p tle-engram      # 19 tests - N-gram hash
 | 2 | **Auto-Learn from Web** | `/learn-url` command: fetch → extract → compress | Learn 300+ facts from 1 Wikipedia page in <5s |
 | 3 | **Knowledge Compaction** | Periodic merge/prune algorithm | 100K raw → 30K compacted, same coverage |
 
-### Phase 2: Generation Quality (Week 4-7)
+### Phase 2: Generation Quality + Tokenization (Week 4-8)
 
-**Goal:** Fluent multi-sentence output ใกล้เคียง LLM
+**Goal:** Fluent output + algebraic tokenization + eliminate all rule-based code
 
 | Week | Task | Deliverable | Gate |
 |:----:|------|-------------|------|
 | 4 | **Template extraction** (10K+ from corpus) | Template bank + matcher | Generate varied sentence structures |
 | 5 | **KN-5 fluency scoring** | E_fluency in energy function | Perplexity < 100 on generated text |
-| 6 | **Multi-sentence generation** | Paragraph planner | Coherent 3-5 sentence responses |
-| 7 | **Style adaptation** | Casual/formal/brief modes | User picks style |
+| 6 | **VSA Morphological Tokenization** | Subword composition: C("un")⊙ρ(C("believe"))⊙ρ²(C("able")) | 5K roots + 200 affixes → cover 100K+ words |
+| 7 | **VSA Intent Detection** (replace rule-based) | Algebraic semantic matching for intents | "tell me the reason" → detects "why" without keyword |
+| 8 | **Multi-sentence + Style** | Paragraph planner + casual/formal modes | Coherent 3-5 sentence responses |
 
-### Phase 3: Intelligence Layer (Week 8-10)
+### Phase 3: Intelligence Layer (Week 9-11)
 
-**Goal:** Reasoning ที่ซับซ้อน + self-correction
-
-| Week | Task | Deliverable | Gate |
-|:----:|------|-------------|------|
-| 8 | **Attractor reasoning** (iterative refinement) | Resonator-based multi-pass | Answer improves over 3-5 iterations |
-| 9 | **PTG recursive composition** | Unbounded reasoning depth | Solve 10-hop inference chains |
-| 10 | **Contradiction detection** | Conflict alert + resolution | Detect 90%+ contradictions |
-
-### Phase 4: Scale & Deploy (Week 11-12)
-
-**Goal:** พร้อมใช้จริง + publish
+**Goal:** Reasoning ซับซ้อน + fully algebraic pipeline
 
 | Week | Task | Deliverable | Gate |
 |:----:|------|-------------|------|
-| 11 | **Background web learning** | Auto-fill knowledge gaps | AXIOM gets smarter daily |
-| 12 | **Benchmark + paper** | TriviaQA 40%+, arXiv submission | Publishable results |
+| 9 | **Attractor reasoning** (iterative refinement) | Resonator-based multi-pass | Answer improves over 3-5 iterations |
+| 10 | **PTG recursive composition** | Unbounded reasoning depth | Solve 10-hop inference chains |
+| 11 | **VSA Entity Linking + Contradiction Detection** | Fuzzy match + conflict alert | Link "short wavelength" ↔ "blue light" automatically |
+
+### Phase 4: Scale & Deploy (Week 12-14)
+
+**Goal:** Multi-language + web learning + publish
+
+| Week | Task | Deliverable | Gate |
+|:----:|------|-------------|------|
+| 12 | **Background web learning daemon** | Auto-fill knowledge gaps from internet | AXIOM gets smarter daily |
+| 13 | **Multi-language** (Thai + English) | VSA subword handles ภาษาไทย | "ทำไมท้องฟ้าเป็นสีฟ้า?" works |
+| 14 | **Benchmark + paper** | TriviaQA 40%+, arXiv submission | Publishable results |
 
 ---
 
@@ -200,19 +215,32 @@ cargo test -p tle-engram      # 19 tests - N-gram hash
   - [ ] Auto-trigger every 10K facts
   - [ ] Test: 100K → 30K, recall preserved
 
-### 🔲 TODO (Phase 2 — Quality):
-- [ ] Template bank extraction from WikiText
+### 🔲 TODO (Phase 2 — Quality + Tokenization):
+- [ ] Template bank extraction from WikiText (10K+)
 - [ ] KN-5 fluency as energy term
+- [ ] **VSA Morphological Tokenization** (novel: subword as algebraic composition)
+  - [ ] Morpheme dictionary (5K roots + 200 affixes)
+  - [ ] Longest-match decomposition algorithm
+  - [ ] Positional binding: C(part_i) ⊙ ρⁱ
+  - [ ] Fallback to whole-word for undecomposable
+  - [ ] Test: "unbelievable" close to "unforgettable"
+- [ ] **VSA Intent Detection** (replace rule-based keyword matching)
+  - [ ] Intent prototype vectors (bundle of related words per intent)
+  - [ ] Cosine matching: input_vec vs intent_vecs
+  - [ ] Remove all if/starts_with intent rules
+  - [ ] Test: "tell me the reason" → detects "why"
 - [ ] Multi-sentence paragraph generation
 - [ ] Style modes (casual/formal/brief)
 
 ### 🔲 TODO (Phase 3 — Intelligence):
-- [ ] Attractor-based iterative reasoning
-- [ ] PTG recursive composition
-- [ ] Contradiction detection
+- [ ] Attractor-based iterative reasoning (Resonator multi-pass)
+- [ ] PTG recursive composition (unbounded depth)
+- [ ] **VSA Entity Linking** (fuzzy cosine match, replace exact string match)
+- [ ] Contradiction detection + resolution
 
 ### 🔲 TODO (Phase 4 — Deploy):
 - [ ] Background web learning daemon
+- [ ] **Multi-language** (Thai + English via VSA subword)
 - [ ] TriviaQA benchmark
 - [ ] arXiv paper submission
 
