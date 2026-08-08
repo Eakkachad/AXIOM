@@ -364,6 +364,16 @@ impl IncrementalStore {
     pub fn stats(&self) -> &IncrStats {
         &self.stats
     }
+
+    /// Get reference to the fact store (for AnalogicalEngine).
+    pub fn fact_store(&self) -> &HashMap<String, Vec<(String, String)>> {
+        &self.fact_store
+    }
+
+    /// Get reference to the codebook (for AnalogicalEngine).
+    pub fn codebook(&self) -> &Codebook {
+        &self.codebook
+    }
 }
 
 impl Default for IncrementalStore {

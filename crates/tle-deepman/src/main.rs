@@ -705,6 +705,9 @@ fn handle_generate(
         Intent::WhereIs(subject) => {
             respond_where_is(engine, store, &subject, start);
         }
+        Intent::YesNo(question) => {
+            respond_yes_no(store, &question, start);
+        }
         Intent::Question(topic) => {
             respond_question(engine, store, &topic, &lower, start);
         }
@@ -725,6 +728,7 @@ enum Intent {
     WhatIs(String),
     WhoIs(String),
     WhereIs(String),
+    YesNo(String),
     Question(String),
     Generate,
 }
@@ -776,6 +780,13 @@ fn detect_intent(input: &str) -> Intent {
             .trim_end_matches('?')
             .trim();
         return Intent::WhereIs(subject.to_string());
+    }
+
+    // Yes/No: "is X a Y?" / "does X have Y?" / "can X Y?" / "do X Y?"
+    if input.starts_with("is ") || input.starts_with("does ") || input.starts_with("can ")
+        || input.starts_with("do ") {
+        let topic = input.trim_end_matches('?').trim().to_string();
+        return Intent::YesNo(topic);
     }
 
     // General questions (contains ?)
@@ -884,6 +895,125 @@ fn respond_where_is(
         println!("  {} is located in {} [{:?}]", capitalize(subject), output, gen_time);
     } else {
         println!("  I don't know where '{}' is. Teach me with /teach!", subject);
+    }
+}
+
+/// Respond to yes/no questions using direct facts + analogical inference.
+///
+/// "is a dog an animal?" → check facts, then try analogy
+/// "can elephants swim?" → check facts, then try analogy
+fn respond_yes_no(
+    store: &tle_afc::IncrementalStore,
+    question: &str,
+    start: Instant,
+) {
+    let words: Vec<&str> = question.split_whitespace().collect();
+
+    // Parse: "is [subject] [relation] [object]" or "can [subject] [verb]" etc.
+    let (subject, relation, object) = parse_yes_no_question(&words);
+
+    if subject.is_empty() {
+        println!("  I'm not sure how to answer that. Try rephrasing?");
+        return;
+    }
+
+    // 1. Check direct facts
+    let facts = store.get_facts(&subject);
+    for (rel, obj) in &facts {
+        if relation_matches_loose(rel, &relation) {
+            if object.is_empty() || obj.contains(&object) || object.contains(&**obj) {
+                println!("  Yes! {} {} {}. [{:?}]", capitalize(&subject), rel, obj, start.elapsed());
+                return;
+            }
+        }
+    }
+
+    // 2. Try analogical inference
+    let analogy_engine = tle_afc::AnalogicalEngine::new(store.codebook(), store.fact_store());
+    let results = analogy_engine.infer(&subject, &relation);
+
+    if !results.is_empty() {
+        let best = &results[0];
+        if object.is_empty() || best.answer.contains(&object) || object.contains(&best.answer) {
+            println!("  Probably yes — by analogy: {} [{:?}]",
+                best.reasoning, start.elapsed());
+        } else {
+            println!("  By analogy with {}: {} {} {} (confidence: {:.2}) [{:?}]",
+                best.source_subject, subject, relation, best.answer, best.confidence, start.elapsed());
+        }
+        return;
+    }
+
+    // 3. Check sentence memory
+    let sentences = store.get_sentences(&subject);
+    for sent in &sentences {
+        if !relation.is_empty() && sent.contains(&relation) {
+            println!("  Based on what I know: {} [{:?}]", capitalize(sent), start.elapsed());
+            return;
+        }
+    }
+
+    println!("  I don't have enough information to answer that. Teach me more about {}!", subject);
+}
+
+/// Parse a yes/no question into (subject, relation, object).
+fn parse_yes_no_question(words: &[&str]) -> (String, String, String) {
+    if words.len() < 3 {
+        return (String::new(), String::new(), String::new());
+    }
+
+    // "is [subject] a/an [object]" → (subject, "is", object)
+    if words[0] == "is" || words[0] == "are" {
+        let subject = words[1].to_lowercase();
+        // Find "a", "an", "the" or just take the rest
+        let rest_start = if words.len() > 2 && (words[2] == "a" || words[2] == "an" || words[2] == "the") {
+            3
+        } else {
+            2
+        };
+        let object = words[rest_start..].join(" ").to_lowercase();
+        return (subject, "is".to_string(), object);
+    }
+
+    // "does [subject] have [object]" → (subject, "has", object)
+    if words[0] == "does" || words[0] == "do" {
+        let subject = words[1].to_lowercase();
+        if words.len() > 2 {
+            let verb = words[2].to_lowercase();
+            let relation = match verb.as_str() {
+                "have" => "has".to_string(),
+                _ => verb,
+            };
+            let object = if words.len() > 3 {
+                words[3..].join(" ").to_lowercase()
+            } else {
+                String::new()
+            };
+            return (subject, relation, object);
+        }
+    }
+
+    // "can [subject] [verb] [rest]" → (subject, "can", verb+rest)
+    if words[0] == "can" {
+        let subject = words[1].to_lowercase();
+        let object = if words.len() > 2 {
+            words[2..].join(" ").to_lowercase()
+        } else {
+            String::new()
+        };
+        return (subject, "can".to_string(), object);
+    }
+
+    (String::new(), String::new(), String::new())
+}
+
+/// Loose relation matching for yes/no questions.
+fn relation_matches_loose(stored: &str, query: &str) -> bool {
+    if stored == query { return true; }
+    match (stored, query) {
+        ("is", "are") | ("are", "is") => true,
+        ("has", "have") | ("have", "has") => true,
+        _ => stored.contains(query) || query.contains(stored),
     }
 }
 
