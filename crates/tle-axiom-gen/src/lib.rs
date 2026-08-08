@@ -17,6 +17,7 @@ pub mod engine;
 pub mod graph;
 pub mod linearize;
 pub mod search;
+pub mod templates;
 
 pub use engine::{AxiomGen, GenerationResult};
 pub use graph::{KnowledgeGraph, Triple};
