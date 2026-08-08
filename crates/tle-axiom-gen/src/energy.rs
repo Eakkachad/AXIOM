@@ -122,6 +122,45 @@ pub fn compute_simplicity(path_len: usize) -> f32 {
     1.0 / (path_len as f32)
 }
 
+/// Compute fluency score for a linearized sentence.
+///
+/// Measures how "natural English" a generated string looks using
+/// lightweight heuristics (no neural model needed).
+/// Returns value in [0, 1] — lower = more natural.
+pub fn compute_fluency(sentence: &str) -> f32 {
+    if sentence.len() < 5 {
+        return 0.5;
+    }
+
+    let lower = sentence.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+
+    if words.is_empty() {
+        return 1.0;
+    }
+
+    // 1. Average word length (English avg ≈ 4.7)
+    let avg_word_len = words.iter().map(|w| w.len()).sum::<usize>() as f32 / words.len() as f32;
+    let word_len_score = 1.0 - ((avg_word_len - 4.7).abs() / 10.0).min(1.0);
+
+    // 2. Space ratio (natural ≈ 15-20%)
+    let space_ratio = chars.iter().filter(|&&c| c == ' ').count() as f32 / chars.len() as f32;
+    let space_score = 1.0 - ((space_ratio - 0.17).abs() / 0.3).min(1.0);
+
+    // 3. Sentence starts with capital
+    let starts_cap = sentence.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
+    let cap_score = if starts_cap { 0.0 } else { 0.1 };
+
+    // 4. Ends with punctuation
+    let ends_punct = sentence.ends_with('.') || sentence.ends_with('!') || sentence.ends_with('?');
+    let punct_score = if ends_punct { 0.0 } else { 0.1 };
+
+    // Combine (lower = more natural)
+    let raw = 1.0 - (word_len_score * 0.4 + space_score * 0.4) + cap_score + punct_score;
+    raw.max(0.0).min(1.0)
+}
+
 /// Encode a single triple as a hypervector using VSA binding.
 ///
 /// Formula: C(subject) ⊙ C(relation) ⊙ ρ(C(object))
