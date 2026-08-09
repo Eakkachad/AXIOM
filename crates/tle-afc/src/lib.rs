@@ -44,7 +44,7 @@ pub use energy::{CompositeEnergyFlow, EnergyConfig};
 pub use morph_tokenizer::MorphTokenizer;
 pub use graph::FlowGraph;
 pub use vsa_intent::{VsaIntentDetector, VsaIntent};
-pub use incremental::IncrementalStore;
+pub use incremental::{CompactionReport, IncrConfig, IncrementalStore};
 pub use node::{FlowNode, FlowState};
 pub use nodes::{
     BindNode, ContextAccumNode, DiversityPenaltyNode, MultiHopNode, PermuteNode,

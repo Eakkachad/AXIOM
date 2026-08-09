@@ -543,6 +543,8 @@ fn main() {
             let st = store.stats();
             println!("  Incremental: {} facts, {} tokens learned, {} transitions",
                 st.facts_added, st.tokens_ingested, st.transitions_added);
+            println!("  Compaction: {} runs, {} facts pruned",
+                st.compactions, st.facts_pruned);
             continue;
         }
 

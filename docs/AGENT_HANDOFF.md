@@ -211,6 +211,15 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] `CompactionConfig` and `CompactionReport` exported
   - [x] 14 `tle-knowledge` tests pass
 
+### ✅ COMPLETED (Phase 1.3 — Production Compaction):
+- [x] Automatic compaction wired into `tle-afc::IncrementalStore`
+  - [x] Default trigger every 10,000 learned facts
+  - [x] Configurable trigger interval and per-subject retention limit
+  - [x] Rebuilds exact fact store and VSA KG memory after pruning
+  - [x] `/stats` reports compaction runs and pruned facts
+  - [x] Production compaction regression test added
+  - [x] `cargo test -p tle-afc`: 46 tests pass
+
 ### ✅ COMPLETED (Phase 2 — Generation Quality):
 - [x] Template extraction (TemplateBank) — 19 patterns, 4 tests
 - [x] Fluency scoring (compute_fluency) — heuristic naturalness scorer
@@ -231,7 +240,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
    - [ ] Topic clustering (cosine similarity)
    - [ ] Fact merging (shared subject → combine objects)
    - [ ] Automatic age-based stale fact pruning
-   - [ ] Auto-trigger every 10K facts
+   - [x] Auto-trigger every 10K facts
 
 ### 🔲 TODO (Phase 2 — remaining):
 - [ ] **Style adaptation** (casual/formal/brief modes)

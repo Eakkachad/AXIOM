@@ -16,7 +16,7 @@
 //!   → Engram hits "capital of thailand" → "bangkok" ✓
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tle_vsa::{bind, HyperVector, Codebook};
 
 /// Incremental knowledge store that updates both Engram and TBA on-the-fly.
@@ -35,6 +35,8 @@ pub struct IncrementalStore {
     sentence_memory: HashMap<String, Vec<String>>,
     /// Fact store: subject → list of (relation, object) pairs
     fact_store: HashMap<String, Vec<(String, String)>>,
+    /// Insertion order used to retain the newest facts during compaction.
+    fact_log: Vec<(String, String, String)>,
     /// Configuration
     config: IncrConfig,
     /// Statistics
@@ -50,6 +52,10 @@ pub struct IncrConfig {
     pub max_order: usize,
     /// Codebook seed.
     pub seed: u64,
+    /// Run compaction after this many learned facts. Zero disables auto-compaction.
+    pub compaction_interval: usize,
+    /// Keep at most this many newest facts for each subject.
+    pub max_facts_per_subject: usize,
 }
 
 impl Default for IncrConfig {
@@ -58,6 +64,8 @@ impl Default for IncrConfig {
             dim: 2048,
             max_order: 5,
             seed: 0xAB10_CAFE_1234_5678,
+            compaction_interval: 10_000,
+            max_facts_per_subject: 100,
         }
     }
 }
@@ -69,6 +77,17 @@ pub struct IncrStats {
     pub tokens_ingested: usize,
     pub transitions_added: usize,
     pub vocab_size: usize,
+    pub compactions: usize,
+    pub facts_pruned: usize,
+}
+
+/// Result of a production knowledge compaction pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CompactionReport {
+    pub facts_before: usize,
+    pub facts_after: usize,
+    pub duplicates_removed: usize,
+    pub facts_pruned: usize,
 }
 
 /// Simple vocabulary for incremental store.
@@ -133,6 +152,7 @@ impl IncrementalStore {
             vocab: IncrVocab::new(),
             sentence_memory: HashMap::new(),
             fact_store: HashMap::new(),
+            fact_log: Vec::new(),
             config,
             stats: IncrStats::default(),
         }
@@ -231,6 +251,7 @@ impl IncrementalStore {
             .entry(subj_lower.clone())
             .or_default()
             .push((rel_lower.clone(), obj_lower.clone()));
+        self.fact_log.push((subj_lower.clone(), rel_lower.clone(), obj_lower.clone()));
 
         // Ensure all are in codebook
         self.codebook.get_or_insert(&subj_lower);
@@ -253,6 +274,75 @@ impl IncrementalStore {
         // Also add as text transition for generation
         let sentence = format!("{} {} {}", subject, relation, object);
         self.learn_text(&sentence);
+
+        if self.config.compaction_interval > 0
+            && self.stats.facts_added % self.config.compaction_interval == 0
+        {
+            self.compact_knowledge();
+        }
+    }
+
+    /// Compact production facts and rebuild the bundled KG memory.
+    ///
+    /// Exact duplicate facts and older per-subject facts are removed. The KG must
+    /// be rebuilt because its VSA representation is a superposition and cannot
+    /// subtract individual stale bindings safely.
+    pub fn compact_knowledge(&mut self) -> CompactionReport {
+        let facts_before = self.fact_log.len();
+        if facts_before == 0 {
+            return CompactionReport::default();
+        }
+
+        let mut seen = HashSet::new();
+        let mut subject_counts: HashMap<&str, usize> = HashMap::new();
+        let mut retained = Vec::with_capacity(facts_before);
+        for fact in self.fact_log.iter().rev() {
+            if !seen.insert(fact.clone()) {
+                continue;
+            }
+            let count = subject_counts.entry(fact.0.as_str()).or_insert(0);
+            if *count < self.config.max_facts_per_subject.max(1) {
+                retained.push(fact.clone());
+                *count += 1;
+            }
+        }
+        retained.reverse();
+
+        let facts_after = retained.len();
+        let report = CompactionReport {
+            facts_before,
+            facts_after,
+            duplicates_removed: facts_before - seen.len(),
+            facts_pruned: seen.len() - facts_after,
+        };
+
+        self.fact_log = retained;
+        self.fact_store.clear();
+        self.kg_memory = HyperVector::zeros(self.config.dim);
+        let facts = self.fact_log.clone();
+        for (subject, relation, object) in facts {
+            self.fact_store
+                .entry(subject.clone())
+                .or_default()
+                .push((relation.clone(), object.clone()));
+            self.encode_fact_into_kg(&subject, &relation, &object);
+        }
+
+        self.stats.compactions += 1;
+        self.stats.facts_pruned += report.duplicates_removed + report.facts_pruned;
+        report
+    }
+
+    fn encode_fact_into_kg(&mut self, subject: &str, relation: &str, object: &str) {
+        let (Some(s_vec), Some(r_vec), Some(o_vec)) = (
+            self.codebook.get(subject).cloned(),
+            self.codebook.get(relation).cloned(),
+            self.codebook.get(object).cloned(),
+        ) else {
+            return;
+        };
+        let binding = s_vec.permute(2).hadamard(&r_vec.permute(1)).hadamard(&o_vec);
+        self.kg_memory = self.kg_memory.add(&binding);
     }
 
     /// Retrieve exact facts about a subject from the fact store.
@@ -461,5 +551,28 @@ mod tests {
         assert_eq!(store.stats.tokens_ingested, 4 + 3); // text + fact-as-text
         assert_eq!(store.stats.facts_added, 1);
         assert!(store.stats.transitions_added > 0);
+    }
+
+    #[test]
+    fn test_compaction_rebuilds_production_knowledge() {
+        let mut store = IncrementalStore::with_config(IncrConfig {
+            dim: 128,
+            max_order: 3,
+            seed: 42,
+            compaction_interval: 3,
+            max_facts_per_subject: 2,
+        });
+
+        store.learn_fact("cat", "has", "four legs");
+        store.learn_fact("cat", "likes", "sun");
+        store.learn_fact("cat", "says", "meow");
+
+        let facts = store.get_facts("cat");
+        assert_eq!(facts.len(), 2);
+        assert_eq!(facts[0], ("likes", "sun"));
+        assert_eq!(facts[1], ("says", "meow"));
+        assert_eq!(store.stats.compactions, 1);
+        assert_eq!(store.stats.facts_pruned, 1);
+        assert!(store.query_fact("cat", "likes").is_some());
     }
 }
