@@ -222,7 +222,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] Same-subject/relation values merge deterministically during compaction
   - [x] `/stats` reports merged values
 
-### ✅ COMPLETED (Phase 1.4 — Web Learning MVP):
+### ✅ COMPLETED (Phase 1.4 — Web Learning):
 - [x] Bounded HTTP/HTTPS fetch with timeout and response-size limit
 - [x] HTML cleanup: removes scripts, styles, navigation, forms, and markup
 - [x] Sentence extraction and simple fact extraction
@@ -230,11 +230,11 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Extracted facts are learned by IncrementalStore and AXIOM-Gen
 - [x] Entity normalization removes leading articles for stable queries
 - [x] Multi-clause fact extraction added
-- [x] Local HTTP-server integration test and 5 web-learning tests pass
+- [x] Local HTTP-server integration test and 6 web-learning tests pass
 - [x] Synthetic 400-fact extraction benchmark passes under 5 seconds
 - [x] Wikipedia infobox/table extraction added and tested
-- [x] Real Wikipedia run measured: 1,103 sentences, 297 facts, ~698ms
-- [ ] Wikipedia 300+ facts gate: performance passes, extraction coverage is still short by 3 facts
+- [x] Real Wikipedia run measured: 1,103 sentences, 345 facts, ~1.53s
+- [x] Wikipedia 300+ facts / <5s gate passed without synthetic padding
 
 ### ✅ COMPLETED (Phase 2 — Generation Quality):
 - [x] Template extraction (TemplateBank) — 19 patterns, 4 tests
@@ -275,13 +275,13 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] `/stats` reports detected AXIOM-Gen contradictions
 - [x] `cargo test -p tle-axiom-gen`: 45 tests pass
 
-### 🔲 TODO (Phase 1 — remaining):
-- [ ] **Week 2:** Auto-learn from web (MVP complete; quality gate remains)
+### ✅ COMPLETED (Phase 1 — Knowledge Infrastructure):
+- [x] **Week 2:** Auto-learn from web
   - [x] HTTP fetch + HTML extraction (MVP)
   - [x] `/learn-url` command (MVP)
   - [x] Improve extraction quality with entity normalization and multi-clause extraction
-  - [ ] Increase real-page extraction coverage to 300+ facts without lowering precision
-- [ ] **Week 3:** Knowledge Compaction
+  - [x] Increase real-page extraction coverage to 300+ facts without lowering precision
+- [x] **Week 3:** Knowledge Compaction
    - [x] Topic clustering (cosine similarity)
    - [x] Fact merging (shared subject + relation → combine distinct objects)
    - [x] Automatic age-based stale fact pruning

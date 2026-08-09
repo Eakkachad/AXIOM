@@ -117,7 +117,9 @@ fn strip_markup(html: &str) -> String {
                 }
                 if skip_depth == 0 && closing && name == "th" {
                     output.push_str(": ");
-                } else if skip_depth == 0 && (name == "br" || (closing && matches!(name, "p" | "div" | "li" | "h1" | "h2" | "h3" | "section" | "article" | "tr" | "td"))) {
+                } else if skip_depth == 0 && closing && matches!(name, "th" | "dt") {
+                    output.push_str(": ");
+                } else if skip_depth == 0 && (name == "br" || (closing && matches!(name, "p" | "div" | "li" | "h1" | "h2" | "h3" | "section" | "article" | "tr" | "td" | "dd"))) {
                     output.push('\n');
                 }
             } else {
@@ -180,12 +182,21 @@ fn extract_fact(sentence: &str) -> Option<FactCandidate> {
         (" introduced by ", "introduced_by"), (" named ", "named"),
         (" evolved from ", "evolved_from"), (" superseded by ", "superseded_by"),
         (" replaced by ", "replaced_by"), (" used for ", "used_for"),
+        (" developed in ", "developed_in"), (" implemented in ", "implemented_in"),
+        (" implemented by ", "implemented_by"), (" distributed under ", "distributed_under"),
+        (" licensed under ", "licensed_under"), (" written using ", "written_using"),
+        (" used by ", "used_by"), (" supported by ", "supported_by"),
     ];
     let (_, pattern, relation) = patterns.iter().filter_map(|(pattern, relation)| {
         lower.find(pattern).map(|position| (position, *pattern, *relation))
     }).min_by_key(|(position, _, _)| *position)?;
     let position = lower.find(pattern)?;
-    let subject = normalize_subject(&sentence[..position]);
+    let mut subject = normalize_subject(&sentence[..position]);
+    if subject.split_whitespace().count() > 8 {
+        if let Some((_, tail)) = subject.rsplit_once(',') {
+            subject = normalize_subject(tail);
+        }
+    }
     let object = normalize_text(&sentence[position + pattern.len()..]);
     if subject.split_whitespace().count() > 8 || object.split_whitespace().count() > 40 || subject.len() < 2 || object.len() < 2 {
         return None;
@@ -196,7 +207,9 @@ fn extract_fact(sentence: &str) -> Option<FactCandidate> {
 fn extract_facts(sentence: &str) -> Vec<FactCandidate> {
     let mut facts = Vec::new();
     let clauses: Vec<&str> = sentence.split(" and ").collect();
-    let first = extract_fact(clauses[0]);
+    // Prefer the complete sentence so introductory clauses containing "and"
+    // do not detach the real subject before relation extraction.
+    let first = extract_fact(sentence);
     if let Some(fact) = first.clone() {
         facts.push(fact.clone());
         for clause in clauses.iter().skip(1) {
@@ -336,5 +349,13 @@ mod tests {
         assert_eq!(page.sentences.len(), 400);
         assert_eq!(page.facts.len(), 400);
         assert!(elapsed.as_secs() < 5, "extraction took {:?}", elapsed);
+    }
+
+    #[test]
+    fn trims_long_introductory_subject_clauses() {
+        let page = extract_html("<p>In the long and documented history of modern systems programming, Rust is memory safe.</p>");
+        assert!(page.facts.iter().any(|fact| {
+            fact.subject == "Rust" && fact.relation == "is" && fact.object == "memory safe"
+        }), "facts: {:?}", page.facts);
     }
 }
