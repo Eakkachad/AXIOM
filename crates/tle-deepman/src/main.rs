@@ -38,6 +38,8 @@ use tle_engram::builder::{BuilderConfig, EngramBuilder, Vocab};
 use tle_engram::fusion::SigmoidFusion;
 use tle_engram::hash::NgramHash;
 
+mod web_learning;
+
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════
@@ -505,6 +507,7 @@ fn main() {
     println!("  /teach <fact>       Learn a fact (e.g., /teach Bangkok is the capital of Thailand)");
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
     println!("  /load <file.txt>    Load and learn from a text file");
+    println!("  /learn-url <url>    Fetch a web page and learn its facts");
     println!("  /save <file.json>   Save learned knowledge to file");
     println!("  /restore <file.json> Restore previously saved knowledge");
     println!("  /stats              Show engine statistics");
@@ -565,6 +568,11 @@ fn main() {
 
         if let Some(file_path) = trimmed.strip_prefix("/load ") {
             handle_load(&mut store, file_path.trim());
+            continue;
+        }
+
+        if let Some(url) = trimmed.strip_prefix("/learn-url ") {
+            handle_learn_url(&mut store, &mut axiom_gen, url.trim());
             continue;
         }
 
@@ -1399,6 +1407,33 @@ fn handle_load(store: &mut tle_afc::IncrementalStore, path: &str) {
         Err(e) => {
             println!("  ✗ Error loading '{}': {}", path, e);
         }
+    }
+}
+
+/// Fetch a web page, extract bounded text/facts, and teach both production stores.
+fn handle_learn_url(store: &mut tle_afc::IncrementalStore, axiom_gen: &mut tle_axiom_gen::AxiomGen, url: &str) {
+    if url.is_empty() {
+        println!("  Usage: /learn-url <http(s)://...>");
+        return;
+    }
+
+    let start = Instant::now();
+    match web_learning::fetch_html(url) {
+        Ok(html) => {
+            let page = web_learning::extract_html(&html);
+            for sentence in &page.sentences {
+                store.learn_text(sentence);
+            }
+            for fact in &page.facts {
+                store.learn_fact(&fact.subject, &fact.relation, &fact.object);
+                axiom_gen.add_fact(&fact.subject.to_lowercase(), &fact.relation, &fact.object.to_lowercase());
+            }
+
+            let title = page.title.as_deref().unwrap_or("untitled page");
+            println!("  ✓ Learned '{}': {} sentences, {} facts [{:?}]",
+                title, page.sentences.len(), page.facts.len(), start.elapsed());
+        }
+        Err(error) => println!("  ✗ Could not learn '{}': {}", url, error),
     }
 }
 

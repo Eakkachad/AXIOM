@@ -220,6 +220,19 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] Production compaction regression test added
   - [x] `cargo test -p tle-afc`: 46 tests pass
 
+### ✅ COMPLETED (Phase 1.4 — Web Learning MVP):
+- [x] Bounded HTTP/HTTPS fetch with timeout and response-size limit
+- [x] HTML cleanup: removes scripts, styles, navigation, forms, and markup
+- [x] Sentence extraction and simple fact extraction
+- [x] `/learn-url <url>` wired into the production REPL
+- [x] Extracted facts are learned by IncrementalStore and AXIOM-Gen
+- [x] Entity normalization removes leading articles for stable queries
+- [x] Multi-clause fact extraction added
+- [x] Local HTTP-server integration test and 5 web-learning tests pass
+- [x] Synthetic 400-fact extraction benchmark passes under 5 seconds
+- [x] Real Wikipedia run measured: 1,094 sentences, 252 facts, ~750ms
+- [ ] Wikipedia 300+ facts gate: performance passes, extraction coverage is still short by 48 facts
+
 ### ✅ COMPLETED (Phase 2 — Generation Quality):
 - [x] Template extraction (TemplateBank) — 19 patterns, 4 tests
 - [x] Fluency scoring (compute_fluency) — heuristic naturalness scorer
@@ -233,9 +246,11 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Wired into REPL (subjects added as attractor basins on /teach)
 
 ### 🔲 TODO (Phase 1 — remaining):
-- [ ] **Week 2:** Auto-learn from web (SKIPPED for now)
-  - [ ] HTTP fetch + HTML extraction
-  - [ ] `/learn-url` command
+- [ ] **Week 2:** Auto-learn from web (MVP complete; quality gate remains)
+  - [x] HTTP fetch + HTML extraction (MVP)
+  - [x] `/learn-url` command (MVP)
+  - [x] Improve extraction quality with entity normalization and multi-clause extraction
+  - [ ] Increase real-page extraction coverage to 300+ facts without lowering precision
 - [ ] **Week 3:** Knowledge Compaction
    - [ ] Topic clustering (cosine similarity)
    - [ ] Fact merging (shared subject → combine objects)
