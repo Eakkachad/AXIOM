@@ -264,7 +264,8 @@ impl AxiomGen {
         // (it's called redundantly when an entity appears in multiple triples).
         let mut relevance_cache: HashMap<usize, f32> = HashMap::new();
 
-        for triple in &graph.triples {
+        for (ti, triple) in graph.triples.iter().enumerate() {
+            let triple_conf = graph.triple_confidence(ti);
             let subject_in_query = query_entities.contains(&triple.subject_id);
             let object_in_query = query_entities.contains(&triple.object_id);
             let connected = subject_in_query != object_in_query;
@@ -276,13 +277,14 @@ impl AxiomGen {
                 let name = graph.entity_name(entity_id);
                 let lower = name.to_lowercase();
                 let overlap = content_words.iter().filter(|w| lower.contains(w.as_str())).count();
-                let connected_bonus = if connected_id == Some(entity_id) { 2.5 } else { 0.0 };
+                let connected_bonus = if connected_id == Some(entity_id) { 2.5 * triple_conf } else { 0.0 };
                 let role_bonus = if connected_id == Some(entity_id) {
-                    match intent {
+                    let rb = match intent {
                         Intent::Who => if subject_in_query { 1.5 } else { 0.0 },
                         Intent::What | Intent::Where => if !subject_in_query { 1.5 } else { 0.0 },
                         _ => 0.5,
-                    }
+                    };
+                    rb * triple_conf
                 } else { 0.0 };
                 let relevance = *relevance_cache.entry(entity_id).or_insert_with(|| {
                     tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(graph.entity_name(entity_id)))

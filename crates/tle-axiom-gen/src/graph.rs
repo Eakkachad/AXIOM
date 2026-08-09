@@ -158,6 +158,30 @@ impl KnowledgeGraph {
         &self.relations[id]
     }
 
+    /// Heuristic confidence score for a triple (EGA-style gate proxy).
+    ///
+    /// Low-confidence triples have garbage subjects ("Together they") or
+    /// verbose objects ("a Swiss professional tennis player who won the
+    /// Australian Open in 1997").  Answer selection weights these scores so
+    /// the beam's energy function implicitly favours reliable facts.
+    pub fn triple_confidence(&self, triple_idx: usize) -> f32 {
+        let t = &self.triples[triple_idx];
+        let subj_words = self.entity_name(t.subject_id).split_whitespace().count();
+        let obj_words = self.entity_name(t.object_id).split_whitespace().count();
+        // Short entities are more reliable (long phrases are decomposition
+        // noise).  Use a sigmoid-like ramp: 1.0 for ≤2 words, decaying to 0.
+        let len_score = (0.8f32).powi(subj_words.saturating_sub(2) as i32)
+            .min((0.8f32).powi(obj_words.saturating_sub(1) as i32));
+        // Penalise relations that are bare copulas — they match too easily.
+        let rel_name = self.relation_name(t.relation_id);
+        let rel_penalty = if rel_name == "is" || rel_name == "are" || rel_name == "was" || rel_name == "were" {
+            0.6
+        } else {
+            1.0
+        };
+        len_score * rel_penalty
+    }
+
     /// BFS subgraph extraction: starting from a set of entities,
     /// explore up to `max_hops` hops and return all reachable triples.
     pub fn bfs_subgraph(&self, start_entities: &[usize], max_hops: usize) -> Vec<Triple> {
