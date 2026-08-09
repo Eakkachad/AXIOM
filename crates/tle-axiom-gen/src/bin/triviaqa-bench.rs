@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = AxiomGen::new(2048);
         let evidence_facts = evidence.get(&record.id).cloned().unwrap_or_default();
         let document_facts = evidence_dir.as_deref()
-            .map(|directory| extract_document_facts(directory, &record.evidence_files))
+            .map(|directory| extract_document_facts(directory, &record.evidence_files, &record.question))
             .unwrap_or_default();
         let document_text = evidence_dir.as_deref()
             .map(|directory| read_evidence_text(directory, &record.evidence_files))
@@ -111,7 +111,7 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
         .collect()
 }
 
-fn extract_document_facts(directory: &str, files: &[String]) -> Vec<[String; 3]> {
+fn extract_document_facts(directory: &str, files: &[String], question: &str) -> Vec<[String; 3]> {
     let mut facts = Vec::new();
     for filename in files {
         let path = std::path::Path::new(directory).join(filename);
@@ -119,6 +119,17 @@ fn extract_document_facts(directory: &str, files: &[String]) -> Vec<[String; 3]>
         let mut text = String::new();
         if file.take(256 * 1024).read_to_string(&mut text).is_err() { continue; }
         let subject = filename.trim_end_matches(".txt").replace('_', " ");
+        let mut sentences: Vec<(usize, String)> = text
+            .split(|character| matches!(character, '.' | '!' | '?'))
+            .take(200)
+            .map(|sentence| sentence.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|sentence| sentence.len() >= 20)
+            .map(|sentence| (question_overlap(question, &sentence), sentence))
+            .collect();
+        sentences.sort_by(|left, right| right.0.cmp(&left.0));
+        for (_, sentence) in sentences.into_iter().take(5) {
+            facts.push([subject.clone(), "describes".to_string(), sentence]);
+        }
         for sentence in text.split(|character| matches!(character, '.' | '!' | '?')).take(20) {
             if let Some((relation, object)) = extract_relation(sentence) {
                 if object.split_whitespace().count() <= 30 && object.len() >= 2 {
@@ -128,6 +139,15 @@ fn extract_document_facts(directory: &str, files: &[String]) -> Vec<[String; 3]>
         }
     }
     facts
+}
+
+fn question_overlap(question: &str, sentence: &str) -> usize {
+    let question_words: Vec<String> = question.to_lowercase().split_whitespace()
+        .map(|word| word.trim_matches(|character: char| !character.is_alphanumeric()).to_string())
+        .filter(|word| word.len() >= 4 && !matches!(word.as_str(), "what" | "which" | "where" | "when" | "does" | "have"))
+        .collect();
+    let lower_sentence = sentence.to_lowercase();
+    question_words.iter().filter(|word| lower_sentence.contains(word.as_str())).count()
 }
 
 fn extract_relation(sentence: &str) -> Option<(&'static str, String)> {
