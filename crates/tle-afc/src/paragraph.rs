@@ -26,6 +26,14 @@ pub struct ParagraphGenerator {
     relation_priority: Vec<String>,
 }
 
+/// Output style for generated paragraphs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResponseStyle {
+    Casual,
+    Formal,
+    Brief,
+}
+
 impl ParagraphGenerator {
     /// Create a new paragraph generator.
     pub fn new() -> Self {
@@ -86,8 +94,21 @@ impl ParagraphGenerator {
         topic: &str,
         facts: &[(String, String)],
     ) -> String {
+        self.generate_with_style(topic, facts, ResponseStyle::Casual)
+    }
+
+    /// Generate with explicit style control while preserving deterministic output.
+    pub fn generate_with_style(
+        &self,
+        topic: &str,
+        facts: &[(String, String)],
+        style: ResponseStyle,
+    ) -> String {
         if facts.is_empty() {
-            return format!("I don't know much about {} yet.", topic);
+            return match style {
+                ResponseStyle::Formal => format!("There is insufficient information about {}.", topic),
+                _ => format!("I don't know much about {} yet.", topic),
+            };
         }
 
         let plan = self.plan(topic, facts);
@@ -113,7 +134,15 @@ impl ParagraphGenerator {
         }
 
         // Join with transitions
-        self.join_sentences(&sentences)
+        let mut output = self.join_sentences(&sentences);
+        if style == ResponseStyle::Brief {
+            output = output.split_once('.').map(|(first, _)| format!("{}.", first)).unwrap_or(output);
+        }
+        if style == ResponseStyle::Formal {
+            output = output.replace("They ", &format!("{} ", capitalize(topic)));
+            output = output.replace("It ", &format!("{} ", capitalize(topic)));
+        }
+        output
     }
 
     /// Convert a single fact to a sentence.
@@ -229,5 +258,18 @@ mod tests {
         let gen = ParagraphGenerator::new();
         let paragraph = gen.generate("unknown", &[]);
         assert!(paragraph.contains("don't know"));
+    }
+
+    #[test]
+    fn test_styles_are_deterministic_and_distinct() {
+        let gen = ParagraphGenerator::new();
+        let facts = vec![
+            ("is".to_string(), "a small animal".to_string()),
+            ("has".to_string(), "soft fur".to_string()),
+        ];
+        let brief = gen.generate_with_style("cat", &facts, ResponseStyle::Brief);
+        let formal = gen.generate_with_style("cat", &facts, ResponseStyle::Formal);
+        assert_eq!(brief.matches('.').count(), 1);
+        assert!(formal.contains("Cat has soft fur."));
     }
 }

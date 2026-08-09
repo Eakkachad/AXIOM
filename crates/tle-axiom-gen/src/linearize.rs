@@ -7,6 +7,7 @@
 //! 4. Applies article insertion and capitalization
 
 use std::collections::HashSet;
+use crate::templates::TemplateBank;
 
 /// The communicative intent detected from the query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,6 +202,39 @@ pub fn linearize(
     }
 }
 
+/// Linearize using corpus-derived templates when one matches the relation.
+pub fn linearize_with_templates(
+    path_triples: &[crate::graph::Triple],
+    entities: &[String],
+    relations: &[String],
+    intent: Intent,
+    templates: &TemplateBank,
+) -> String {
+    if path_triples.is_empty() {
+        return String::new();
+    }
+
+    let mut clauses = Vec::with_capacity(path_triples.len());
+    for triple in path_triples {
+        let subject = &entities[triple.subject_id];
+        let relation = &relations[triple.relation_id];
+        let object = &entities[triple.object_id];
+        let clause = templates.generate(subject, relation, object).unwrap_or_else(|| {
+            linearize(std::slice::from_ref(triple), entities, relations, Intent::Declarative)
+                .trim_end_matches('.').to_string()
+        });
+        clauses.push(clause);
+    }
+
+    let connective = connective_for_intent(intent);
+    let mut sentence = clauses[0].clone();
+    for clause in &clauses[1..] {
+        sentence = format!("{}, {} {}", sentence, connective, clause);
+    }
+    let sentence = capitalize_first(&sentence);
+    if sentence.ends_with('.') { sentence } else { format!("{}.", sentence) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +337,20 @@ mod tests {
         let relations: Vec<String> = vec![];
         let result = linearize(&triples, &entities, &relations, Intent::Declarative);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_linearize_with_templates() {
+        let mut kg = KnowledgeGraph::new();
+        kg.add_triple("cat", "is", "animal");
+        let mut bank = TemplateBank::new();
+        bank.add_template(crate::templates::Template {
+            pattern: "[SUBJ] is an [OBJ]".to_string(),
+            frequency: 10,
+            num_slots: 2,
+            relation_hint: Some("is".to_string()),
+        });
+        let result = linearize_with_templates(&kg.triples, &kg.entities, &kg.relations, Intent::What, &bank);
+        assert_eq!(result, "Cat is an animal.");
     }
 }

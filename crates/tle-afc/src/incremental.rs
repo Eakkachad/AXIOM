@@ -58,6 +58,8 @@ pub struct IncrConfig {
     pub max_facts_per_subject: usize,
     /// Merge multiple values for the same subject and relation.
     pub merge_same_relation: bool,
+    /// Optional maximum number of newest facts retained globally during compaction.
+    pub max_fact_age: Option<usize>,
 }
 
 impl Default for IncrConfig {
@@ -69,6 +71,7 @@ impl Default for IncrConfig {
             compaction_interval: 10_000,
             max_facts_per_subject: 100,
             merge_same_relation: true,
+            max_fact_age: None,
         }
     }
 }
@@ -312,6 +315,12 @@ impl IncrementalStore {
             }
         }
         retained.reverse();
+
+        if let Some(max_age) = self.config.max_fact_age {
+            if retained.len() > max_age {
+                retained = retained.split_off(retained.len() - max_age);
+            }
+        }
 
         let facts_before_merge = retained.len();
         if self.config.merge_same_relation {
@@ -592,6 +601,7 @@ mod tests {
             compaction_interval: 3,
             max_facts_per_subject: 2,
             merge_same_relation: true,
+            max_fact_age: None,
         });
 
         store.learn_fact("cat", "has", "four legs");
@@ -616,6 +626,7 @@ mod tests {
             compaction_interval: 0,
             max_facts_per_subject: 10,
             merge_same_relation: true,
+            max_fact_age: None,
         });
 
         store.learn_fact("rust", "supports", "ownership");
@@ -625,5 +636,27 @@ mod tests {
         assert_eq!(report.facts_merged, 1);
         assert_eq!(store.get_facts("rust"), vec![("supports", "ownership; zero cost abstractions")]);
         assert!(store.query_fact("rust", "supports").is_some());
+    }
+
+    #[test]
+    fn test_compaction_prunes_old_global_facts() {
+        let mut store = IncrementalStore::with_config(IncrConfig {
+            dim: 128,
+            max_order: 3,
+            seed: 42,
+            compaction_interval: 0,
+            max_facts_per_subject: 10,
+            merge_same_relation: false,
+            max_fact_age: Some(2),
+        });
+        store.learn_fact("old", "is", "discarded");
+        store.learn_fact("new_a", "is", "kept");
+        store.learn_fact("new_b", "is", "kept");
+
+        let report = store.compact_knowledge();
+        assert_eq!(report.facts_after, 2);
+        assert!(store.get_facts("old").is_empty());
+        assert_eq!(store.get_facts("new_a").len(), 1);
+        assert_eq!(store.get_facts("new_b").len(), 1);
     }
 }

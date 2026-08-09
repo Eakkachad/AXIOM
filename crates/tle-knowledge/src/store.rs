@@ -191,6 +191,16 @@ impl CompressedKnowledgeStore {
         report
     }
 
+    /// Return cosine-routed topic clusters as `(representative, fact_count)` pairs.
+    /// CategoryIndex maintains these clusters incrementally as facts are stored.
+    pub fn topic_clusters(&self) -> Vec<(String, usize)> {
+        let mut clusters: Vec<(String, usize)> = self.categories.categories.iter()
+            .map(|category| (category.name.clone(), category.fact_count))
+            .collect();
+        clusters.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        clusters
+    }
+
     /// Query: get all known facts about a subject.
     ///
     /// Returns: Vec<(relation, object)> — exact matches first.
@@ -359,6 +369,21 @@ mod tests {
         assert!(store.might_know("tokyo"));
         // Unknown entities should mostly return false
         // (some false positives possible with Bloom)
+    }
+
+    #[test]
+    fn test_topic_clusters_are_deterministic() {
+        let mut store = CompressedKnowledgeStore::with_config(StoreConfig {
+            dim: 128,
+            seed: 42,
+            expected_facts: 100,
+        });
+        store.store_fact("cat", "is", "animal");
+        store.store_fact("dog", "is", "animal");
+        let clusters = store.topic_clusters();
+        assert!(!clusters.is_empty());
+        assert_eq!(clusters, store.topic_clusters());
+        assert_eq!(clusters.iter().map(|(_, count)| count).sum::<usize>(), 2);
     }
 
     #[test]

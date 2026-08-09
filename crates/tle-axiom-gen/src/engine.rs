@@ -23,7 +23,7 @@ use tle_vsa::{Codebook, HyperVector};
 
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
-use crate::linearize::{classify_intent, linearize};
+use crate::linearize::{classify_intent, linearize_with_templates};
 use crate::templates::TemplateBank;
 use crate::search::{beam_search, SearchConfig};
 
@@ -170,17 +170,13 @@ impl AxiomGen {
 
         // Linearize path to natural language
         // Try TemplateBank first for varied output, fallback to default linearizer
-        let sentence = if path_triples.len() == 1 {
-            // Single triple — try template
-            let t = &path_triples[0];
-            let subj = self.graph.entity_name(t.subject_id);
-            let rel = self.graph.relation_name(t.relation_id);
-            let obj = self.graph.entity_name(t.object_id);
-            self.template_bank.generate(subj, rel, obj)
-                .unwrap_or_else(|| linearize(&path_triples, &self.graph.entities, &self.graph.relations, intent))
-        } else {
-            linearize(&path_triples, &self.graph.entities, &self.graph.relations, intent)
-        };
+        let sentence = linearize_with_templates(
+            &path_triples,
+            &self.graph.entities,
+            &self.graph.relations,
+            intent,
+            &self.template_bank,
+        );
 
         GenerationResult {
             sentence,

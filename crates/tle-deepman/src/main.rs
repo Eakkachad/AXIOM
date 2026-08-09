@@ -486,6 +486,7 @@ fn main() {
 
     // Initialize AXIOM-Gen for compositional generation
     let mut axiom_gen = tle_axiom_gen::AxiomGen::new(2048);
+    axiom_gen.template_bank = tle_axiom_gen::templates::TemplateBank::extract_from_corpus(&data);
 
     // Initialize Delta Memory for conversation context
     let mut delta_mem = tle_afc::DeltaMem::new(2048);
@@ -496,6 +497,7 @@ fn main() {
 
     // Initialize Paragraph Generator
     let paragraph_gen = tle_afc::paragraph::ParagraphGenerator::new();
+    let mut response_style = tle_afc::paragraph::ResponseStyle::Casual;
 
     // Initialize Morphological Tokenizer (VSA subword composition)
     let morph_tokenizer = tle_afc::MorphTokenizer::new();
@@ -511,6 +513,7 @@ fn main() {
     println!("  /save <file.json>   Save learned knowledge to file");
     println!("  /restore <file.json> Restore previously saved knowledge");
     println!("  /stats              Show engine statistics");
+    println!("  /style <mode>       Set response style: casual, formal, brief");
     println!("  /quit               Exit");
     println!("  <anything else>     Chat — ask questions or generate text");
     println!("────────────────────────────────────────────────────────────\n");
@@ -548,6 +551,20 @@ fn main() {
                 st.facts_added, st.tokens_ingested, st.transitions_added);
             println!("  Compaction: {} runs, {} facts pruned, {} values merged",
                 st.compactions, st.facts_pruned, st.facts_merged);
+            continue;
+        }
+
+        if let Some(style_name) = trimmed.strip_prefix("/style ") {
+            response_style = match style_name.trim().to_lowercase().as_str() {
+                "casual" => tle_afc::paragraph::ResponseStyle::Casual,
+                "formal" => tle_afc::paragraph::ResponseStyle::Formal,
+                "brief" => tle_afc::paragraph::ResponseStyle::Brief,
+                _ => {
+                    println!("  Usage: /style casual|formal|brief");
+                    continue;
+                }
+            };
+            println!("  ✓ Response style: {:?}", response_style);
             continue;
         }
 
@@ -606,6 +623,10 @@ fn main() {
         // Process through intent detection (VSA-based with rule-based fallback)
         let start = Instant::now();
 
+        // Compose morpheme vectors before intent matching so OOV forms share
+        // algebraic signal with known roots and affixes.
+        let _morph_query = morph_tokenizer.encode_sentence(&effective_input, &mut intent_codebook);
+
         // Try VSA intent detection first
         let (vsa_intent, vsa_confidence) = vsa_intent_detector.detect(&effective_input, &mut intent_codebook);
         let intent = if vsa_confidence > 0.1 {
@@ -643,10 +664,10 @@ fn main() {
                 println!("  You're welcome! Ask me more or teach me something new.");
             }
             Intent::WhatIs(subject) => {
-                respond_what_is(&mut engine, &store, &subject, start);
+                respond_what_is(&mut engine, &store, &subject, start, response_style);
             }
             Intent::WhoIs(subject) => {
-                respond_what_is(&mut engine, &store, &subject, start);
+                respond_what_is(&mut engine, &store, &subject, start, response_style);
             }
             Intent::WhereIs(subject) => {
                 respond_where_is(&mut engine, &store, &subject, start);
@@ -831,10 +852,10 @@ fn handle_generate(
             println!("  You're welcome! Ask me more or teach me something new.");
         }
         Intent::WhatIs(subject) => {
-            respond_what_is(engine, store, &subject, start);
+            respond_what_is(engine, store, &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
         }
         Intent::WhoIs(subject) => {
-            respond_what_is(engine, store, &subject, start);
+            respond_what_is(engine, store, &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
         }
         Intent::WhereIs(subject) => {
             respond_where_is(engine, store, &subject, start);
@@ -945,6 +966,7 @@ fn respond_what_is(
     store: &tle_afc::IncrementalStore,
     subject: &str,
     start: Instant,
+    style: tle_afc::paragraph::ResponseStyle,
 ) {
     // Priority 1: Exact fact store (always correct if taught)
     let subject_clean = subject
@@ -960,7 +982,7 @@ fn respond_what_is(
             let owned_facts: Vec<(String, String)> = facts.iter()
                 .map(|(r, o)| (r.to_string(), o.to_string()))
                 .collect();
-            let paragraph = para_gen.generate(subject_clean, &owned_facts);
+            let paragraph = para_gen.generate_with_style(subject_clean, &owned_facts, style);
             println!("  {} [{:?}]", paragraph, start.elapsed());
             return;
         }

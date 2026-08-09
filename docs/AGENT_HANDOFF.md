@@ -248,6 +248,14 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Attractor Reasoning — iterative convergence, 3 tests
 - [x] Wired into REPL (subjects added as attractor basins on /teach)
 
+### ✅ COMPLETED (Phase 2.1 — Integration Pass):
+- [x] Topic clusters exposed from CKR using cosine-routed `CategoryIndex`
+- [x] Age-based global fact pruning added to production compaction
+- [x] Response styles added: `/style casual`, `/style formal`, `/style brief`
+- [x] MorphTokenizer wired into the query hot path for OOV morpheme composition
+- [x] TemplateBank wired into AXIOM-Gen linearization for single and multi-hop paths
+- [x] Verified focused suites: AFC 49, AXIOM-Gen 41, Deepman 5, Knowledge 15 tests
+
 ### 🔲 TODO (Phase 1 — remaining):
 - [ ] **Week 2:** Auto-learn from web (MVP complete; quality gate remains)
   - [x] HTTP fetch + HTML extraction (MVP)
@@ -255,15 +263,15 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] Improve extraction quality with entity normalization and multi-clause extraction
   - [ ] Increase real-page extraction coverage to 300+ facts without lowering precision
 - [ ] **Week 3:** Knowledge Compaction
-   - [ ] Topic clustering (cosine similarity)
+   - [x] Topic clustering (cosine similarity)
    - [x] Fact merging (shared subject + relation → combine distinct objects)
-   - [ ] Automatic age-based stale fact pruning
+   - [x] Automatic age-based stale fact pruning
    - [x] Auto-trigger every 10K facts
 
 ### 🔲 TODO (Phase 2 — remaining):
-- [ ] **Style adaptation** (casual/formal/brief modes)
-- [ ] **Wire MorphTokenizer into hot path** (currently initialized but not encoding tokens)
-- [ ] **Wire TemplateBank into AXIOM-Gen linearizer** (replace hard-coded templates)
+- [x] **Style adaptation** (casual/formal/brief modes)
+- [x] **Wire MorphTokenizer into hot path** (query morpheme composition)
+- [x] **Wire TemplateBank into AXIOM-Gen linearizer** (single and multi-hop paths)
 
 ### 🔲 TODO (Phase 3 — remaining):
 - [ ] **PTG recursive composition** (unbounded reasoning depth)
