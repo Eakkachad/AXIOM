@@ -672,10 +672,10 @@ fn main() {
                 println!("  You're welcome! Ask me more or teach me something new.");
             }
             Intent::WhatIs(subject) => {
-                respond_what_is(&mut engine, &store, &subject, start, response_style);
+                respond_what_is(&mut engine, &store, &mut axiom_gen, &subject, start, response_style);
             }
             Intent::WhoIs(subject) => {
-                respond_what_is(&mut engine, &store, &subject, start, response_style);
+                respond_what_is(&mut engine, &store, &mut axiom_gen, &subject, start, response_style);
             }
             Intent::WhereIs(subject) => {
                 respond_where_is(&mut engine, &store, &subject, start);
@@ -788,7 +788,7 @@ fn handle_teach(
     // Also add to AXIOM-Gen knowledge graph (for compositional generation)
     // Re-extract subject/relation/object for axiom_gen
     let lower = trimmed.to_lowercase();
-    for pattern in &[" is ", " are ", " has ", " have ", " can ", " causes ", " makes ",
+    for pattern in &[" is ", " are ", " has ", " have ", " can ", " causes ", " makes ", " scatters ",
                      " produces ", " leads to ", " comes from ", " results in ",
                      " contains ", " requires ", " enables ", " creates "] {
         if let Some(pos) = lower.find(pattern) {
@@ -860,10 +860,10 @@ fn handle_generate(
             println!("  You're welcome! Ask me more or teach me something new.");
         }
         Intent::WhatIs(subject) => {
-            respond_what_is(engine, store, &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
+            respond_what_is(engine, store, &mut tle_axiom_gen::AxiomGen::new(2048), &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
         }
         Intent::WhoIs(subject) => {
-            respond_what_is(engine, store, &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
+            respond_what_is(engine, store, &mut tle_axiom_gen::AxiomGen::new(2048), &subject, start, tle_afc::paragraph::ResponseStyle::Casual);
         }
         Intent::WhereIs(subject) => {
             respond_where_is(engine, store, &subject, start);
@@ -972,6 +972,7 @@ fn detect_intent(input: &str) -> Intent {
 fn respond_what_is(
     engine: &mut DeepManEngine,
     store: &tle_afc::IncrementalStore,
+    axiom_gen: &mut tle_axiom_gen::AxiomGen,
     subject: &str,
     start: Instant,
     style: tle_afc::paragraph::ResponseStyle,
@@ -1030,7 +1031,14 @@ fn respond_what_is(
         }
     }
 
-    // Priority 3: Engram-based generation
+    // Priority 3: AXIOM-Gen graph composition
+    let generated = axiom_gen.generate(&format!("what is {}?", subject));
+    if generated.path_length >= 1 && !generated.sentence.is_empty() {
+        println!("  {} [{:?}]", generated.sentence, start.elapsed());
+        return;
+    }
+
+    // Priority 4: Engram-based generation
     let prompt = format!("{} is", subject);
     let (generated, gen_time) = engine.generate(&prompt);
     let output = engine.decode(&generated);
@@ -1417,7 +1425,7 @@ fn handle_load(store: &mut tle_afc::IncrementalStore, path: &str) {
                 // Try to extract facts from simple patterns:
                 // "X is Y", "X are Y", "X has Y", "X can Y"
                 let lower = trimmed.to_lowercase();
-                for pattern in &[" is ", " are ", " has ", " can ", " was "] {
+                for pattern in &[" is ", " are ", " has ", " can ", " was ", " scatters "] {
                     if let Some(pos) = lower.find(pattern) {
                         let subject = &trimmed[..pos];
                         let relation = pattern.trim();

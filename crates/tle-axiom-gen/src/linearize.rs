@@ -107,6 +107,12 @@ fn article_for(word: &str) -> &'static str {
 fn with_article(entity: &str, seen: &mut HashSet<String>) -> String {
     let text = entity_to_text(entity);
 
+    // Mass nouns are not preceded by an indefinite article.
+    if matches!(text.as_str(), "evaporation" | "water" | "information" | "knowledge" | "software" | "equipment" | "research") {
+        seen.insert(text.clone());
+        return text;
+    }
+
     // Skip articles for:
     // - Entities that already start with an article
     // - Plural nouns (ending in 's')
@@ -328,6 +334,12 @@ mod tests {
         assert_eq!(article_for("apple"), "an");
         assert_eq!(article_for("blue"), "a");
         assert_eq!(article_for("orange"), "an");
+    }
+
+    #[test]
+    fn test_mass_noun_has_no_indefinite_article() {
+        let mut seen = HashSet::new();
+        assert_eq!(with_article("evaporation", &mut seen), "evaporation");
     }
 
     #[test]

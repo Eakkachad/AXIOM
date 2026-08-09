@@ -312,12 +312,12 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 
 | Issue | Severity | Fix Plan |
 |-------|:--------:|----------|
-| KG cycle causes repetitive output | Medium | Add visited-set in beam search |
-| "scatters" doesn't match `/teach` pattern | Low | Add to pattern list |
-| Articles still imperfect ("a evaporation") | Low | Better plural/mass noun detection |
-| Pronoun resolution sometimes picks verb as subject | Low | Add verb blacklist |
-| AXIOM-Gen not triggered for "what is X?" (only why/how) | Medium | Expand intent → AXIOM-Gen routing |
-| `/learn-url` not implemented yet | High | Phase 1 Week 2 |
+| KG cycle causes repetitive output | Closed | Visited-entity guard in beam search |
+| "scatters" doesn't match `/teach` pattern | Closed | Added to production extraction patterns |
+| Articles still imperfect ("a evaporation") | Improved | Mass-noun handling added; broader grammar remains |
+| Pronoun resolution sometimes picks verb as subject | Improved | Common-verb blacklist added |
+| AXIOM-Gen not triggered for "what is X?" | Closed | What-is path now tries AXIOM-Gen before Engram fallback |
+| `/learn-url` not implemented yet | Closed | `/learn-url` production MVP and Wikipedia gate complete |
 
 ---
 

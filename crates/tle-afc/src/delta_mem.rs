@@ -100,7 +100,7 @@ impl DeltaMem {
 
         // Extract the main subject (first noun-like word > 2 chars)
         for word in &words {
-            if word.len() > 2 && !is_stop_word(word) {
+            if word.len() > 2 && !is_stop_word(word) && !is_common_verb(word) {
                 self.last_subject = Some(word.to_string());
                 break;
             }
@@ -160,6 +160,12 @@ impl DeltaMem {
         self.last_subject = None;
         self.turn = 0;
     }
+}
+
+fn is_common_verb(word: &str) -> bool {
+    matches!(word, "make" | "makes" | "made" | "get" | "gets" | "use" | "uses" | "used"
+        | "cause" | "causes" | "create" | "creates" | "produce" | "produces"
+        | "lead" | "leads" | "come" | "comes" | "result" | "results")
 }
 
 /// Check if a word is a stop word (not a useful subject).
