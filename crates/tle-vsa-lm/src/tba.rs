@@ -71,6 +71,63 @@ impl TransitionMemory {
     }
 }
 
+/// Trigram Transition Memory: encodes (w_{i-1}, w_i) → w_{i+1} patterns.
+///
+/// ```text
+/// TM = Σ ρ²(C(w_{i-1})) ⊙ ρ(C(w_i)) ⊙ C(w_{i+1})
+/// ```
+///
+/// Prediction for context (prev, current):
+/// ```text
+/// pred = ρ²(C(prev)) ⊙ ρ(C(current)) ⊙ TM
+/// ```
+///
+/// Because fewer trigrams share the same (prev, current) pair than bigrams
+/// share a single current, the trigram signal-to-noise ratio is inherently
+/// better — this is the algebraic analog of "higher-order n-gram smoothing."
+#[derive(Debug, Clone)]
+pub struct TrigramMemory {
+    pub memory: HyperVector,
+    pub transitions: u64,
+}
+
+impl TrigramMemory {
+    pub fn new(dim: usize) -> Self {
+        Self { memory: HyperVector::zeros(dim), transitions: 0 }
+    }
+
+    pub fn learn(&mut self, prev: &HyperVector, current: &HyperVector, next: &HyperVector) {
+        let p2 = prev.permute(2);
+        let p1 = current.permute(1);
+        let binding = bind(&p2, &bind(&p1, next));
+        self.memory = self.memory.add(&binding);
+        self.transitions += 1;
+    }
+
+    pub fn learn_ids(&mut self, ids: &[usize], vocab: &Vocab) {
+        for w in ids.windows(3) {
+            if let (Some(p), Some(c), Some(n)) = (
+                vocab.vector_by_id(w[0]),
+                vocab.vector_by_id(w[1]),
+                vocab.vector_by_id(w[2]),
+            ) {
+                self.learn(p, c, n);
+            }
+        }
+    }
+
+    pub fn predict(&self, prev: &HyperVector, current: &HyperVector) -> HyperVector {
+        let p2 = prev.permute(2);
+        let p1 = current.permute(1);
+        bind(&p2, &bind(&p1, &self.memory))
+    }
+
+    pub fn score(&self, prev: &HyperVector, current: &HyperVector, candidate: &HyperVector) -> f32 {
+        let pred = self.predict(prev, current);
+        cosine_similarity(&pred, candidate)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -21,3 +21,7 @@ path = "src/bin/vsalm-corpus.rs"
 [[bin]]
 name = "vsalm-knowledge"
 path = "src/bin/vsalm-knowledge.rs"
+
+[[bin]]
+name = "vsalm-scale"
+path = "src/bin/vsalm-scale.rs"

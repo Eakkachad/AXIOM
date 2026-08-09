@@ -30,7 +30,7 @@ use tle_vsa::HyperVector;
 use decode::DecodedToken;
 use engram::Engram;
 use reservoir::Reservoir;
-use tba::TransitionMemory;
+use tba::{TransitionMemory, TrigramMemory};
 use vocab::Vocab;
 
 /// Configuration for the VSA-LM.
@@ -46,6 +46,8 @@ pub struct LmConfig {
     pub max_gen_tokens: usize,
     /// Weight of the TBA (transition) score in prediction.
     pub w_tba: f32,
+    /// Weight of the trigram TBA score (higher-order transition).
+    pub w_trigram: f32,
     /// Weight of the Engram (n-gram) score in prediction.
     pub w_engram: f32,
     /// Weight of the reservoir associative-memory score in prediction.
@@ -72,6 +74,7 @@ impl Default for LmConfig {
             beam_width: 8,
             max_gen_tokens: 16,
             w_tba: 1.0,
+            w_trigram: 0.6,
             w_engram: 1.5,
             w_reservoir: 0.5,
             w_knowledge: 2.0,
@@ -92,6 +95,8 @@ pub struct VsaLm {
     pub engram: Engram,
     /// Transition Binding Algebra memory.
     pub tba: TransitionMemory,
+    /// Trigram TBA memory (higher-order transitions).
+    pub trigram: TrigramMemory,
     /// Dynamical reservoir (optional).
     pub reservoir: Option<Reservoir>,
     /// Non-parametric reservoir associative memory.
@@ -117,6 +122,7 @@ impl VsaLm {
             vocab: Vocab::new(dim, 0xA11E_0BEE_F001),
             engram: Engram::new(config.max_order),
             tba: TransitionMemory::new(dim),
+            trigram: TrigramMemory::new(dim),
             reservoir,
             reservoir_mem,
             knowledge: KnowledgePrior::new(),
@@ -141,6 +147,7 @@ impl VsaLm {
         let ids: Vec<usize> = tokens.iter().map(|t| self.vocab.get_or_add(t)).collect();
         self.engram.learn(&ids);
         self.tba.learn_ids(&ids, &self.vocab);
+        self.trigram.learn_ids(&ids, &self.vocab);
 
         // If a reservoir is configured, feed the tokens through it and record
         // each (state, next token) pair into the associative memory.
@@ -168,6 +175,16 @@ impl VsaLm {
         let last = context.last()?;
         let vec = self.vocab.vector(last)?;
         Some(self.tba.predict(vec))
+    }
+
+    /// Raw trigram TBA prediction for the last two tokens in context.
+    pub fn trigram_prediction(&self, context: &[String]) -> Option<HyperVector> {
+        if self.trigram.transitions == 0 || context.len() < 2 {
+            return None;
+        }
+        let prev = self.vocab.vector(&context[context.len() - 2])?;
+        let current = self.vocab.vector(&context[context.len() - 1])?;
+        Some(self.trigram.predict(prev, current))
     }
 
     /// Combined prediction: blend TBA cosine, Engram n-gram probability, and
@@ -215,6 +232,7 @@ impl VsaLm {
         let context_ids: Vec<usize> = context.iter().filter_map(|w| self.vocab.id(w)).collect();
         let shortlist = self.engram.top_candidates(&context_ids, 32);
         let tba_signal = self.tba_prediction(context);
+        let trigram_signal = self.trigram_prediction(context);
 
         // Knowledge prior over the trailing context words.
         let knowledge_context: Vec<String> = context
@@ -233,6 +251,10 @@ impl VsaLm {
                 if let Some(signal) = &tba_signal {
                     let sim = tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
                     score += self.config.w_tba * sim;
+                }
+                if let Some(signal) = &trigram_signal {
+                    let sim = tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
+                    score += self.config.w_trigram * sim;
                 }
                 if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
                     score += self.config.w_knowledge * boost;
@@ -253,6 +275,9 @@ impl VsaLm {
                         let mut score = 0.0f32;
                         if let Some(signal) = &tba_signal {
                             score += tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
+                        }
+                        if let Some(signal) = &trigram_signal {
+                            score += tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap()) * self.config.w_trigram;
                         }
                         if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
                             score += self.config.w_knowledge * boost;
