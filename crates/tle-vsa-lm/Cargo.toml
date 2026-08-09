@@ -25,3 +25,7 @@ path = "src/bin/vsalm-knowledge.rs"
 [[bin]]
 name = "vsalm-scale"
 path = "src/bin/vsalm-scale.rs"
+
+[[bin]]
+name = "vsalm-chat"
+path = "src/bin/vsalm-chat.rs"
