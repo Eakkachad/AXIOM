@@ -82,6 +82,7 @@ pub fn beam_search(
                 &graph.relations,
                 codebook,
                 entity_ief,
+                None,
             );
             beam.push(ScoredPath {
                 path: vec![idx],
@@ -155,6 +156,7 @@ pub fn beam_search(
                         &graph.relations,
                         codebook,
                         entity_ief,
+                        None,
                     );
 
                     candidates.push(ScoredPath {
