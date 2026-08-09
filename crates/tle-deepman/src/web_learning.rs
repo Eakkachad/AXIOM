@@ -49,7 +49,8 @@ pub fn extract_html(html: &str) -> ExtractedPage {
     let sentences: Vec<String> = text
         .split(|c| matches!(c, '.' | '!' | '?' | '\n'))
         .map(normalize_text)
-        .filter(|sentence| sentence.len() >= 12 && sentence.split_whitespace().count() >= 3)
+        .filter(|sentence| sentence.len() >= 12 && (sentence.split_whitespace().count() >= 3
+            || sentence.chars().any(|character| !character.is_ascii())))
         .take(MAX_SENTENCES)
         .collect();
 
@@ -150,6 +151,9 @@ fn normalize_text(text: &str) -> String {
 fn extract_fact(sentence: &str) -> Option<FactCandidate> {
     let lower = sentence.to_lowercase();
     let patterns = [
+        ("อยู่ใน", "located_in"), ("อยู่ที่", "located_in"),
+        ("เกิดใน", "born_in"), ("สามารถ", "can"), ("เป็น", "is"),
+        ("คือ", "is"), ("มี", "has"),
         (" was born in ", "born_in"), (" located in ", "located_in"),
         (" lives in ", "lives_in"), (" leads to ", "leads_to"),
         (" causes ", "causes"), (" produces ", "produces"),
@@ -357,5 +361,12 @@ mod tests {
         assert!(page.facts.iter().any(|fact| {
             fact.subject == "Rust" && fact.relation == "is" && fact.object == "memory safe"
         }), "facts: {:?}", page.facts);
+    }
+
+    #[test]
+    fn extracts_thai_facts_without_whitespace_tokenization() {
+        let page = extract_html("<p>ท้องฟ้าเป็นสีฟ้า</p><p>แมวมีสี่ขา</p>");
+        assert!(page.facts.iter().any(|fact| fact.relation == "is" && fact.subject == "ท้องฟ้า"));
+        assert!(page.facts.iter().any(|fact| fact.relation == "has" && fact.subject == "แมว"));
     }
 }

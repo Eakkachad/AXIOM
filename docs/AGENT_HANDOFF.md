@@ -313,6 +313,8 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 ### 🔲 TODO (Phase 4 — Deploy):
 - [ ] Background web learning daemon (scheduler works in REPL; standalone service/persistence locking remain)
 - [x] **Multi-language foundation** (Thai + English tokenization coverage)
+- [x] Thai fact extraction for `เป็น`, `คือ`, `มี`, `อยู่ใน`, and `เกิดใน`
+- [x] Thai no-whitespace sentence handling regression tests
 - [ ] TriviaQA benchmark
 - [ ] arXiv paper submission
 - [ ] Pre-built binary release

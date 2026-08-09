@@ -742,22 +742,37 @@ fn handle_teach(
     let lower = trimmed.to_lowercase();
     let mut extracted = false;
 
+    // Thai copula/property patterns do not require whitespace tokenization.
+    for (pattern, relation) in [("อยู่ใน", "located_in"), ("อยู่ที่", "located_in"),
+        ("เกิดใน", "born_in"), ("เป็น", "is"), ("คือ", "is"), ("มี", "has")] {
+        if let Some(pos) = lower.find(pattern) {
+            let subject = trimmed[..pos].trim();
+            let object = trimmed[pos + pattern.len()..].trim();
+            if !subject.is_empty() && !object.is_empty() {
+                store.learn_fact(subject, relation, object);
+                println!("  ✓ Fact: {} → {} → {}", subject, relation, object);
+                extracted = true;
+                break;
+            }
+        }
+    }
+
     // Pattern: "X is Y" / "X is a Y" / "X is the Y"
-    if let Some(pos) = lower.find(" is ") {
+    if !extracted { if let Some(pos) = lower.find(" is ") {
         let subject = &trimmed[..pos];
         let object = &trimmed[pos + 4..];
         store.learn_fact(subject, "is", object);
         println!("  ✓ Fact: {} → is → {}", subject, object);
         extracted = true;
-    }
+    }}
     // Pattern: "X are Y"
-    else if let Some(pos) = lower.find(" are ") {
+    else if !extracted { if let Some(pos) = lower.find(" are ") {
         let subject = &trimmed[..pos];
         let object = &trimmed[pos + 5..];
         store.learn_fact(subject, "are", object);
         println!("  ✓ Fact: {} → are → {}", subject, object);
         extracted = true;
-    }
+    }}
     // Pattern: "X has Y" / "X have Y"
     else if let Some(pos) = lower.find(" has ") {
         let subject = &trimmed[..pos];
