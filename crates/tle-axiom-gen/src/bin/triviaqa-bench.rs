@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let limit = env::var("AXIOM_TRIVIA_LIMIT").ok().and_then(|value| value.parse().ok());
     let debug = env::var("AXIOM_TRIVIA_DEBUG").ok().map(|_| ());
     for record in records.into_iter().take(limit.unwrap_or(usize::MAX)) {
-        let mut engine = AxiomGen::new(2048);
+        let mut engine = new_qa_engine();
         let evidence_facts = evidence.get(&record.id).cloned().unwrap_or_default();
         let document_facts = evidence_dir.as_deref()
             .map(|directory| extract_document_facts(directory, &record.evidence_files, &record.question))
@@ -98,6 +98,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 engine.graph.entities.iter().take(20).collect::<Vec<_>>());
             println!("  sentence: {}", output);
         }
+        if total > 0 && total % 50 == 0 {
+            println!("  [{} records done, avg so far: {:?}]", total, total_latency / total as u32);
+        }
+        if total < 10 {
+            println!("  [{}/{} {:?}] Q: {}", total + 1, limit.unwrap_or(318), start.elapsed(), record.question);
+        }
         total += 1;
     }
 
@@ -110,6 +116,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  evidence_answer_recall: {:.2}%", percentage(evidence_hits, total));
     println!("  avg_latency: {:?}", if total == 0 { Duration::ZERO } else { total_latency / total as u32 });
     Ok(())
+}
+
+/// Build an AXIOM-Gen engine tuned for QA: answers are usually 1-3 hops, so a
+/// bounded hop depth and narrower beam avoid exponential beam-search blowup on
+/// noisy decomposition graphs (which can have hundreds of triples per page).
+fn new_qa_engine() -> AxiomGen {
+    let mut engine = AxiomGen::new(2048);
+    engine.search_config.max_hops = 3;
+    engine.search_config.beam_width = 16;
+    engine.search_config.early_exit_on_stall = true;
+    engine
 }
 
 fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {

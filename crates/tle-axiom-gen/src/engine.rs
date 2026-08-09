@@ -260,6 +260,9 @@ impl AxiomGen {
 
         use std::collections::HashMap;
         let mut scores: HashMap<usize, (f32, usize)> = HashMap::new();
+        // Entity-vector cache: compute semantic_vector once per unique entity
+        // (it's called redundantly when an entity appears in multiple triples).
+        let mut relevance_cache: HashMap<usize, f32> = HashMap::new();
 
         for triple in &graph.triples {
             let subject_in_query = query_entities.contains(&triple.subject_id);
@@ -281,7 +284,9 @@ impl AxiomGen {
                         _ => 0.5,
                     }
                 } else { 0.0 };
-                let relevance = tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(name));
+                let relevance = *relevance_cache.entry(entity_id).or_insert_with(|| {
+                    tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(graph.entity_name(entity_id)))
+                });
                 let entry = scores.entry(entity_id).or_insert((0.0, 0));
                 entry.0 += connected_bonus + role_bonus + overlap as f32 + relevance * 0.5;
                 entry.1 += 1;
@@ -293,9 +298,43 @@ impl AxiomGen {
             .filter_map(|(id, (score, count))| {
                 let name = graph.entity_name(id);
                 let words = name.split_whitespace().count();
-                if words > 5 { return None; }
-                let length_penalty = 0.4 * (words.saturating_sub(2)) as f32;
-                Some((score + 0.2 * count as f32 - length_penalty, id, name.to_string()))
+                if words > 5 {
+                    return None;
+                }
+                // Strong preference for short, entity-like answers.
+                let length_penalty = match words {
+                    0 | 1 => 0.0,
+                    2 => 0.4,
+                    3 => 1.2,
+                    4 => 2.0,
+                    _ => 3.0,
+                };
+                // Capitalized proper nouns are far more likely to be answers
+                // than lowercase descriptive phrases ("Martina Hingis" vs
+                // "a tennis player").
+                let capitalized_bonus = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+                    1.0
+                } else {
+                    -0.5
+                };
+                // Penalize entities that begin with articles/determiners
+                // ("a tennis player", "the inventor of ...") — descriptive
+                // phrases, not answer entities.
+                let first = name
+                    .split_whitespace()
+                    .next()
+                    .map(|w| w.to_lowercase())
+                    .unwrap_or_default();
+                let determiner_penalty = if matches!(first.as_str(), "a" | "an" | "the" | "some" | "his" | "her" | "its" | "this" | "that") {
+                    -1.5
+                } else {
+                    0.0
+                };
+                Some((
+                    score + 0.2 * count as f32 - length_penalty + capitalized_bonus + determiner_penalty,
+                    id,
+                    name.to_string(),
+                ))
             })
             .collect();
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -329,11 +368,7 @@ impl AxiomGen {
             }
         }
 
-        // VSA fuzzy linking for multi-word entities and OOV surface forms.
-        // This is the key recall path for questions like "Melanie Molitor is
-        // the mom of which tennis world NO 1?" → graph entity "Molitorová".
-        // We score every entity by a blend of substring affinity and VSA
-        // cosine, WITHOUT requiring exact word overlap.
+        // VSA fuzzy linking — affinity+cosine in a single pass.
         {
             let query_vector = self.compose_entity_vector(&normalized_query);
             let entities: Vec<(String, usize)> = self.graph.entity_index.iter()
@@ -346,44 +381,28 @@ impl AxiomGen {
                     .split('_')
                     .map(normalize_entity_token)
                     .collect();
-                // Substring affinity: fraction of query words that appear as
-                // a prefix or substring of an entity word (or vice versa).
                 let mut affinity = 0.0f32;
                 for qw in &normalized_query {
-                    if qw.len() < 4 {
-                        continue;
-                    }
+                    if qw.len() < 4 { continue; }
                     for ew in &entity_words {
-                        if ew.len() < 4 {
-                            continue;
-                        }
-                        if qw == ew {
-                            affinity += 1.0;
-                        } else if ew.starts_with(qw.as_str()) || qw.starts_with(ew.as_str()) {
-                            affinity += 0.8;
-                        } else if ew.contains(qw.as_str()) || qw.contains(ew.as_str()) {
-                            affinity += 0.5;
-                        }
+                        if ew.len() < 4 { continue; }
+                        if qw == ew { affinity += 1.0; }
+                        else if ew.starts_with(qw.as_str()) || qw.starts_with(ew.as_str()) { affinity += 0.8; }
+                        else if ew.contains(qw.as_str()) || qw.contains(ew.as_str()) { affinity += 0.5; }
                     }
                 }
-                // Cap the affinity contribution and combine with VSA cosine.
+                // Only pay the VSA cost for entities with non-zero affinity.
+                if affinity <= 0.0 { continue; }
                 let affinity = affinity.min(1.5);
                 let entity_vector = self.compose_entity_vector(&entity_words);
                 let cosine = cosine_similarity(&query_vector, &entity_vector);
                 let score = affinity * 1.2 + cosine * 0.5;
-                if score >= 0.9 {
-                    scored.push((score, id));
-                }
+                if score >= 0.9 { scored.push((score, id)); }
             }
             scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
             for (_, id) in scored {
-                if !found_entities.contains(&id) {
-                    found_entities.push(id);
-                }
-                // Keep the top few high-confidence links.
-                if found_entities.len() >= 8 {
-                    break;
-                }
+                if !found_entities.contains(&id) { found_entities.push(id); }
+                if found_entities.len() >= 8 { break; }
             }
         }
 

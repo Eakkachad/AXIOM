@@ -35,6 +35,9 @@ pub struct KnowledgeGraph {
     pub entity_index: HashMap<String, usize>,
     /// Reverse mapping from relation name to ID.
     relation_index: HashMap<String, usize>,
+    /// Adjacency: entity ID → indices of triples it participates in.
+    /// Enables O(degree) neighbor expansion instead of O(all triples) scans.
+    pub adjacency: Vec<Vec<usize>>,
 }
 
 impl KnowledgeGraph {
@@ -46,6 +49,7 @@ impl KnowledgeGraph {
             triples: Vec::new(),
             entity_index: HashMap::new(),
             relation_index: HashMap::new(),
+            adjacency: Vec::new(),
         }
     }
 
@@ -87,7 +91,23 @@ impl KnowledgeGraph {
         };
         let idx = self.triples.len();
         self.triples.push(triple);
+        // Maintain adjacency lists. Ensure vectors are sized to the new
+        // entity count.
+        while self.adjacency.len() <= subj_id.max(obj_id) {
+            self.adjacency.push(Vec::new());
+        }
+        self.adjacency[subj_id].push(idx);
+        self.adjacency[obj_id].push(idx);
         idx
+    }
+
+    /// Get the indices of all triples an entity participates in (as subject
+    /// or object). O(degree), the fast adjacency path for beam expansion.
+    pub fn adjacency_of(&self, entity_id: usize) -> &[usize] {
+        self.adjacency
+            .get(entity_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Get all triples where the given entity is the subject.
@@ -158,23 +178,22 @@ impl KnowledgeGraph {
                 continue;
             }
 
-            // Explore outgoing triples
-            for (idx, triple) in self.triples.iter().enumerate() {
-                if triple.subject_id == current && !seen_triples[idx] {
-                    seen_triples[idx] = true;
-                    result_triples.push(*triple);
-                    if !visited[triple.object_id] {
-                        visited[triple.object_id] = true;
-                        queue.push_back((triple.object_id, depth + 1));
-                    }
+            // Explore triples adjacent to the current entity via the adjacency
+            // index (O(degree)) instead of scanning all triples.
+            for &idx in self.adjacency_of(current) {
+                if seen_triples[idx] {
+                    continue;
                 }
-                if triple.object_id == current && !seen_triples[idx] {
-                    seen_triples[idx] = true;
-                    result_triples.push(*triple);
-                    if !visited[triple.subject_id] {
-                        visited[triple.subject_id] = true;
-                        queue.push_back((triple.subject_id, depth + 1));
-                    }
+                let triple = &self.triples[idx];
+                seen_triples[idx] = true;
+                result_triples.push(*triple);
+                if !visited[triple.object_id] {
+                    visited[triple.object_id] = true;
+                    queue.push_back((triple.object_id, depth + 1));
+                }
+                if !visited[triple.subject_id] {
+                    visited[triple.subject_id] = true;
+                    queue.push_back((triple.subject_id, depth + 1));
                 }
             }
         }

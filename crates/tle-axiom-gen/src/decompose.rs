@@ -161,8 +161,23 @@ fn is_discardable(word: &str) -> bool {
         "the" | "a" | "an" | "this" | "that" | "these" | "those" | "it" | "its"
             | "which" | "who" | "whose" | "where" | "and" | "but" | "or" | "then"
             | "however" | "also" | "later" | "he" | "she" | "they" | "his" | "her"
-            | "their" | "him" | "herself" | "himself"
+            | "their" | "him" | "herself" | "himself" | "we" | "you" | "them" | "us"
+            | "there" | "here" | "one" | "two" | "some" | "many" | "more" | "most"
+            | "after" | "before" | "since" | "until" | "while" | "although" | "because"
+            | "according" | "together" | "addition" | "though" | "accordingly" | "such"
+            | "eventually" | "finally" | "meanwhile" | "besides" | "elsewhere" | "including"
+            | "through"
     )
+}
+
+/// A subject that begins with a date/number token (e.g. "2013, Hingis") is
+/// not a valid entity — the year is a temporal marker, not part of the subject.
+fn subject_is_date_prefix(subject: &str) -> bool {
+    subject
+        .split_whitespace()
+        .next()
+        .map(|w| w.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or(false)
 }
 
 fn normalize(text: &str) -> String {
@@ -191,8 +206,13 @@ fn canonical_subject(text: &str) -> String {
 /// both sides. This prevents predicates like "is" or "has" from matching
 /// inside words such as "Hingis" or "Swiss".
 fn find_word_boundary(lower: &str, phrase: &str) -> Option<usize> {
+    if phrase.is_empty() || phrase.len() > lower.len() { return None; }
     let mut search_from = 0;
+    let mut iterations = 0usize;
+    let max_iter = lower.len() + 1;
     while let Some(position) = lower[search_from..].find(phrase) {
+        iterations += 1;
+        if iterations > max_iter { return None; }
         let absolute = search_from + position;
         let before = absolute.checked_sub(1).and_then(|i| lower.as_bytes().get(i)).copied();
         let after = lower.as_bytes().get(absolute + phrase.len()).copied();
@@ -202,6 +222,7 @@ fn find_word_boundary(lower: &str, phrase: &str) -> Option<usize> {
             return Some(absolute);
         }
         search_from = absolute + phrase.len();
+        if search_from > lower.len() { return None; }
     }
     None
 }
@@ -235,14 +256,24 @@ fn split_clauses(sentence: &str) -> Vec<String> {
 
     for token in sentence.split_whitespace() {
         let lower = token.to_lowercase();
-        let is_boundary = token.ends_with(',')
+        let is_comma = token.ends_with(',');
+        let is_boundary = is_comma
             || lower == "and" || lower == "but" || lower == ";" || token.ends_with(';');
-        if is_boundary && !current.is_empty() {
+        // A comma-boundary token belongs to the CURRENT (left) clause so the
+        // word before it stays attached: "the capital of France," keeps
+        // "France" with the left clause. So commas do NOT trigger the generic
+        // pre-push; they are appended to current and then the left clause is
+        // committed.
+        if is_boundary && !is_comma && !current.is_empty() {
             parts.push(current.trim().to_string());
             current.clear();
         }
         current.push(' ');
         current.push_str(token);
+        if is_comma {
+            parts.push(current.trim().to_string());
+            current.clear();
+        }
         if token.ends_with('.') {
             parts.push(current.trim().to_string());
             current.clear();
@@ -316,6 +347,55 @@ pub fn rank_answer_candidates(query: &str, candidates: &[String]) -> Vec<AnswerC
     ranked
 }
 
+/// Truncate a long object at clause boundaries so we keep the short, entity-like
+/// head of the object rather than the whole trailing clause.
+///
+/// "the Eiffel Tower, which was built in 1889" → "the Eiffel Tower"
+/// "a Swiss professional tennis player who won ..." → "a Swiss professional tennis player"
+///
+/// We ONLY cut at strong clause boundaries (commas, relative pronouns,
+/// coordinators) — NOT at prepositions like " in ", " of ", " with " which are
+/// part of real entity names ("United States of America", "Mount McKinley").
+fn truncate_object(object: &str) -> String {
+    for marker in [", ", " who ", " which ", " that ", " where ", " and ", " but ", " such ", " including "] {
+        if let Some(position) = object.find(marker) {
+            let head = &object[..position];
+            let trimmed = head.trim();
+            if !trimmed.is_empty() {
+                return normalize(trimmed);
+            }
+        }
+    }
+    normalize(object)
+}
+
+/// Is the subject a plausible entity (not a long lowercase descriptive phrase)?
+///
+/// A valid subject is either capitalized (proper noun) or short (≤3 words).
+/// Lowercase phrases longer than 3 words (e.g. "a change of heart two months
+/// later") are not entities and are dropped.
+fn is_entity_like(subject: &str) -> bool {
+    let words: Vec<&str> = subject.split_whitespace().collect();
+    if words.is_empty() {
+        return false;
+    }
+    // Leading article is fine ("the sky", "a cat").
+    let content: Vec<&str> = words
+        .iter()
+        .filter(|w| !matches!(w.to_lowercase().as_str(), "the" | "a" | "an"))
+        .copied()
+        .collect();
+    if content.is_empty() {
+        return false;
+    }
+    // Short subject → keep regardless of capitalization (handles lowercase facts).
+    if content.len() <= 3 {
+        return true;
+    }
+    // Long subject → must contain a capitalized token (proper noun).
+    content.iter().any(|w| w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
+}
+
 /// Decompose a sentence into connected fact triples.
 ///
 /// `fallback_subject` is used only when no clause in the sentence yields an
@@ -329,33 +409,49 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         let Some((position, relation, object)) = find_predicate(&clause) else {
             continue;
         };
+        let raw_object = object.clone();
         let mut subject = normalize(&clause[..position]);
         let subject_canonical = canonical_subject(&subject);
+        // Whether the subject came from the clause (derived) or was inherited /
+        // the fallback page title (trusted — always a valid entity).
+        let mut trusted_subject = false;
 
         if subject_canonical.is_empty() {
             // No explicit subject — inherit from the previous clause.
             match inherited_subject.as_ref() {
-                Some(previous) => subject = previous.clone(),
-                None => subject = fallback_subject.to_string(),
+                Some(previous) => {
+                    subject = previous.clone();
+                    trusted_subject = true;
+                }
+                None => {
+                    subject = fallback_subject.to_string();
+                    trusted_subject = true;
+                }
             }
         } else {
             inherited_subject = Some(subject_canonical.clone());
             subject = subject_canonical;
         }
 
-        if subject.is_empty() {
+        // Reject garbage derived subjects: date-prefixed ("2013, Hingis"), or
+        // long lowercase descriptive phrases that are not real entities.
+        // Trusted (inherited / page-title) subjects always pass.
+        if subject.is_empty()
+            || subject.len() > 60
+            || (!trusted_subject && (subject_is_date_prefix(&subject) || !is_entity_like(&subject)))
+        {
             continue;
         }
 
-        facts.push(DecomposedFact {
-            subject: subject.clone(),
-            relation: relation.to_string(),
-            object: object.clone(),
-        });
+        // Truncate the object to its entity-like head span.
+        let object = truncate_object(&object);
+        if object.is_empty() {
+            continue;
+        }
 
-        // Extract a year reference inside the object and link it as a
-        // temporal anchor: (subject, happened_in, year).
-        for word in object.split_whitespace() {
+        // Extract a year reference from the FULL pre-truncation object and
+        // link it as a temporal anchor: (subject, happened_in, year).
+        for word in raw_object.split_whitespace() {
             let cleaned = word.trim_matches(|c: char| !c.is_ascii_digit());
             if cleaned.len() == 4 && cleaned.starts_with('1') || cleaned.len() == 4 && cleaned.starts_with('2') {
                 facts.push(DecomposedFact {
@@ -366,9 +462,81 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
                 break;
             }
         }
+
+        facts.push(DecomposedFact {
+            subject: subject.clone(),
+            relation: relation.to_string(),
+            object: object.clone(),
+        });
+
+        // Surface embedded proper-noun phrases from the object as standalone
+        // entities. E.g. "the inventor of the lightweight baby buggy" yields
+        // the additional fact (subject, is_related_to, Baby Buggy). TriviaQA
+        // answers are often capitalized phrases buried inside long objects.
+        // NOTE: extract_proper_nouns is expensive on long objects (O(n·m) with
+        // many clauses); applied only when the object is short enough.
+        if object.split_whitespace().count() <= 20 {
+            for phrase in extract_proper_nouns(&object) {
+                if !facts.iter().any(|f| f.subject == subject && f.object == phrase) {
+                    facts.push(DecomposedFact {
+                        subject: subject.clone(),
+                        relation: "is_related_to".to_string(),
+                        object: phrase,
+                    });
+                }
+            }
+        }
     }
 
     facts
+}
+
+/// Extract capitalized multi-word proper-noun phrases from a string.
+///
+/// Looks for runs of tokens where at least the first is capitalized and not at
+/// sentence start (heuristically: the token before is lowercase or a
+/// preposition). Returns the longest capitalized phrase per window.
+fn extract_proper_nouns(text: &str) -> Vec<String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        let w = words[i];
+        let starts_cap = w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
+        // A proper-noun phrase: capitalized word possibly followed by more
+        // capitalized/lowercase words until a clause marker or preposition.
+        if starts_cap {
+            let mut j = i;
+            // Stop the phrase at relative pronouns, prepositions, and
+            // coordinators so "Baby Buggy with a collapsible ..." keeps only
+            // "Baby Buggy".
+            while j < words.len()
+                && !matches!(
+                    words[j].to_lowercase().as_str(),
+                    "who" | "which" | "that" | "where" | "with" | "in" | "on" | "at"
+                        | "of" | "to" | "from" | "and" | "but" | "for" | "the" | "a"
+                        | "an" | "his" | "her" | "its" | "was" | "is" | "are" | "were"
+                )
+            {
+                j += 1;
+            }
+            let phrase_words = &words[i..j];
+            if phrase_words.len() >= 2 && phrase_words.len() <= 5 {
+                let phrase = phrase_words.join(" ");
+                let first = phrase_words[0].to_lowercase();
+                if !matches!(first.as_str(), "a" | "an" | "the" | "his" | "her" | "its") {
+                    out.push(phrase);
+                }
+            }
+            // Advance past the phrase.  If j == i (the very first word was a
+            // stop word), consume it and move on — otherwise the loop would
+            // hang forever because i never advances.
+            i = if j == i { i + 1 } else { j };
+        } else {
+            i += 1;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -411,5 +579,53 @@ mod tests {
     fn ignores_discardable_pseudo_subjects() {
         let facts = decompose_sentence("It was founded in 1901 in Chicago.", "Company X");
         assert!(facts.iter().any(|f| f.subject == "Company X" && f.relation == "founded_in"));
+    }
+
+    #[test]
+    fn rejects_long_lowercase_descriptive_subjects() {
+        // "a change of heart two months later" is not an entity — the clause
+        // should be dropped (no inherited subject survives the filter).
+        let facts = decompose_sentence(
+            "Hingis failed in 1997; a change of heart two months later just before the French Open.",
+            "Hingis",
+        );
+        assert!(!facts.iter().any(|f| f.subject.contains("change of heart")));
+    }
+
+    #[test]
+    fn rejects_date_prefixed_subjects() {
+        let facts = decompose_sentence(
+            "2013, Hingis was elected into the International Tennis Hall of Fame.",
+            "Hingis",
+        );
+        // The subject must be Hingis (inherited), not "2013, Hingis".
+        assert!(!facts.iter().any(|f| f.subject.starts_with('2')));
+    }
+
+    #[test]
+    fn surfaces_embedded_proper_nouns() {
+        let facts = decompose_sentence(
+            "He was the inventor of the lightweight Baby Buggy with a collapsible support assembly.",
+            "Maclaren",
+        );
+        assert!(
+            facts.iter().any(|f| f.object == "Baby Buggy"),
+            "expected embedded proper noun 'Baby Buggy' surfaced, got {:?}",
+            facts.iter().map(|f| f.object.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn truncates_object_at_relative_clause() {
+        let facts = decompose_sentence(
+            "Paris is the capital of France, which is in Europe.",
+            "Paris",
+        );
+        // The capital_of object must be the clean head "France", not the whole
+        // trailing clause.
+        assert!(facts.iter().any(|f| f.relation == "capital_of" && f.object == "France"));
+        // The relative clause "which is in Europe" becomes its own fact, but
+        // the capital_of object must NOT contain "Europe".
+        assert!(!facts.iter().any(|f| f.relation == "capital_of" && f.object.contains("Europe")));
     }
 }

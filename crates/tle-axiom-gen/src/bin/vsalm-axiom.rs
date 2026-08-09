@@ -39,7 +39,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Records to run: {}", limit);
 
     for record in records.iter().take(limit) {
-        let mut engine = AxiomGen::new(4096);
+        let mut engine = AxiomGen::new(2048);
+        engine.search_config.max_hops = 3;
+        engine.search_config.beam_width = 16;
         let facts = extract_document_facts(&evidence_dir, &record.evidence_files, &record.question);
 
         for fact in &facts {

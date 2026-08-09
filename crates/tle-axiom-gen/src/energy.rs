@@ -179,6 +179,18 @@ pub fn encode_triple(
     let relation_name = &relations[triple.relation_id];
     let object_name = &entities[triple.object_id];
 
+    // Prefer `get` (O(1) lookup, no insertion) since add_fact already
+    // registered every symbol; fall back to insertion only if somehow missing.
+    if let (Some(s_vec), Some(r_vec), Some(o_vec)) = (
+        codebook.get(subject_name).cloned(),
+        codebook.get(relation_name).cloned(),
+        codebook.get(object_name).cloned(),
+    ) {
+        // C(s) ⊙ C(r) ⊙ ρ(C(o))
+        let o_permuted = o_vec.permute(1);
+        return s_vec.hadamard(&r_vec).hadamard(&o_permuted);
+    }
+
     let s_vec = codebook.get_or_insert(subject_name).clone();
     let r_vec = codebook.get_or_insert(relation_name).clone();
     let o_vec = codebook.get_or_insert(object_name).clone();

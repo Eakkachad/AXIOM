@@ -19,6 +19,10 @@ pub struct SearchConfig {
     pub max_hops: usize,
     /// Minimum energy threshold for path acceptance.
     pub energy_threshold: f32,
+    /// Stop early when the best path energy stalls across consecutive hops.
+    /// True for QA (answers are usually 1-3 hops); false for deep-chain
+    /// composition benchmarks that intentionally explore to max_hops.
+    pub early_exit_on_stall: bool,
 }
 
 impl Default for SearchConfig {
@@ -27,6 +31,7 @@ impl Default for SearchConfig {
             beam_width: 32,
             max_hops: 10,
             energy_threshold: 0.8,
+            early_exit_on_stall: true,
         }
     }
 }
@@ -65,22 +70,21 @@ pub fn beam_search(
     let mut beam: Vec<ScoredPath> = Vec::new();
 
     for &entity_id in start_entities {
-        for (idx, triple) in graph.triples.iter().enumerate() {
-            if triple.subject_id == entity_id || triple.object_id == entity_id {
-                let path_triples = vec![*triple];
-                let energy = compute_energy(
-                    &path_triples,
-                    query_vector,
-                    energy_config,
-                    &graph.entities,
-                    &graph.relations,
-                    codebook,
-                );
-                beam.push(ScoredPath {
-                    path: vec![idx],
-                    energy,
-                });
-            }
+        for &idx in graph.adjacency_of(entity_id) {
+            let triple = &graph.triples[idx];
+            let path_triples = vec![*triple];
+            let energy = compute_energy(
+                &path_triples,
+                query_vector,
+                energy_config,
+                &graph.entities,
+                &graph.relations,
+                codebook,
+            );
+            beam.push(ScoredPath {
+                path: vec![idx],
+                energy,
+            });
         }
     }
 
@@ -93,6 +97,10 @@ pub fn beam_search(
 
     // Step 2: Iteratively expand paths
     // Keep recursion bounded for safety while allowing deep compositional chains.
+    // Early-termination state: stop when best energy has stalled.
+    let mut previous_best_energy = f32::NEG_INFINITY;
+    let mut stall_count = 0usize;
+    let stall_limit = 4usize;
     for _hop in 1..search_config.max_hops.min(64) {
         let mut candidates: Vec<ScoredPath> = Vec::new();
 
@@ -103,51 +111,53 @@ pub fn beam_search(
             // Expand from both the subject and object of the last triple
             let frontier_entities = [last_triple.subject_id, last_triple.object_id];
 
+            // Build the visited-entity set ONCE per path (not per candidate).
+            let mut visited_entities = HashSet::new();
+            for &path_idx in &scored_path.path {
+                let previous = graph.triples[path_idx];
+                visited_entities.insert(previous.subject_id);
+                visited_entities.insert(previous.object_id);
+            }
+
             for &frontier in &frontier_entities {
-                for (idx, triple) in graph.triples.iter().enumerate() {
-                    // Skip triples already in the path
+                // Only consider triples adjacent to the frontier (O(degree)),
+                // instead of scanning the entire triple list.
+                for &idx in graph.adjacency_of(frontier) {
+                    // Skip triples already in the path.
                     if scored_path.path.contains(&idx) {
                         continue;
                     }
+                    let triple = &graph.triples[idx];
 
-                    // Prevent graph cycles: a path may revisit its frontier, but
-                    // the newly introduced endpoint must not already be in the path.
-                    let mut visited_entities = HashSet::new();
-                    for &path_idx in &scored_path.path {
-                        let previous = graph.triples[path_idx];
-                        visited_entities.insert(previous.subject_id);
-                        visited_entities.insert(previous.object_id);
-                    }
+                    // Prevent graph cycles: the newly introduced endpoint must
+                    // not already be in the path.
                     let introduces_new_entity = !visited_entities.contains(&triple.subject_id)
                         || !visited_entities.contains(&triple.object_id);
                     if !introduces_new_entity {
                         continue;
                     }
 
-                    // Check adjacency
-                    if triple.subject_id == frontier || triple.object_id == frontier {
-                        let mut new_path = scored_path.path.clone();
-                        new_path.push(idx);
+                    let mut new_path = scored_path.path.clone();
+                    new_path.push(idx);
 
-                        let path_triples: Vec<Triple> = new_path
-                            .iter()
-                            .map(|&i| graph.triples[i])
-                            .collect();
+                    let path_triples: Vec<Triple> = new_path
+                        .iter()
+                        .map(|&i| graph.triples[i])
+                        .collect();
 
-                        let energy = compute_energy(
-                            &path_triples,
-                            query_vector,
-                            energy_config,
-                            &graph.entities,
-                            &graph.relations,
-                            codebook,
-                        );
+                    let energy = compute_energy(
+                        &path_triples,
+                        query_vector,
+                        energy_config,
+                        &graph.entities,
+                        &graph.relations,
+                        codebook,
+                    );
 
-                        candidates.push(ScoredPath {
-                            path: new_path,
-                            energy,
-                        });
-                    }
+                    candidates.push(ScoredPath {
+                        path: new_path,
+                        energy,
+                    });
                 }
             }
         }
@@ -164,6 +174,25 @@ pub fn beam_search(
 
         // Save extended paths to all_paths
         all_paths.extend(candidates.iter().cloned());
+
+        // Early termination (QA path only): if the best path energy has not
+        // improved for `stall_limit` consecutive hops, the search has
+        // converged — the beam is only finding equal-or-worse extensions.
+        // This cuts multi-hop search time dramatically on graphs where the
+        // answer is a few hops away, while deep-chain composition tests set
+        // `early_exit_on_stall = false` to explore to max_hops.
+        if search_config.early_exit_on_stall {
+            let best_energy = candidates[0].energy;
+            if best_energy <= previous_best_energy + 1e-6 {
+                stall_count += 1;
+            } else {
+                stall_count = 0;
+            }
+            previous_best_energy = best_energy;
+            if stall_count >= stall_limit {
+                break;
+            }
+        }
 
         // The active beam becomes the extended candidates only
         beam = candidates;
@@ -193,7 +222,7 @@ mod tests {
         let search_config = SearchConfig {
             beam_width: 8,
             max_hops: 3,
-            energy_threshold: 0.0,
+            ..Default::default()
         };
 
         let sky_id = kg.entity_id("sky").unwrap();
@@ -227,7 +256,7 @@ mod tests {
         let search_config = SearchConfig {
             beam_width: 16,
             max_hops: 4,
-            energy_threshold: 0.0,
+            ..Default::default()
         };
 
         let a_id = kg.entity_id("a").unwrap();
@@ -280,7 +309,7 @@ mod tests {
         let search_config = SearchConfig {
             beam_width: 16,
             max_hops: 3,
-            energy_threshold: 0.0,
+            ..Default::default()
         };
 
         let sky_id = kg.entity_id("sky").unwrap();
@@ -316,7 +345,7 @@ mod tests {
             &query_vec,
             &mut codebook,
             &EnergyConfig::default(),
-            &SearchConfig { beam_width: 32, max_hops: 10, energy_threshold: 0.0 },
+            &SearchConfig { beam_width: 32, max_hops: 10, energy_threshold: 0.0, early_exit_on_stall: false },
         );
         assert_eq!(results.iter().map(|path| path.path.len()).max(), Some(10));
     }
@@ -335,7 +364,7 @@ mod tests {
             &query_vec,
             &mut codebook,
             &EnergyConfig::default(),
-            &SearchConfig { beam_width: 16, max_hops: 10, energy_threshold: 0.0 },
+            &SearchConfig { beam_width: 16, max_hops: 10, energy_threshold: 0.0, early_exit_on_stall: false },
         );
         assert!(results.iter().all(|path| path.path.len() <= 2));
     }
