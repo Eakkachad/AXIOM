@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::Value;
-use tle_axiom_gen::decompose::decompose_sentence;
+use tle_axiom_gen::decompose::{decompose_sentence, extract_sentence_entities};
 use tle_axiom_gen::AxiomGen;
 
 #[derive(Debug, Deserialize)]
@@ -185,6 +185,14 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
         let mut seen = std::collections::HashSet::new();
         for (_, sentence) in sentences.into_iter().take(12) {
             for fact in decompose_sentence(&sentence, &subject) {
+                let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
+                if seen.insert(key.clone()) {
+                    facts.push([fact.subject, fact.relation, fact.object]);
+                }
+            }
+            // Safety net: proper-noun entities from the full sentence enter
+            // the graph even when decomposition misses the relation.
+            for fact in extract_sentence_entities(&sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
                     facts.push([fact.subject, fact.relation, fact.object]);

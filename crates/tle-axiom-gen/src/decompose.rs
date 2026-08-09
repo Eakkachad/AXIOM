@@ -22,6 +22,18 @@ pub struct DecomposedFact {
 const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("was born in", "born_in"),
     ("was born on", "born_on"),
+    ("born as", "born_as"),
+    ("was born as", "born_as"),
+    ("born to", "child_of"),
+    ("was born to", "child_of"),
+    ("married to", "married_to"),
+    ("was married to", "married_to"),
+    ("named after", "named_after"),
+    ("was named after", "named_after"),
+    ("renamed to", "renamed_to"),
+    ("was renamed to", "renamed_to"),
+    ("graduated from", "graduated_from"),
+    ("studied at", "studied_at"),
     ("is located in", "located_in"),
     ("was located in", "located_in"),
     ("is located at", "located_at"),
@@ -488,6 +500,27 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         }
     }
 
+    facts
+}
+
+/// Extract proper-noun entities from an entire evidence sentence and emit
+/// them as `(fallback_subject, mentions, EntityName)` facts.
+///
+/// This is a high-recall safety net: even when decomposition fails to
+/// extract the relation connecting subject to answer, the answer entity
+/// (which is usually a capitalized proper noun in the evidence text)
+/// still enters the knowledge graph.
+pub fn extract_sentence_entities(sentence: &str, fallback_subject: &str) -> Vec<DecomposedFact> {
+    let mut facts: Vec<DecomposedFact> = Vec::new();
+    for phrase in extract_proper_nouns(sentence) {
+        if !facts.iter().any(|f: &DecomposedFact| f.subject == fallback_subject && f.object.as_str() == phrase.as_str()) {
+            facts.push(DecomposedFact {
+                subject: fallback_subject.to_string(),
+                relation: "mentions".to_string(),
+                object: phrase,
+            });
+        }
+    }
     facts
 }
 

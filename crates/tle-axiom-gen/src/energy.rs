@@ -104,17 +104,7 @@ pub fn compute_energy(
 
 /// Average triple quality confidence: brevity of subjects and objects
 /// favours clean triples over wordy decomposition artifacts.
-fn compute_confidence(triples: &[Triple], entities: &[String], relations: &[String], precomputed: Option<&[f32]>) -> f32 {
-    if let Some(pre) = precomputed {
-        let mut s = 0.0f32;
-        for t in triples {
-            let idx = t.subject_id; // reuse subject_id as approx index; beam indices differ
-            let _ = idx;
-        }
-        // Beam passes triple values, not indices.  Compute heuristic confidence
-        // from entity names directly since we don't have graph triple indices.
-        let _ = pre;
-    }
+fn compute_confidence(triples: &[Triple], entities: &[String], relations: &[String], _precomputed: Option<&[f32]>) -> f32 {
     let mut total = 0.0f32;
     for t in triples {
         let subj_words = entities[t.subject_id].split_whitespace().count();
