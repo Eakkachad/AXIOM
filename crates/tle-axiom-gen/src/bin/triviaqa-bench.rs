@@ -3,7 +3,7 @@
 use std::env;
 use std::fs::File;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -19,6 +19,8 @@ struct Record {
     answers: Vec<String>,
     #[serde(default)]
     facts: Vec<[String; 3]>,
+    #[serde(default)]
+    evidence_files: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,17 +33,25 @@ struct EvidenceRecord {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = env::args().nth(1).unwrap_or_else(|| "data/axiom_triviaqa.jsonl".to_string());
     let evidence_path = env::args().nth(2);
+    let evidence_dir = env::args().nth(3);
     let records = load_records(&path)?;
-    let evidence = evidence_path.as_deref().map(load_evidence).transpose()?.unwrap_or_default();
-    let mut engine = AxiomGen::new(2048);
+    let evidence = match evidence_path.as_deref() {
+        None | Some("-") => HashMap::new(),
+        Some(path) => load_evidence(path)?,
+    };
     let mut total = 0usize;
     let mut exact = 0usize;
     let mut substring = 0usize;
     let mut total_latency = Duration::ZERO;
 
-    for record in records {
+    let limit = env::var("AXIOM_TRIVIA_LIMIT").ok().and_then(|value| value.parse().ok());
+    for record in records.into_iter().take(limit.unwrap_or(usize::MAX)) {
+        let mut engine = AxiomGen::new(2048);
         let evidence_facts = evidence.get(&record.id).cloned().unwrap_or_default();
-        for fact in record.facts.iter().chain(evidence_facts.iter()) {
+        let document_facts = evidence_dir.as_deref()
+            .map(|directory| extract_document_facts(directory, &record.evidence_files))
+            .unwrap_or_default();
+        for fact in record.facts.iter().chain(evidence_facts.iter()).chain(document_facts.iter()) {
             engine.add_fact(&fact[0], &fact[1], &fact[2]);
         }
         let start = Instant::now();
@@ -77,7 +87,10 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
                         answers.extend(aliases.iter().filter_map(Value::as_str).map(str::to_string));
                     }
                 }
-                records.push(Record { id, question, answers, facts: Vec::new() });
+                let evidence_files = item.get("EntityPages").and_then(Value::as_array)
+                    .map(|pages| pages.iter().filter_map(|page| page.get("Filename").and_then(Value::as_str).map(str::to_string)).collect())
+                    .unwrap_or_default();
+                records.push(Record { id, question, answers, facts: Vec::new(), evidence_files });
             }
             return Ok(records);
         }
@@ -88,6 +101,40 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
         .filter(|line| line.as_ref().map(|line| !line.trim().is_empty()).unwrap_or(true))
         .map(|line| Ok(serde_json::from_str(&line?)?))
         .collect()
+}
+
+fn extract_document_facts(directory: &str, files: &[String]) -> Vec<[String; 3]> {
+    let mut facts = Vec::new();
+    for filename in files {
+        let path = std::path::Path::new(directory).join(filename);
+        let Ok(file) = File::open(path) else { continue; };
+        let mut text = String::new();
+        if file.take(256 * 1024).read_to_string(&mut text).is_err() { continue; }
+        let subject = filename.trim_end_matches(".txt").replace('_', " ");
+        for sentence in text.split(|character| matches!(character, '.' | '!' | '?')).take(20) {
+            if let Some((relation, object)) = extract_relation(sentence) {
+                if object.split_whitespace().count() <= 30 && object.len() >= 2 {
+                    facts.push([subject.clone(), relation.to_string(), object]);
+                }
+            }
+        }
+    }
+    facts
+}
+
+fn extract_relation(sentence: &str) -> Option<(&'static str, String)> {
+    let sentence = sentence.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = sentence.to_lowercase();
+    for (pattern, relation) in [(" is located in ", "located_in"), (" was born in ", "born_in"),
+        (" was founded in ", "founded_in"), (" is known for ", "known_for"),
+        (" contains ", "contains"), (" has ", "has"), (" was ", "was"),
+        (" are ", "are"), (" is ", "is")] {
+        if let Some(position) = lower.find(pattern) {
+            let object = sentence[position + pattern.len()..].trim().to_lowercase();
+            if !object.is_empty() { return Some((relation, object)); }
+        }
+    }
+    None
 }
 
 fn load_evidence(path: &str) -> Result<HashMap<String, Vec<[String; 3]>>, Box<dyn std::error::Error>> {
