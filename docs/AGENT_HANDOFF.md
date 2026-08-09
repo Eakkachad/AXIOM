@@ -1,6 +1,6 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-08 23:35 ICT
+> Last updated: 2026-08-09
 > Status: Phase 1 PoC COMPLETE, entering Phase 2
 
 ---
@@ -202,6 +202,15 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] CompressedKnowledgeStore (3-tier: Bloom + exact + VSA)
   - [x] 13 tests pass
 
+### ✅ COMPLETED (Phase 1.2 — Knowledge Compaction):
+- [x] Deterministic fact compaction — `tle-knowledge::CompressedKnowledgeStore::compact`
+  - [x] Exact duplicate removal, retaining newest facts
+  - [x] Configurable per-subject pruning
+  - [x] Optional global fact limit
+  - [x] Bloom, exact, and VSA indexes rebuilt after pruning
+  - [x] `CompactionConfig` and `CompactionReport` exported
+  - [x] 14 `tle-knowledge` tests pass
+
 ### ✅ COMPLETED (Phase 2 — Generation Quality):
 - [x] Template extraction (TemplateBank) — 19 patterns, 4 tests
 - [x] Fluency scoring (compute_fluency) — heuristic naturalness scorer
@@ -219,10 +228,10 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [ ] HTTP fetch + HTML extraction
   - [ ] `/learn-url` command
 - [ ] **Week 3:** Knowledge Compaction
-  - [ ] Topic clustering (cosine similarity)
-  - [ ] Fact merging (shared subject → combine objects)
-  - [ ] Stale fact pruning
-  - [ ] Auto-trigger every 10K facts
+   - [ ] Topic clustering (cosine similarity)
+   - [ ] Fact merging (shared subject → combine objects)
+   - [ ] Automatic age-based stale fact pruning
+   - [ ] Auto-trigger every 10K facts
 
 ### 🔲 TODO (Phase 2 — remaining):
 - [ ] **Style adaptation** (casual/formal/brief modes)

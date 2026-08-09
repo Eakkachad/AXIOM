@@ -2,11 +2,11 @@
 //!
 //! Combines: Bloom filter (fast check) + CategoryIndex (VSA bundles) + Exact store (HashMap)
 
-use std::collections::HashMap;
-use tle_vsa::{cosine_similarity, Codebook, HyperVector};
+use std::collections::{HashMap, HashSet};
+use tle_vsa::Codebook;
 
 use crate::bloom::BloomFilter;
-use crate::bundle::{encode_fact, query_bundle};
+use crate::bundle::query_bundle;
 use crate::category::CategoryIndex;
 
 /// Configuration for the knowledge store.
@@ -41,6 +41,8 @@ pub struct CompressedKnowledgeStore {
     bloom: BloomFilter,
     /// Exact fact store: subject → [(relation, object)]
     exact: HashMap<String, Vec<(String, String)>>,
+    /// Insertion order lets compaction retain the newest facts deterministically.
+    fact_log: Vec<(String, String, String)>,
     /// Category-indexed VSA bundles.
     categories: CategoryIndex,
     /// Codebook for VSA encoding.
@@ -62,6 +64,30 @@ pub struct StoreStats {
     pub bloom_hits: usize,
 }
 
+/// Limits used when rebuilding the compact knowledge index.
+#[derive(Clone, Debug)]
+pub struct CompactionConfig {
+    /// Keep at most this many newest facts for each subject.
+    pub max_facts_per_subject: usize,
+    /// Optional global limit. Newest facts win when the limit is reached.
+    pub max_total_facts: Option<usize>,
+}
+
+impl Default for CompactionConfig {
+    fn default() -> Self {
+        Self { max_facts_per_subject: 100, max_total_facts: None }
+    }
+}
+
+/// Result of a compaction pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CompactionReport {
+    pub facts_before: usize,
+    pub facts_after: usize,
+    pub duplicates_removed: usize,
+    pub stale_facts_pruned: usize,
+}
+
 impl CompressedKnowledgeStore {
     /// Create a new knowledge store with default config.
     pub fn new() -> Self {
@@ -73,6 +99,7 @@ impl CompressedKnowledgeStore {
         Self {
             bloom: BloomFilter::new(config.expected_facts),
             exact: HashMap::new(),
+            fact_log: Vec::new(),
             categories: CategoryIndex::new(config.dim),
             codebook: Codebook::new(config.dim, config.seed),
             config,
@@ -94,6 +121,7 @@ impl CompressedKnowledgeStore {
             .entry(subj_lower.clone())
             .or_default()
             .push((rel_lower.clone(), obj_lower.clone()));
+        self.fact_log.push((subj_lower.clone(), rel_lower.clone(), obj_lower.clone()));
         self.stats.exact_facts += 1;
 
         // Tier 3: VSA category bundles
@@ -102,6 +130,65 @@ impl CompressedKnowledgeStore {
 
         self.stats.total_facts += 1;
         self.stats.num_categories = self.categories.num_categories();
+    }
+
+    /// Remove duplicate and stale facts, then rebuild the compressed index.
+    ///
+    /// VSA bundles are superpositions, so removing one member requires rebuilding
+    /// them. The retained insertion order makes the result deterministic.
+    pub fn compact(&mut self, config: CompactionConfig) -> CompactionReport {
+        let facts_before = self.fact_log.len();
+        if facts_before == 0 {
+            return CompactionReport::default();
+        }
+
+        let mut seen = HashSet::new();
+        let mut subject_counts: HashMap<&str, usize> = HashMap::new();
+        let mut retained = Vec::with_capacity(facts_before);
+
+        // Walk backwards so both deduplication and per-subject pruning keep newest data.
+        for fact in self.fact_log.iter().rev() {
+            if !seen.insert(fact.clone()) {
+                continue;
+            }
+            let count = subject_counts.entry(fact.0.as_str()).or_insert(0);
+            if *count < config.max_facts_per_subject.max(1) {
+                retained.push(fact.clone());
+                *count += 1;
+            }
+        }
+        retained.reverse();
+
+        if let Some(limit) = config.max_total_facts {
+            if retained.len() > limit {
+                let start = retained.len() - limit;
+                retained = retained.split_off(start);
+            }
+        }
+
+        let unique_facts = seen.len();
+        let facts_after = retained.len();
+        let report = CompactionReport {
+            facts_before,
+            facts_after,
+            duplicates_removed: facts_before - unique_facts,
+            stale_facts_pruned: unique_facts - facts_after,
+        };
+
+        self.fact_log.clear();
+        self.exact.clear();
+        self.bloom = BloomFilter::new(self.config.expected_facts);
+        self.categories = CategoryIndex::new(self.config.dim);
+        self.stats.total_facts = 0;
+        self.stats.exact_facts = 0;
+        self.stats.vsa_facts = 0;
+        self.stats.num_categories = 0;
+
+        for (subject, relation, object) in retained {
+            self.store_fact(&subject, &relation, &object);
+        }
+
+        report
     }
 
     /// Query: get all known facts about a subject.
@@ -272,5 +359,30 @@ mod tests {
         assert!(store.might_know("tokyo"));
         // Unknown entities should mostly return false
         // (some false positives possible with Bloom)
+    }
+
+    #[test]
+    fn test_compaction_deduplicates_and_keeps_newest() {
+        let mut store = CompressedKnowledgeStore::with_config(StoreConfig {
+            dim: 128,
+            seed: 42,
+            expected_facts: 100,
+        });
+        store.store_fact("cat", "has", "four legs");
+        store.store_fact("cat", "has", "four legs");
+        store.store_fact("cat", "likes", "sun");
+        store.store_fact("cat", "says", "meow");
+
+        let report = store.compact(CompactionConfig {
+            max_facts_per_subject: 2,
+            max_total_facts: None,
+        });
+
+        assert_eq!(report.facts_before, 4);
+        assert_eq!(report.duplicates_removed, 1);
+        assert_eq!(report.facts_after, 2);
+        assert_eq!(report.stale_facts_pruned, 1);
+        assert_eq!(store.query_subject("cat").len(), 2);
+        assert_eq!(store.stats.total_facts, 2);
     }
 }

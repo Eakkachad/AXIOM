@@ -36,4 +36,4 @@ pub mod store;
 pub use bloom::BloomFilter;
 pub use bundle::KnowledgeBundle;
 pub use category::CategoryIndex;
-pub use store::CompressedKnowledgeStore;
+pub use store::{CompactionConfig, CompactionReport, CompressedKnowledgeStore};
