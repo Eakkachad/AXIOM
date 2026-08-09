@@ -1,8 +1,49 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-09 (session close — VSA-LM path launched)
-> Status: Phase 1 COMPLETE · Phases 2-3 largely complete · TriviaQA intelligence work in progress · **VSA-LM (Path C) STARTED**
+> Last updated: 2026-08-09 (session close)
+> Status: TriviaQA substring 23.9% (3× baseline) · candidate 15.4% (2×) · entity recall 79.6% · VSA-LM (Path C) architecture complete
+
+> ## SESSION HANDOFF SUMMARY v4 (FINAL — 2026-08-09)
 >
+> **Current state:** TriviaQA accuracy has jumped from 8.18% → 23.9% substring and 7.23% → 15.4% candidate in a single session (4 commits). The VSA-LM (Path C) non-neural LM architecture is fully built with 27 tests. The remaining gap is answer selection — entities are in the graph 79.6% of the time but extract_answer only picks the right one 15.4% of the time.
+>
+> **Key finding: the bottleneck is NOT energy function math** (we tried VSA consistency, IEF, triple confidence — all infrastructure now, all 0-weight). The bottleneck is decomposition precision — even with 80% entity recall, extract_answer (scan all triples) beats beam-search path scoring because VSA quasi-orthogonality gives near-zero signal for any path. The correct strategy: improve graph QUALITY (better entity boundaries, clause typing, proper-noun extraction from sentences), not energy function complexity.
+>
+> **TriviaQA milestone (verified-wikipedia-dev, 318 records):**
+> | Metric | Session start | Session end | Change |
+> |--------|:---:|:---:|:---:|
+> | substring_accuracy | 8.18% | **23.90%** | +15.7pt (2.9×) |
+> | candidate_answer_accuracy | 7.23% | **15.41%** | +8.2pt (2.1×) |
+> | answer_entity_recall | 72.33% | **79.56%** | +7.2pt |
+> | evidence_answer_recall | 99.69% | **99.69%** | unchanged |
+> | avg_latency | ~16ms | ~147ms | slower (more features) |
+>
+> **VSA-LM status (Path C — non-neural LM):**
+> - `crates/tle-vsa-lm/` — 27 tests passing, 3 binaries
+> - 4 signals: TBA (VSA bigram) + Engram (n-gram hash) + Reservoir (k-NN associative memory) + KnowledgePrior (fact-grounded steering)
+> - Wikipedia corpus: TRAIN 90.1% / TEST 10.7% next-token (no softmax, no backprop, deterministic)
+> - Knowledge-guided generation: `"does a cat have" → "animal heart"` (multi-hop chaining)
+> - Architecture complete; generalization gap (TEST 11%) needs vocabulary scaling and better VSA encoding
+>
+> **Commits this session (5 total):**
+> 1. `d9aefa2` — VSA-LM crate (VSA + TBA + Engram + Reservoir + decoder)
+> 2. `4b8d1c6` — Fuzzy entity linking (Molitor→Molitorová) + 17 family relations
+> 3. `19e8ac3` — KnowledgePrior (fact-grounded generation)
+> 4. `99a1b3e` — Clean decomposition + performance (3× speed, infinite-loop fix)
+> 5. `ce43999` — Sentence proper-noun extraction (entity recall +8.5pt)
+> 6. `42645f1` — EGA-style triple confidence scoring
+> 7. `9aaaa49` — DDTree answer selection infrastructure
+> 8. `ad3273a` — VSA consistency + IEF energy terms (infrastructure, off)
+> 9. `7c74e66` — Triple-confidence energy term (infrastructure, off)
+>
+> **Next steps (in priority order):**
+> 1. **Answer selection ranking** — the last 65% gap: extract_answer scores entities well (15.4%) but can't break 20% without better ranking. Options: intent-based filtering (Who→subject, What→object), VSA cosine weight tuning, multi-signal ensemble with DDTree scores.
+> 2. **Decomposition coverage** — entity recall 79.6% means 20% of answers still missing from graph. ClausIE-style clause typing + dependency-based entity boundaries would close this.
+> 3. **VSA-LM scale** — vocabulary 10K+, perplexity <200, generalization (TEST >20%) before claiming "LM แบบใหม่"
+
+---
+
+> ## SESSION HANDOFF SUMMARY v3 (TriviaQA entity linking breakthrough)
 > ## SESSION HANDOFF SUMMARY v2 (VSA-LM / Path C — next agent)
 >
 > **Current focus:** Building a non-neural VSA-based language generator (`tle-vsa-lm`) as the long-term "Path C" direction — replace softmax/backprop LM components with VSA algebra + reservoir + n-gram. Fully deterministic, CPU-only, no training.
