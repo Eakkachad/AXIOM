@@ -12,6 +12,7 @@
 //! 4. **Linearization** (`linearize`): Converts graph paths to natural language
 //! 5. **Engine** (`engine`): Orchestrates the full generation pipeline
 
+pub mod decompose;
 pub mod energy;
 pub mod engine;
 pub mod graph;
@@ -19,6 +20,7 @@ pub mod linearize;
 pub mod search;
 pub mod templates;
 
+pub use decompose::{DecomposedFact, decompose_sentence};
 pub use engine::{AxiomGen, GenerationResult};
 pub use graph::{KnowledgeGraph, Triple};
 pub use energy::EnergyConfig;

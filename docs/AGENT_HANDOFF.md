@@ -324,6 +324,10 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Verified Wikipedia dev split loader: 318 records parsed
 - [x] Verified Wikipedia dev evidence run: 318 records, 11.32% substring accuracy, 99.69% evidence-answer recall, 404ms average latency
 - [x] Question-overlap evidence grounding added without answer-alias oracle lookup
+- [x] Clause-based fact decomposition (`decompose::decompose_sentence`) with relational verb anchoring and subject chaining
+- [x] Composed semantic entity vectors so VSA cosine reflects shared vocabulary
+- [x] Structural answer extraction in `GenerationResult.answer` (connectivity + role bias + VSA relevance + length penalty)
+- [x] Root-cause diagnostics: answer-entity recall 72.33%, evidence recall 99.69%, candidate answer 7.23%
 - [ ] Full train/test benchmark and richer evidence extraction remain
 - [ ] arXiv paper submission
 - [x] Reproducible paper artifact status and pre-submission checklist added

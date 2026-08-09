@@ -23,7 +23,7 @@ use tle_vsa::{cosine_similarity, Codebook, HyperVector};
 
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
-use crate::linearize::{classify_intent, linearize_with_templates};
+use crate::linearize::{classify_intent, linearize_with_templates, Intent};
 use crate::templates::TemplateBank;
 use crate::search::{beam_search, SearchConfig};
 
@@ -32,6 +32,8 @@ use crate::search::{beam_search, SearchConfig};
 pub struct GenerationResult {
     /// The generated natural language sentence.
     pub sentence: String,
+    /// The best single-entity answer extracted from the selected path.
+    pub answer: String,
     /// Reasoning trace: descriptions of each step in the path.
     pub reasoning: Vec<String>,
     /// Energy score of the best path found.
@@ -127,6 +129,7 @@ impl AxiomGen {
         if query_entities.is_empty() {
             return GenerationResult {
                 sentence: String::new(),
+                answer: String::new(),
                 reasoning: vec!["No known entities found in query.".to_string()],
                 energy: 0.0,
                 path_length: 0,
@@ -152,6 +155,7 @@ impl AxiomGen {
         if results.is_empty() {
             return GenerationResult {
                 sentence: String::new(),
+                answer: String::new(),
                 reasoning: vec!["No paths found in knowledge graph.".to_string()],
                 energy: 0.0,
                 path_length: 0,
@@ -195,12 +199,88 @@ impl AxiomGen {
             &self.template_bank,
         );
 
+        // Extract the best single-entity answer from the selected path.
+        let answer = self.extract_answer(&self.graph, &query_entities, intent, &query_vector, query);
+
         GenerationResult {
             sentence,
+            answer,
             reasoning,
             energy: best.energy,
             path_length: path_triples.len(),
         }
+    }
+
+    /// Extract a single best answer entity from the graph.
+    ///
+    /// Combines three genuine signals:
+    /// 1. Structural connectivity: entities directly linked to a query entity
+    ///    by a triple receive a strong bonus (the classic QA signal).
+    /// 2. Lexical overlap: entities whose surface form shares question content
+    ///    words (e.g. "hormone" in "Which hormone ..." → "Luteinizing hormone").
+    /// 3. VSA semantic relevance to the bundled query vector.
+    ///
+    /// A length penalty keeps long phrase-entities (decomposition artifacts)
+    /// from winning over short, entity-like answers. No answer oracle is used.
+    fn extract_answer(
+        &self,
+        graph: &KnowledgeGraph,
+        query_entities: &[usize],
+        intent: Intent,
+        query_vector: &HyperVector,
+        query: &str,
+    ) -> String {
+        let content_words: Vec<String> = query
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() >= 4)
+                .filter(|w| !matches!(*w, "what" | "which" | "where" | "when" | "how" | "does"
+                    | "have" | "who" | "with" | "from" | "that" | "this" | "why" | "the" | "was" | "did"))
+                .map(|w| w.to_string())
+                .collect();
+
+        use std::collections::HashMap;
+        let mut scores: HashMap<usize, (f32, usize)> = HashMap::new();
+
+        for triple in &graph.triples {
+            let subject_in_query = query_entities.contains(&triple.subject_id);
+            let object_in_query = query_entities.contains(&triple.object_id);
+            let connected = subject_in_query != object_in_query;
+            let connected_id = if connected {
+                if subject_in_query { Some(triple.object_id) } else { Some(triple.subject_id) }
+            } else { None };
+
+            for entity_id in [triple.subject_id, triple.object_id] {
+                let name = graph.entity_name(entity_id);
+                let lower = name.to_lowercase();
+                let overlap = content_words.iter().filter(|w| lower.contains(w.as_str())).count();
+                let connected_bonus = if connected_id == Some(entity_id) { 2.5 } else { 0.0 };
+                let role_bonus = if connected_id == Some(entity_id) {
+                    match intent {
+                        Intent::Who => if subject_in_query { 1.5 } else { 0.0 },
+                        Intent::What | Intent::Where => if !subject_in_query { 1.5 } else { 0.0 },
+                        _ => 0.5,
+                    }
+                } else { 0.0 };
+                let relevance = tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(name));
+                let entry = scores.entry(entity_id).or_insert((0.0, 0));
+                entry.0 += connected_bonus + role_bonus + overlap as f32 + relevance * 0.5;
+                entry.1 += 1;
+            }
+        }
+
+        let mut ranked: Vec<(f32, usize, String)> = scores
+            .into_iter()
+            .filter_map(|(id, (score, count))| {
+                let name = graph.entity_name(id);
+                let words = name.split_whitespace().count();
+                if words > 5 { return None; }
+                let length_penalty = 0.4 * (words.saturating_sub(2)) as f32;
+                Some((score + 0.2 * count as f32 - length_penalty, id, name.to_string()))
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        ranked.first().map(|(_, _, name)| name.clone()).unwrap_or_default()
     }
 
     /// Extract entity IDs mentioned in the query that exist in the knowledge graph.
@@ -260,6 +340,39 @@ impl AxiomGen {
         let mut result = HyperVector::zeros(self.codebook.dim());
         for word in words.iter().filter(|word| !word.is_empty()) {
             result = result.add(&self.codebook.get_or_insert(word));
+        }
+        result.normalize()
+    }
+
+    /// Compose a semantic vector for a symbol from its constituent word
+    /// vectors.
+    ///
+    /// The base codebook maps whole strings to independent random vectors, so
+    /// `C("Luteinizing_hormone")` shares nothing with `C("hormone")`. By
+    /// bundling the word-level vectors instead, entities that share vocabulary
+    /// acquire positive cosine similarity, making VSA relevance meaningful for
+    /// fuzzy answer matching. No answer oracle or training is involved.
+    fn semantic_vector(&self, name: &str) -> HyperVector {
+        let words: Vec<&str> = name
+            .split(|c: char| c == ' ' || c == '_' || c == '-')
+            .filter(|w| !w.is_empty())
+            .collect();
+        let mut result = HyperVector::zeros(self.codebook.dim());
+        let mut found = 0usize;
+        for word in words.iter() {
+            if let Some(vec) = self.codebook.get(word) {
+                // Bundle word vectors without permutation so that words shared
+                // between query and entity contribute positive cosine signal,
+                // matching how build_query_vector bundles query words.
+                result = result.add(vec);
+                found += 1;
+            }
+        }
+        if found == 0 {
+            if let Some(vec) = self.codebook.get(name) {
+                return vec.clone();
+            }
+            return result;
         }
         result.normalize()
     }

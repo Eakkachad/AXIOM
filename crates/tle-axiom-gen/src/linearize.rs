@@ -14,6 +14,7 @@ use crate::templates::TemplateBank;
 pub enum Intent {
     Why,
     What,
+    Who,
     How,
     Where,
     When,
@@ -29,6 +30,8 @@ pub fn classify_intent(query: &str) -> Intent {
         Intent::Why
     } else if lower.starts_with("what") || lower.contains("what ") {
         Intent::What
+    } else if lower.starts_with("who") || lower.contains("who ") {
+        Intent::Who
     } else if lower.starts_with("how") || lower.contains("how ") {
         Intent::How
     } else if lower.starts_with("where") || lower.contains("where ") {
@@ -45,7 +48,7 @@ fn connective_for_intent(intent: Intent) -> &'static str {
     match intent {
         Intent::Why => "because",
         Intent::How => "which",
-        Intent::What => "that is",
+        Intent::What | Intent::Who => "that is",
         Intent::Where => "where",
         Intent::When => "when",
         Intent::Declarative => "and",
