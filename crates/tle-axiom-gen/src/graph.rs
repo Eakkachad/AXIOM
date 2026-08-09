@@ -98,6 +98,23 @@ impl KnowledgeGraph {
             .collect()
     }
 
+    /// Export all triples as (subject, relation, object) name triples.
+    ///
+    /// This is the bridge to downstream consumers (e.g. the VSA-LM knowledge
+    /// prior) that want the graph facts as plain strings.
+    pub fn export_triples(&self) -> Vec<[String; 3]> {
+        self.triples
+            .iter()
+            .map(|t| {
+                [
+                    self.entity_name(t.subject_id).to_string(),
+                    self.relation_name(t.relation_id).to_string(),
+                    self.entity_name(t.object_id).to_string(),
+                ]
+            })
+            .collect()
+    }
+
     /// Get all triples where the given entity is the object.
     pub fn get_triples_to(&self, entity_id: usize) -> Vec<&Triple> {
         self.triples
@@ -274,6 +291,17 @@ mod tests {
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].first_object, "blue");
         assert_eq!(conflicts[0].second_object, "green");
+    }
+
+    #[test]
+    fn test_export_triples() {
+        let mut kg = KnowledgeGraph::new();
+        kg.add_triple("sky", "is", "blue");
+        kg.add_triple("blue", "has", "short_wavelength");
+        let triples = kg.export_triples();
+        assert_eq!(triples.len(), 2);
+        assert_eq!(triples[0], ["sky", "is", "blue"]);
+        assert_eq!(triples[1], ["blue", "has", "short_wavelength"]);
     }
 
     #[test]

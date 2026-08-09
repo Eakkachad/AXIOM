@@ -39,6 +39,7 @@ tle-decoder = { path = "crates/tle-decoder" }
 tle-pipeline = { path = "crates/tle-pipeline" }
 tle-afc = { path = "crates/tle-afc" }
 tle-engram = { path = "crates/tle-engram" }
+tle-vsa-lm = { path = "crates/tle-vsa-lm" }
 
 # External dependencies (pinned versions)
 rand = "0.8.5"

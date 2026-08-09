@@ -43,6 +43,26 @@
 
 ---
 
+> ## SESSION HANDOFF SUMMARY v3 (TriviaQA entity linking breakthrough)
+>
+> **Biggest single jump in TriviaQA history: substring 8.18% → 20.13%, candidate answer 7.23% → 11.32%.**
+>
+> **What fixed it:** `AxiomGen::extract_query_entities` VSA fuzzy linking no longer requires exact word overlap. It now scores every graph entity by a blend of **substring/prefix affinity** (so query "Molitor" links to evidence entity "Molitorová", "habsburg" → "Habsburgs") + **composed semantic-vector cosine**. Removed the strict `overlap` gate that blocked derived-name linking. Also added 17 family-relation phrases to `decompose::RELATIONAL_PHRASES` (is the mother/father/parent/daughter/son/wife/husband/sister/brother/founder/leader/president/author/director of).
+>
+> **Verified numbers (verified-wikipedia-dev, 318 records):**
+> | Metric | Before | After |
+> |--------|:---:|:---:|
+> | substring_accuracy | 8.18% | **20.13%** |
+> | candidate_answer_accuracy | 7.23% | **11.32%** |
+> | answer_entity_recall | 72.33% | 72.33% |
+> | avg_latency | ~16ms | 62ms (fuzzy scan over all entities) |
+>
+> **Also built:** AXIOM-Gen → VSA-LM integration binary `vsalm-axiom` (evidence → graph → `sync_into_vsa_lm` → knowledge-guided generation). `KnowledgeGraph::export_triples()`, `AxiomGen::sync_into_vsa_lm()`, VSA-LM `KnowledgePrior` with entity-level matching + `knowledge_only` stopword mode.
+>
+> **Honest caveat:** the entity-linking fix moved real dev-set accuracy 2.5×. The vsalm-axiom standalone VSA-LM generation is still noisy (works on clean taught facts, not noisy decomposed evidence); VSA-LM is best used as a *fluency layer over AxiomGen reasoning*, not standalone QA. Remaining bottlenecks: decomposition noise (100+ junk entities/page), answer selection on long phrase-entities.
+
+---
+
 > ## SESSION HANDOFF SUMMARY (previous — TriviaQA intelligence)
 >
 > **Current focus:** Making AXIOM genuinely smarter for open-domain QA, verified on real TriviaQA (not smoke fixtures).

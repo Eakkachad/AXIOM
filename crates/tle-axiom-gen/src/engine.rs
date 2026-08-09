@@ -113,6 +113,25 @@ impl AxiomGen {
         self.contradiction_policy = policy;
     }
 
+    /// Sync every triple in the knowledge graph into a VSA-LM knowledge prior.
+    ///
+    /// This is the bridge between AXIOM-Gen (structured fact reasoning) and
+    /// VSA-LM (non-neural fluency): the graph decides what facts exist, and
+    /// the VSA-LM knowledge prior steers token generation toward them.
+    pub fn sync_into_vsa_lm(&self, lm: &mut tle_vsa_lm::VsaLm) {
+        for [subject, relation, object] in self.graph.export_triples() {
+            // Register entity words so the VSA-LM can emit them.
+            for name in [&subject, &relation, &object] {
+                for w in name.split(|c: char| c == '_' || c == ' ') {
+                    if !w.is_empty() {
+                        lm.vocab.get_or_add(w);
+                    }
+                }
+            }
+            lm.knowledge.add_fact(&subject, &relation, &object);
+        }
+    }
+
     /// Generate a compositional sentence answering the query.
     ///
     /// Pipeline:
@@ -311,24 +330,59 @@ impl AxiomGen {
         }
 
         // VSA fuzzy linking for multi-word entities and OOV surface forms.
-        if found_entities.is_empty() {
+        // This is the key recall path for questions like "Melanie Molitor is
+        // the mom of which tennis world NO 1?" → graph entity "Molitorová".
+        // We score every entity by a blend of substring affinity and VSA
+        // cosine, WITHOUT requiring exact word overlap.
+        {
             let query_vector = self.compose_entity_vector(&normalized_query);
-            let candidates: Vec<(String, usize)> = self.graph.entity_index.iter()
+            let entities: Vec<(String, usize)> = self.graph.entity_index.iter()
                 .map(|(name, &id)| (name.clone(), id))
                 .collect();
-            for (name, id) in candidates {
+            let mut scored: Vec<(f32, usize)> = Vec::new();
+            for (name, id) in entities {
                 let entity_words: Vec<String> = name
                     .to_lowercase()
                     .split('_')
                     .map(normalize_entity_token)
                     .collect();
-                let overlap = entity_words.iter().any(|word| normalized_query.contains(word));
-                if !overlap {
-                    continue;
+                // Substring affinity: fraction of query words that appear as
+                // a prefix or substring of an entity word (or vice versa).
+                let mut affinity = 0.0f32;
+                for qw in &normalized_query {
+                    if qw.len() < 4 {
+                        continue;
+                    }
+                    for ew in &entity_words {
+                        if ew.len() < 4 {
+                            continue;
+                        }
+                        if qw == ew {
+                            affinity += 1.0;
+                        } else if ew.starts_with(qw.as_str()) || qw.starts_with(ew.as_str()) {
+                            affinity += 0.8;
+                        } else if ew.contains(qw.as_str()) || qw.contains(ew.as_str()) {
+                            affinity += 0.5;
+                        }
+                    }
                 }
+                // Cap the affinity contribution and combine with VSA cosine.
+                let affinity = affinity.min(1.5);
                 let entity_vector = self.compose_entity_vector(&entity_words);
-                if cosine_similarity(&query_vector, &entity_vector) >= 0.35 {
+                let cosine = cosine_similarity(&query_vector, &entity_vector);
+                let score = affinity * 1.2 + cosine * 0.5;
+                if score >= 0.9 {
+                    scored.push((score, id));
+                }
+            }
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            for (_, id) in scored {
+                if !found_entities.contains(&id) {
                     found_entities.push(id);
+                }
+                // Keep the top few high-confidence links.
+                if found_entities.len() >= 8 {
+                    break;
                 }
             }
         }
@@ -418,6 +472,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_sync_into_vsa_lm_fills_knowledge_prior() {
+        let mut gen = AxiomGen::new(2048);
+        gen.add_fact("sky", "is", "blue");
+        gen.add_fact("blue", "has", "short_wavelength");
+
+        let mut lm = tle_vsa_lm::VsaLm::new(tle_vsa_lm::LmConfig {
+            dim: 2048,
+            max_order: 2,
+            ..Default::default()
+        });
+        gen.sync_into_vsa_lm(&mut lm);
+
+        assert_eq!(lm.knowledge.facts, 2);
+        // "sky" should surface "blue" as the next fact-consistent word.
+        let ctx = vec!["sky".to_string(), "is".to_string()];
+        let pred = lm.predict_next_fast(&ctx, 5);
+        assert!(pred.iter().any(|t| t.word == "blue"));
+    }
+
+    #[test]
     fn test_axiom_gen_new() {
         let gen = AxiomGen::new(2048);
         assert_eq!(gen.graph.entities.len(), 0);
@@ -461,6 +535,20 @@ mod tests {
         gen.add_fact("cat", "is", "animal");
         let entities = gen.extract_query_entities("what are cats?");
         assert!(entities.contains(&gen.graph.entity_id("cat").unwrap()));
+    }
+
+    #[test]
+    fn test_fuzzy_entity_linking_derived_name() {
+        // "Molitor" (in the question) must link to the graph entity
+        // "Molitorová" (the surface form in evidence) via prefix matching.
+        let mut gen = AxiomGen::new(2048);
+        gen.add_fact("Molitorová", "is", "tennis player");
+        let entities = gen.extract_query_entities("Melanie Molitor is the mom of which tennis player");
+        assert!(
+            entities.contains(&gen.graph.entity_id("Molitorová").unwrap()),
+            "query 'Molitor' should fuzzy-link to entity 'Molitorová', got {:?}",
+            entities.iter().map(|&id| gen.graph.entity_name(id).to_string()).collect::<Vec<_>>()
+        );
     }
 
     #[test]

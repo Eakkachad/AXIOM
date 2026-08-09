@@ -52,6 +52,10 @@ pub struct LmConfig {
     pub w_reservoir: f32,
     /// Weight of the knowledge-prior (fact-grounded) score in prediction.
     pub w_knowledge: f32,
+    /// When true and no corpus n-grams were learned, restrict candidates to
+    /// knowledge-driven content words (filters stopwords). Enables clean
+    /// short answers from a knowledge-graph-only engine.
+    pub knowledge_only: bool,
     /// Reservoir configuration (dimension, leak, etc.).
     pub reservoir_config: Option<ReservoirConfig>,
     /// Anti-repetition penalty strength.
@@ -71,6 +75,7 @@ impl Default for LmConfig {
             w_engram: 1.5,
             w_reservoir: 0.5,
             w_knowledge: 2.0,
+            knowledge_only: false,
             reservoir_config: None,
             w_repeat: 0.15,
             repeat_window: 3,
@@ -255,6 +260,12 @@ impl VsaLm {
                         DecodedToken { id, word, similarity: score }
                     })
                     .collect();
+
+                // In knowledge-only mode (no corpus), suppress stopwords so
+                // the answer is a clean sequence of fact content words.
+                if self.config.knowledge_only {
+                    candidates.retain(|c| !is_stopword(&c.word));
+                }
             }
         }
 
@@ -475,6 +486,23 @@ impl VsaLm {
 
 /// Seed for the VSA-LM codebook.
 const _CFLM_SEED: u64 = 0xC0DE_0EAD_0A11;
+
+/// Common English stopwords that should not be emitted as answer content.
+fn is_stopword(word: &str) -> bool {
+    matches!(
+        word.to_lowercase().as_str(),
+        "the" | "a" | "an" | "and" | "or" | "but" | "of" | "in" | "on" | "at" | "to"
+            | "for" | "with" | "by" | "as" | "is" | "are" | "was" | "were" | "be"
+            | "been" | "being" | "has" | "have" | "had" | "it" | "its" | "this"
+            | "that" | "these" | "those" | "which" | "who" | "whom" | "whose"
+            | "what" | "when" | "where" | "why" | "how" | "no" | "not" | "nor"
+            | "from" | "up" | "down" | "out" | "about" | "into" | "over" | "under"
+            | "again" | "then" | "once" | "here" | "there" | "all" | "any" | "both"
+            | "each" | "few" | "more" | "most" | "other" | "some" | "such" | "than"
+            | "too" | "very" | "can" | "will" | "just" | "should" | "would" | "could"
+            | "may" | "might" | "must" | "shall" | "am" | "do" | "did" | "does"
+    )
+}
 
 /// Probability of `next` under the Engram, backed off to the lowest seen
 /// order (i.e. highest-probability match wins across orders).

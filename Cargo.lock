@@ -486,6 +486,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tle-vsa",
+ "tle-vsa-lm",
 ]
 
 [[package]]
