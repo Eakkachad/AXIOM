@@ -268,12 +268,18 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Multi-word entities use composed VSA vectors and cosine similarity
 - [x] Fuzzy entity-linking regression test added (`cats` → `cat`)
 - [x] `cargo test -p tle-axiom-gen`: 44 tests pass
+- [x] Underscore entity linking fixed (`node_0` query matching)
 
 ### ✅ COMPLETED (Phase 3.4 — Contradiction Detection):
 - [x] KnowledgeGraph detects conflicting objects for the same subject/relation
 - [x] Duplicate facts are ignored as non-conflicts
 - [x] `/stats` reports detected AXIOM-Gen contradictions
 - [x] `cargo test -p tle-axiom-gen`: 45 tests pass
+
+### ✅ COMPLETED (Phase 4.1 — Validation Coverage):
+- [x] Thai root-token and mixed Thai-English deterministic tokenization tests
+- [x] Added `axiom-bench` deterministic 10-hop benchmark binary
+- [x] Benchmark verified: 10-hop path, deterministic trace, ~15-17ms generation
 
 ### ✅ COMPLETED (Phase 1 — Knowledge Infrastructure):
 - [x] **Week 2:** Auto-learn from web
@@ -301,7 +307,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 
 ### 🔲 TODO (Phase 4 — Deploy):
 - [ ] Background web learning daemon
-- [ ] **Multi-language** (Thai + English via VSA subword)
+- [x] **Multi-language foundation** (Thai + English tokenization coverage)
 - [ ] TriviaQA benchmark
 - [ ] arXiv paper submission
 - [ ] Pre-built binary release

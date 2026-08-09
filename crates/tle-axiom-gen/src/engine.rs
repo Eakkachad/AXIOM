@@ -222,7 +222,7 @@ impl AxiomGen {
             let entity_lower = name.to_lowercase();
             let entity_words: Vec<&str> = entity_lower.split('_').collect();
 
-            let matches = entity_words.iter().any(|ew| {
+            let matches = words.contains(&entity_lower.as_str()) || entity_words.iter().any(|ew| {
                 words.contains(ew) || normalized_query.iter().any(|word| word == &normalize_entity_token(ew))
             });
             if matches && !found_entities.contains(&id) {

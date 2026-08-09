@@ -259,4 +259,23 @@ mod tests {
 
         assert_eq!(v1, v2, "Same word must produce same vector");
     }
+
+    #[test]
+    fn test_thai_token_is_preserved_as_root() {
+        let tok = MorphTokenizer::new();
+        let morphemes = tok.decompose("แมว");
+        assert_eq!(morphemes.len(), 1);
+        assert_eq!(morphemes[0].text, "แมว");
+        assert_eq!(morphemes[0].mtype, MorphemeType::Root);
+    }
+
+    #[test]
+    fn test_mixed_thai_english_sentence_is_deterministic() {
+        let tok = MorphTokenizer::new();
+        let mut codebook = Codebook::new(2048, 42);
+        let first = tok.encode_sentence("แมว is running", &mut codebook);
+        let second = tok.encode_sentence("แมว is running", &mut codebook);
+        assert_eq!(first, second);
+        assert_eq!(first.dim(), 2048);
+    }
 }
