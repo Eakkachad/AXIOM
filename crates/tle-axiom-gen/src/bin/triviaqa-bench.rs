@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total = 0usize;
     let mut exact = 0usize;
     let mut substring = 0usize;
+    let mut evidence_hits = 0usize;
     let mut total_latency = Duration::ZERO;
 
     let limit = env::var("AXIOM_TRIVIA_LIMIT").ok().and_then(|value| value.parse().ok());
@@ -51,6 +52,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let document_facts = evidence_dir.as_deref()
             .map(|directory| extract_document_facts(directory, &record.evidence_files))
             .unwrap_or_default();
+        let document_text = evidence_dir.as_deref()
+            .map(|directory| read_evidence_text(directory, &record.evidence_files))
+            .unwrap_or_default();
+        if record.answers.iter().any(|answer| document_text.to_lowercase().contains(&answer.to_lowercase())) {
+            evidence_hits += 1;
+        }
         for fact in record.facts.iter().chain(evidence_facts.iter()).chain(document_facts.iter()) {
             engine.add_fact(&fact[0], &fact[1], &fact[2]);
         }
@@ -68,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  records: {}", total);
     println!("  exact_accuracy: {:.2}%", percentage(exact, total));
     println!("  substring_accuracy: {:.2}%", percentage(substring, total));
+    println!("  evidence_answer_recall: {:.2}%", percentage(evidence_hits, total));
     println!("  avg_latency: {:?}", if total == 0 { Duration::ZERO } else { total_latency / total as u32 });
     Ok(())
 }
@@ -127,14 +135,30 @@ fn extract_relation(sentence: &str) -> Option<(&'static str, String)> {
     let lower = sentence.to_lowercase();
     for (pattern, relation) in [(" is located in ", "located_in"), (" was born in ", "born_in"),
         (" was founded in ", "founded_in"), (" is known for ", "known_for"),
-        (" contains ", "contains"), (" has ", "has"), (" was ", "was"),
-        (" are ", "are"), (" is ", "is")] {
+        (" consists of ", "consists_of"), (" contains ", "contains"),
+        (" includes ", "includes"), (" causes ", "causes"), (" produces ", "produces"),
+        (" supports ", "supports"), (" uses ", "uses"), (" used by ", "used_by"),
+        (" developed by ", "developed_by"), (" created by ", "created_by"),
+        (" became ", "became"), (" served as ", "served_as"),
+        (" has ", "has"), (" was ", "was"), (" are ", "are"), (" is ", "is")] {
         if let Some(position) = lower.find(pattern) {
             let object = sentence[position + pattern.len()..].trim().to_lowercase();
             if !object.is_empty() { return Some((relation, object)); }
         }
     }
     None
+}
+
+fn read_evidence_text(directory: &str, files: &[String]) -> String {
+    let mut text = String::new();
+    for filename in files {
+        let path = std::path::Path::new(directory).join(filename);
+        if let Ok(file) = File::open(path) {
+            let mut limited = file.take(256 * 1024);
+            let _ = limited.read_to_string(&mut text);
+        }
+    }
+    text
 }
 
 fn load_evidence(path: &str) -> Result<HashMap<String, Vec<[String; 3]>>, Box<dyn std::error::Error>> {

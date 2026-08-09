@@ -322,7 +322,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Separate evidence-facts JSONL ingestion supported by `QuestionId`
 - [x] Official TriviaQA RC archive downloaded/extracted locally (ignored by git)
 - [x] Verified Wikipedia dev split loader: 318 records parsed
-- [x] Verified Wikipedia dev evidence run: 318 records, 10.06% substring accuracy, 187ms average latency
+- [x] Verified Wikipedia dev evidence run: 318 records, 9.75% substring accuracy, 99.69% evidence-answer recall, 207ms average latency
 - [ ] Full train/test benchmark and richer evidence extraction remain
 - [ ] arXiv paper submission
 - [x] Reproducible paper artifact status and pre-submission checklist added
