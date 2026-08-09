@@ -230,8 +230,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Multi-clause fact extraction added
 - [x] Local HTTP-server integration test and 5 web-learning tests pass
 - [x] Synthetic 400-fact extraction benchmark passes under 5 seconds
-- [x] Real Wikipedia run measured: 1,094 sentences, 252 facts, ~750ms
-- [ ] Wikipedia 300+ facts gate: performance passes, extraction coverage is still short by 48 facts
+- [x] Wikipedia infobox/table extraction added and tested
+- [x] Real Wikipedia run measured: 1,103 sentences, 297 facts, ~698ms
+- [ ] Wikipedia 300+ facts gate: performance passes, extraction coverage is still short by 3 facts
 
 ### ✅ COMPLETED (Phase 2 — Generation Quality):
 - [x] Template extraction (TemplateBank) — 19 patterns, 4 tests

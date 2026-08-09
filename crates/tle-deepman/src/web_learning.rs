@@ -68,6 +68,20 @@ pub fn extract_html(html: &str) -> ExtractedPage {
         }
     }
 
+    // Wikipedia-style infoboxes expose useful facts as table labels and values.
+    if let Some(page_subject) = title.as_deref().and_then(page_subject) {
+        for line in text.lines() {
+            if let Some(fact) = extract_labeled_fact(line, &page_subject) {
+                if !facts.contains(&fact) {
+                    facts.push(fact);
+                }
+                if facts.len() >= MAX_FACTS {
+                    break;
+                }
+            }
+        }
+    }
+
     ExtractedPage { title, sentences, facts }
 }
 
@@ -98,10 +112,12 @@ fn strip_markup(html: &str) -> String {
                 in_tag = false;
                 let name = tag.trim().trim_start_matches('/').split_whitespace().next().unwrap_or("");
                 let closing = tag.trim_start().starts_with('/');
-                if matches!(name, "script" | "style" | "noscript" | "svg" | "head" | "nav" | "footer" | "aside" | "form") {
+                if matches!(name, "script" | "style" | "noscript" | "svg" | "head" | "title" | "nav" | "footer" | "aside" | "form") {
                     if closing { skip_depth = skip_depth.saturating_sub(1); } else { skip_depth += 1; }
                 }
-                if skip_depth == 0 && matches!(name, "p" | "div" | "li" | "br" | "h1" | "h2" | "h3" | "section" | "article") {
+                if skip_depth == 0 && closing && name == "th" {
+                    output.push_str(": ");
+                } else if skip_depth == 0 && (name == "br" || (closing && matches!(name, "p" | "div" | "li" | "h1" | "h2" | "h3" | "section" | "article" | "tr" | "td"))) {
                     output.push('\n');
                 }
             } else {
@@ -157,6 +173,13 @@ fn extract_fact(sentence: &str) -> Option<FactCandidate> {
         (" maintained by ", "maintained_by"), (" governed by ", "governed_by"),
         (" influenced by ", "influenced_by"), (" derived from ", "derived_from"),
         (" adopted by ", "adopted_by"), (" known for ", "known_for"),
+        (" serves as ", "serves_as"), (" acts as ", "acts_as"),
+        (" functions as ", "functions_as"), (" associated with ", "associated_with"),
+        (" linked to ", "linked_to"), (" related to ", "related_to"),
+        (" documented in ", "documented_in"), (" published in ", "published_in"),
+        (" introduced by ", "introduced_by"), (" named ", "named"),
+        (" evolved from ", "evolved_from"), (" superseded by ", "superseded_by"),
+        (" replaced by ", "replaced_by"), (" used for ", "used_for"),
     ];
     let (_, pattern, relation) = patterns.iter().filter_map(|(pattern, relation)| {
         lower.find(pattern).map(|position| (position, *pattern, *relation))
@@ -210,6 +233,32 @@ fn normalize_subject(text: &str) -> String {
         .to_string()
 }
 
+fn page_subject(title: &str) -> Option<String> {
+    let subject = title
+        .strip_suffix(" - Wikipedia")
+        .or_else(|| title.strip_suffix(" – Wikipedia"))
+        .unwrap_or(title);
+    let subject = normalize_subject(subject);
+    (subject.len() >= 2).then_some(subject)
+}
+
+fn extract_labeled_fact(line: &str, subject: &str) -> Option<FactCandidate> {
+    let (label, object) = line.split_once(':')?;
+    let label = normalize_text(label);
+    let object = normalize_text(object);
+    if label.is_empty() || object.len() < 2 || label.len() > 40 || object.len() > 120 {
+        return None;
+    }
+    if label.split_whitespace().count() > 5 || label.chars().any(|c| !c.is_alphanumeric() && c != ' ' && c != '-') {
+        return None;
+    }
+    Some(FactCandidate {
+        subject: subject.to_string(),
+        relation: label.to_lowercase().replace([' ', '-'], "_"),
+        object,
+    })
+}
+
 use std::io::Read;
 
 #[cfg(test)]
@@ -222,11 +271,13 @@ mod tests {
             <html><head><title>Sky</title><script>ignore me</script></head>
             <body><nav>Menu</nav><article><h1>The Sky</h1>
             <p>The sky is blue.</p><p>Blue light has a short wavelength.</p>
+            <table><tr><th>Color</th><td>Blue</td></tr></table>
             </article></body></html>
         "#);
         assert_eq!(page.title.as_deref(), Some("Sky"));
         assert!(page.sentences.iter().any(|s| s == "The sky is blue"));
         assert!(page.facts.iter().any(|f| f.subject == "sky" && f.relation == "is" && f.object == "blue"));
+        assert!(page.facts.iter().any(|f| f.relation == "color" && f.object == "Blue"));
         assert!(!page.sentences.iter().any(|s| s.contains("ignore me")));
     }
 
