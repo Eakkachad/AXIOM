@@ -525,9 +525,10 @@ fn main() {
     // REPL loop
     let stdin = std::io::stdin();
     let mut web_queue = daemon::WebLearnQueue::load("data/axiom_web_queue.tsv");
-    let mut background_jobs: Vec<Receiver<Result<web_learning::ExtractedPage, String>>> = Vec::new();
+    let mut background_jobs: Vec<Receiver<(String, bool, Result<web_learning::ExtractedPage, String>)>> = Vec::new();
     loop {
-        poll_background_learns(&mut background_jobs, &mut store, &mut axiom_gen);
+        poll_background_learns(&mut background_jobs, &mut web_queue, &mut store, &mut axiom_gen);
+        start_next_queued_job(&mut background_jobs, &mut web_queue);
 
         // Prompt
         eprint!("AXIOM> ");
@@ -1489,7 +1490,7 @@ fn handle_learn_url(store: &mut tle_afc::IncrementalStore, axiom_gen: &mut tle_a
 }
 
 fn handle_learn_url_background(
-    jobs: &mut Vec<Receiver<Result<web_learning::ExtractedPage, String>>>,
+    jobs: &mut Vec<Receiver<(String, bool, Result<web_learning::ExtractedPage, String>)>>,
     url: &str,
 ) {
     if url.is_empty() {
@@ -1498,33 +1499,61 @@ fn handle_learn_url_background(
     }
     let url = url.to_string();
     let worker_url = url.clone();
+    let result_url = url.clone();
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let result = web_learning::fetch_html(&worker_url).map(|html| web_learning::extract_html(&html));
-        let _ = sender.send(result);
+        let _ = sender.send((result_url, false, result));
     });
     jobs.push(receiver);
     println!("  ✓ Background learning started for '{}'", url);
 }
 
 fn poll_background_learns(
-    jobs: &mut Vec<Receiver<Result<web_learning::ExtractedPage, String>>>,
+    jobs: &mut Vec<Receiver<(String, bool, Result<web_learning::ExtractedPage, String>)>>,
+    queue: &mut daemon::WebLearnQueue,
     store: &mut tle_afc::IncrementalStore,
     axiom_gen: &mut tle_axiom_gen::AxiomGen,
 ) {
     let mut remaining = Vec::with_capacity(jobs.len());
     for receiver in jobs.drain(..) {
         match receiver.try_recv() {
-            Ok(Ok(page)) => {
+            Ok((url, queued, Ok(page))) => {
                 let (title, sentences, facts) = learn_extracted_page(store, axiom_gen, &page);
                 println!("  ✓ Background learned '{}': {} sentences, {} facts", title, sentences, facts);
+                if queued {
+                    let _ = queue.complete(&url);
+                }
             }
-            Ok(Err(error)) => println!("  ✗ Background learning failed: {}", error),
+            Ok((url, queued, Err(error))) => {
+                println!("  ✗ Background learning failed: {}", error);
+                if queued {
+                    let _ = queue.fail(&url);
+                }
+            }
             Err(TryRecvError::Empty) => remaining.push(receiver),
             Err(TryRecvError::Disconnected) => println!("  ✗ Background learning worker disconnected"),
         }
     }
     *jobs = remaining;
+}
+
+fn start_next_queued_job(
+    jobs: &mut Vec<Receiver<(String, bool, Result<web_learning::ExtractedPage, String>)>>,
+    queue: &mut daemon::WebLearnQueue,
+) {
+    if !jobs.is_empty() {
+        return;
+    }
+    let Some(job) = queue.next() else { return; };
+    let url = job.url;
+    let worker_url = url.clone();
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = web_learning::fetch_html(&worker_url).map(|html| web_learning::extract_html(&html));
+        let _ = sender.send((url, true, result));
+    });
+    jobs.push(receiver);
 }
 
 fn learn_extracted_page(

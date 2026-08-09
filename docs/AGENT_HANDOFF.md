@@ -283,6 +283,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Background web-learning job boundary added via `/learn-url-bg`
 - [x] Fetch/extract runs off-thread; knowledge mutation remains on the REPL thread
 - [x] Persistent `/queue-url` queue with retry state and line-based persistence
+- [x] Scheduler processes one queued job at a time with automatic retry
 - [x] Queue validation/retry persistence tests added
 
 ### ✅ COMPLETED (Phase 1 — Knowledge Infrastructure):
@@ -310,7 +311,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
  - [x] **Wire AttractorReasoner into question answering** (query-topic disambiguation)
 
 ### 🔲 TODO (Phase 4 — Deploy):
-- [ ] Background web learning daemon (persistent queue MVP exists; worker scheduler/auto-retry wiring remains)
+- [ ] Background web learning daemon (scheduler works in REPL; standalone service/persistence locking remain)
 - [x] **Multi-language foundation** (Thai + English tokenization coverage)
 - [ ] TriviaQA benchmark
 - [ ] arXiv paper submission
