@@ -285,6 +285,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Persistent `/queue-url` queue with retry state and line-based persistence
 - [x] Scheduler processes one queued job at a time with automatic retry
 - [x] Queue validation/retry persistence tests added
+- [x] Standalone `web-daemon` binary added with `--once` mode and append-only learned output
 
 ### ✅ COMPLETED (Phase 1 — Knowledge Infrastructure):
 - [x] **Week 2:** Auto-learn from web
@@ -311,15 +312,18 @@ Goal: 100% Algebraic — zero rule-based, zero neural
  - [x] **Wire AttractorReasoner into question answering** (query-topic disambiguation)
 
 ### 🔲 TODO (Phase 4 — Deploy):
-- [ ] Background web learning daemon (scheduler works in REPL; standalone service/persistence locking remain)
+- [x] Background web learning daemon (standalone worker and REPL scheduler available)
 - [x] **Multi-language foundation** (Thai + English tokenization coverage)
 - [x] Thai fact extraction for `เป็น`, `คือ`, `มี`, `อยู่ใน`, and `เกิดใน`
 - [x] Thai no-whitespace sentence handling regression tests
 - [ ] Full TriviaQA benchmark run (dataset acquisition and evidence ingestion remain)
 - [x] TriviaQA-compatible JSONL harness (`triviaqa-bench`) with exact/substring accuracy and latency metrics
 - [x] TriviaQA native `Data` JSON format reader added
+- [x] Separate evidence-facts JSONL ingestion supported by `QuestionId`
 - [ ] arXiv paper submission
-- [ ] Pre-built binary release
+- [x] Reproducible paper artifact status and pre-submission checklist added
+- [ ] Published pre-built binary release (local artifact generated)
+- [x] Local Linux x86_64 archive and SHA256 manifest generated
 - [x] Reproducible release profile and `docs/RELEASE.md` added
 
 ---

@@ -4,6 +4,7 @@ use std::env;
 use std::fs::File;
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -12,15 +13,26 @@ use tle_axiom_gen::AxiomGen;
 
 #[derive(Debug, Deserialize)]
 struct Record {
+    #[serde(default)]
+    id: String,
     question: String,
     answers: Vec<String>,
     #[serde(default)]
     facts: Vec<[String; 3]>,
 }
 
+#[derive(Debug, Deserialize)]
+struct EvidenceRecord {
+    id: String,
+    #[serde(default)]
+    facts: Vec<[String; 3]>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = env::args().nth(1).unwrap_or_else(|| "data/axiom_triviaqa.jsonl".to_string());
+    let evidence_path = env::args().nth(2);
     let records = load_records(&path)?;
+    let evidence = evidence_path.as_deref().map(load_evidence).transpose()?.unwrap_or_default();
     let mut engine = AxiomGen::new(2048);
     let mut total = 0usize;
     let mut exact = 0usize;
@@ -28,7 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_latency = Duration::ZERO;
 
     for record in records {
-        for fact in &record.facts {
+        let evidence_facts = evidence.get(&record.id).cloned().unwrap_or_default();
+        for fact in record.facts.iter().chain(evidence_facts.iter()) {
             engine.add_fact(&fact[0], &fact[1], &fact[2]);
         }
         let start = Instant::now();
@@ -55,6 +68,7 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
         if let Some(items) = document.get("Data").and_then(Value::as_array) {
             let mut records = Vec::new();
             for item in items {
+                let id = item.get("QuestionId").and_then(Value::as_str).unwrap_or_default().to_string();
                 let question = item.get("Question").and_then(Value::as_str).unwrap_or_default().to_string();
                 let mut answers = Vec::new();
                 if let Some(answer) = item.get("Answer") {
@@ -63,7 +77,7 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
                         answers.extend(aliases.iter().filter_map(Value::as_str).map(str::to_string));
                     }
                 }
-                records.push(Record { question, answers, facts: Vec::new() });
+                records.push(Record { id, question, answers, facts: Vec::new() });
             }
             return Ok(records);
         }
@@ -74,6 +88,18 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
         .filter(|line| line.as_ref().map(|line| !line.trim().is_empty()).unwrap_or(true))
         .map(|line| Ok(serde_json::from_str(&line?)?))
         .collect()
+}
+
+fn load_evidence(path: &str) -> Result<HashMap<String, Vec<[String; 3]>>, Box<dyn std::error::Error>> {
+    let reader = BufReader::new(File::open(path)?);
+    let mut evidence = HashMap::new();
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() { continue; }
+        let record: EvidenceRecord = serde_json::from_str(&line)?;
+        evidence.insert(record.id, record.facts);
+    }
+    Ok(evidence)
 }
 
 fn percentage(correct: usize, total: usize) -> f64 {
