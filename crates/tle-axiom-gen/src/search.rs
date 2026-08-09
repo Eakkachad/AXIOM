@@ -61,6 +61,7 @@ pub fn beam_search(
     codebook: &mut Codebook,
     energy_config: &EnergyConfig,
     search_config: &SearchConfig,
+    entity_ief: Option<&[f32]>,
 ) -> Vec<ScoredPath> {
     if start_entities.is_empty() || graph.triples.is_empty() {
         return Vec::new();
@@ -80,6 +81,7 @@ pub fn beam_search(
                 &graph.entities,
                 &graph.relations,
                 codebook,
+                entity_ief,
             );
             beam.push(ScoredPath {
                 path: vec![idx],
@@ -152,6 +154,7 @@ pub fn beam_search(
                         &graph.entities,
                         &graph.relations,
                         codebook,
+                        entity_ief,
                     );
 
                     candidates.push(ScoredPath {
@@ -233,6 +236,7 @@ mod tests {
             &mut codebook,
             &energy_config,
             &search_config,
+            None,
         );
 
         assert!(!results.is_empty());
@@ -267,6 +271,7 @@ mod tests {
             &mut codebook,
             &energy_config,
             &search_config,
+            None,
         );
 
         assert!(!results.is_empty());
@@ -290,6 +295,7 @@ mod tests {
             &mut codebook,
             &energy_config,
             &search_config,
+            None,
         );
 
         assert!(results.is_empty());
@@ -320,6 +326,7 @@ mod tests {
             &mut codebook,
             &energy_config,
             &search_config,
+            None,
         );
 
         // Verify sorted in descending energy order
@@ -346,6 +353,7 @@ mod tests {
             &mut codebook,
             &EnergyConfig::default(),
             &SearchConfig { beam_width: 32, max_hops: 10, energy_threshold: 0.0, early_exit_on_stall: false },
+            None,
         );
         assert_eq!(results.iter().map(|path| path.path.len()).max(), Some(10));
     }
@@ -365,6 +373,7 @@ mod tests {
             &mut codebook,
             &EnergyConfig::default(),
             &SearchConfig { beam_width: 16, max_hops: 10, energy_threshold: 0.0, early_exit_on_stall: false },
+            None,
         );
         assert!(results.iter().all(|path| path.path.len() <= 2));
     }

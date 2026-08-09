@@ -162,6 +162,8 @@ impl AxiomGen {
         let _subgraph = self.graph.bfs_subgraph(&query_entities, self.search_config.max_hops);
 
         // Step 4: Beam search for best paths
+        // Precompute entity informativeness: rare entities are more specific.
+        let entity_ief = compute_entity_ief(&self.graph);
         let results = beam_search(
             &self.graph,
             &query_entities,
@@ -169,6 +171,7 @@ impl AxiomGen {
             &mut self.codebook,
             &self.energy_config,
             &self.search_config,
+            Some(&entity_ief),
         );
 
         if results.is_empty() {
@@ -563,6 +566,25 @@ fn normalize_entity_token(token: &str) -> String {
     } else {
         token.to_string()
     }
+}
+
+/// Precompute inverse entity frequency: rare entities score higher.
+///
+/// Most decomposition errors produce generic hub entities ("is", "a",
+/// "together") that appear in many triples.  IEF penalises these so the
+/// beam search energy function naturally prefers paths through specific,
+/// informative entities (like proper noun answers).
+fn compute_entity_ief(graph: &KnowledgeGraph) -> Vec<f32> {
+    let n = graph.entities.len();
+    let mut freq = vec![0usize; n];
+    for triple in &graph.triples {
+        if triple.subject_id < n { freq[triple.subject_id] += 1; }
+        if triple.object_id < n { freq[triple.object_id] += 1; }
+    }
+    let total = freq.iter().sum::<usize>() as f32;
+    freq.into_iter()
+        .map(|f| if f == 0 { 0.0 } else { -((f as f32) / total.max(1.0)).ln() })
+        .collect()
 }
 
 #[cfg(test)]

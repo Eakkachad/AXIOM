@@ -22,6 +22,11 @@ pub struct EnergyConfig {
     pub lambda_grammar: f32,
     /// Weight for consecutive triple coherence.
     pub lambda_coherence: f32,
+    /// Weight for VSA internal triple consistency.
+    /// cos(C(subject) ⊙ C(relation), C(object)).
+    pub lambda_consistency: f32,
+    /// Weight for entity informativeness (inverse entity frequency).
+    pub lambda_ief: f32,
     /// Weight for length penalty (deviation from target).
     pub lambda_length: f32,
     /// Weight for simplicity (Occam's razor).
@@ -36,6 +41,8 @@ impl Default for EnergyConfig {
             lambda_relevance: 1.0,
             lambda_grammar: 0.5,
             lambda_coherence: 0.8,
+            lambda_consistency: 0.0,
+            lambda_ief: 0.0,
             lambda_length: 0.3,
             lambda_simplicity: 0.2,
             target_length: 3,
@@ -47,9 +54,15 @@ impl Default for EnergyConfig {
 ///
 /// Higher energy = better path. The energy is a weighted sum of:
 /// - Relevance: cosine similarity between path vector and query vector
+/// - Consistency: average VSA consistency of individual triples
+/// - IEF: entity informativeness (rare entities score higher)
 /// - Coherence: average pairwise similarity of consecutive triples
 /// - Length penalty: penalizes deviation from target length
 /// - Simplicity: rewards shorter paths (Occam's razor)
+///
+/// `entity_ief` is an optional per-entity inverse-entity-frequency array
+/// (compute once from the graph as `-log(freq(e)/total)`). Pass `None` to
+/// skip the IEF term.
 pub fn compute_energy(
     path_triples: &[Triple],
     query_vector: &HyperVector,
@@ -57,6 +70,7 @@ pub fn compute_energy(
     entities: &[String],
     relations: &[String],
     codebook: &mut Codebook,
+    entity_ief: Option<&[f32]>,
 ) -> f32 {
     if path_triples.is_empty() {
         return 0.0;
@@ -64,14 +78,60 @@ pub fn compute_energy(
 
     let path_hdv = encode_path(path_triples, entities, relations, codebook);
     let relevance = compute_relevance(&path_hdv, query_vector);
+    let consistency = compute_consistency(path_triples, entities, relations, codebook);
     let coherence = compute_coherence(path_triples, entities, relations, codebook);
+    let ief = entity_ief.map(|ief| compute_ief_score(path_triples, ief)).unwrap_or(0.0);
     let length_penalty = compute_length_penalty(path_triples.len(), config.target_length);
     let simplicity = compute_simplicity(path_triples.len());
 
     config.lambda_relevance * relevance
+        + config.lambda_consistency * consistency
+        + config.lambda_ief * ief
         + config.lambda_coherence * coherence
         + config.lambda_length * length_penalty
         + config.lambda_simplicity * simplicity
+}
+
+/// VSA internal consistency: for each triple, measure how well the bound
+/// subject-relation vector aligns with the object vector.
+///
+/// A true fact (sky, is, blue) has C(sky)⊙C(is) ≈ C(blue) because the
+/// codebook vectors for related concepts have no structure.  But a noise
+/// triple ("Together they", "is", "...") has random unrelated vectors →
+/// low cosine.
+pub fn compute_consistency(
+    path_triples: &[Triple],
+    entities: &[String],
+    relations: &[String],
+    codebook: &mut Codebook,
+) -> f32 {
+    let mut total = 0.0f32;
+    for triple in path_triples {
+        let subj_name = &entities[triple.subject_id];
+        let rel_name = &relations[triple.relation_id];
+        let obj_name = &entities[triple.object_id];
+        if let (Some(s_vec), Some(r_vec), Some(o_vec)) = (
+            codebook.get(subj_name).cloned(),
+            codebook.get(rel_name).cloned(),
+            codebook.get(obj_name).cloned(),
+        ) {
+            let bound = s_vec.hadamard(&r_vec);
+            total += cosine_similarity(&bound, &o_vec).max(-1.0);
+        }
+    }
+    if path_triples.is_empty() { 0.0 } else { total / path_triples.len() as f32 }
+}
+
+/// Average inverse entity frequency of path entities.  Rare (informative)
+/// entities boost the score; hub entities ("is", "a", "the") are penalised.
+pub fn compute_ief_score(triples: &[Triple], entity_ief: &[f32]) -> f32 {
+    let mut total = 0.0f32;
+    let mut n = 0usize;
+    for t in triples {
+        if t.subject_id < entity_ief.len() { total += entity_ief[t.subject_id]; n += 1; }
+        if t.object_id < entity_ief.len() { total += entity_ief[t.object_id]; n += 1; }
+    }
+    if n == 0 { 0.0 } else { total / n as f32 }
 }
 
 /// Compute relevance: cosine similarity between path HDV and query vector.
@@ -308,6 +368,7 @@ mod tests {
             &kg.entities,
             &kg.relations,
             &mut codebook,
+            None,
         );
         // Energy should be finite and non-zero for a valid path
         assert!(energy.is_finite());
