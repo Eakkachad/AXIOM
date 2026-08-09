@@ -6,6 +6,7 @@
 # Data files (large, download separately)
 /data/glove.6B.50d.txt
 /data/wiki_train.txt
+/data/triviaqa/
 /data/transitions.json
 /data/transitions_mlp.json
 

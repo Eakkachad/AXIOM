@@ -320,6 +320,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] TriviaQA-compatible JSONL harness (`triviaqa-bench`) with exact/substring accuracy and latency metrics
 - [x] TriviaQA native `Data` JSON format reader added
 - [x] Separate evidence-facts JSONL ingestion supported by `QuestionId`
+- [x] Official TriviaQA RC archive downloaded/extracted locally (ignored by git)
+- [x] Verified Wikipedia dev split loader: 318 records parsed
+- [ ] Full accuracy run pending evidence-to-facts conversion; no score claimed yet
 - [ ] arXiv paper submission
 - [x] Reproducible paper artifact status and pre-submission checklist added
 - [ ] Published pre-built binary release (local artifact generated)

@@ -30,6 +30,16 @@ cargo run --release --locked -p tle-axiom-gen --bin triviaqa-bench -- data/axiom
 Full TriviaQA scoring requires an external dataset and evidence ingestion;
 the repository fixture is only a smoke benchmark.
 
+## TriviaQA Acquisition
+
+```bash
+bash scripts/fetch_triviaqa.sh data/triviaqa
+```
+
+The archive is external, ignored by git, and must be handled according to its
+license. Convert extracted evidence into `QuestionId`-keyed evidence-facts
+JSONL before running `triviaqa-bench`.
+
 ## Local Linux Artifact
 
 The release packaging step produces `dist/axiom-linux-x86_64.tar.gz` and
