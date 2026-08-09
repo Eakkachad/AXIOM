@@ -624,6 +624,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tle-vsa-lm"
+version = "0.1.0"
+dependencies = [
+ "rand",
+ "rand_chacha",
+ "tle-vsa",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"

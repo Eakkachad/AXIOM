@@ -1,0 +1,19 @@
+[package]
+name = "tle-vsa-lm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VSA Language Model: non-neural text generation via VSA binding, TBA transitions, Engram memory, and energy beam search"
+
+[dependencies]
+tle-vsa = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+
+[[bin]]
+name = "vsalm-bench"
+path = "src/bin/vsalm-bench.rs"
+
+[[bin]]
+name = "vsalm-corpus"
+path = "src/bin/vsalm-corpus.rs"

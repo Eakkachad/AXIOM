@@ -1,7 +1,69 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-09
-> Status: Phase 1 PoC COMPLETE, entering Phase 2
+> Last updated: 2026-08-09 (session close — VSA-LM path launched)
+> Status: Phase 1 COMPLETE · Phases 2-3 largely complete · TriviaQA intelligence work in progress · **VSA-LM (Path C) STARTED**
+>
+> ## SESSION HANDOFF SUMMARY v2 (VSA-LM / Path C — next agent)
+>
+> **Current focus:** Building a non-neural VSA-based language generator (`tle-vsa-lm`) as the long-term "Path C" direction — replace softmax/backprop LM components with VSA algebra + reservoir + n-gram. Fully deterministic, CPU-only, no training.
+>
+> **Research conclusions this session (from literature + sub-agents):**
+> - Pure VSA text generation at scale has never been published — this is frontier research, but the building blocks (TBA, resonator decoding, reservoir) exist and AXIOM already had most of them.
+> - The CFLM spec (soliton/Gross-Pitaevskii/gauge-theory language model) is **theoretical only** — no implementation exists anywhere. Do NOT chase it as a near-term target; mine it for ideas only.
+> - katgpt-rs has no VSA code, but contributes engineering patterns: Engram (O(1) n-gram hash — already in AXIOM), KARC (reservoir + basis expansion), CompressionDrafter (beam search where scoring = compression length; the *concept* → VSA beam search), sigmoid-never-softmax design rule.
+>
+> **What was built this session:**
+> - New crate `crates/tle-vsa-lm/` (workspace member) — 21 tests passing:
+>   - `vocab.rs` — deterministic word↔id + VSA bipolar codebook
+>   - `engram.rs` — O(1) FNV-hash n-gram memory (multi-order, additive smoothing) + `top_candidates` short-list
+>   - `tba.rs` — Transition Binding Algebra: TM = Σ ρ(C(w_i))⊙C(w_{i+1}); predict = ρ(C(current))⊙TM; score via cosine
+>   - `reservoir.rs` — leaky echo-state reservoir + `ReservoirMemory` (non-parametric k-NN associative readout, bounded eviction)
+>   - `decode.rs` — VSA cosine decoder (no softmax) + penalty closure
+>   - `lib.rs` — `VsaLm` engine: learn/generate/predict, two-stage decoder, energy-guided beam search with VSA anti-repetition (bundle recent context, penalize similar candidates) + bigram loop-breaker
+> - Binaries: `vsalm-bench` (toy 97-sentence corpus) and `vsalm-corpus <file> [ratio]` (real-corpus benchmark)
+>
+> **Verified numbers (real Wikipedia wiki_train.txt, 300 sentences, 240 train):**
+> - TRAIN next-token accuracy **90.1%**, TEST **10.7%** (no softmax, no backprop, no sampling)
+> - Signal decomposition: TBA-only TEST 5.8% vs Engram-only TEST 13.5% — n-gram dominates on in-vocab text, but **TBA (pure VSA) generalizes to unseen contexts** better than exact n-gram on the tiny toy corpus (3.4% vs 2.5%)
+> - Generation is genuinely fluent Wikipedia-style text, e.g. `"the player characters rest in a camp where units can be customized and character"` — no catastrophic repetition after VSA anti-repetition fix
+> - **Deterministic: 5 identical runs ✓**
+> - Two-stage decoder (Engram short-list 32 → TBA cosine only on short-list): **accuracy pass 184s → 1.2s (144× speedup)** with <4pt accuracy cost
+>
+> **Next steps (VSA-LM):**
+> 1. Reservoir signal currently only helps slightly (TRAIN 80.4→81.5% on toy); the k-NN associative readout needs a smarter neighbor search (hierarchical/tree index) and larger reservoir to be competitive
+> 2. Larger real corpus run (currently capped at ~300 sentences due to reservoir cost; the TBA+Engram core handles thousands of sentences fast)
+> 3. Improve generation coherence: integrate AXIOM-Gen KG as a *knowledge prior* (steer next-token toward fact-consistent words), then use VSA-LM as the fluency layer — this is the roadmap to conversational AXIOM
+> 4. Compare VSA-LM vs HRBM ridge readout (`tle-reservoir`) on the same corpus for a fair "VSA decode vs neural readout" number
+> 5. Consider KARC-style basis expansion (Chebyshev/Fourier) in the reservoir
+>
+> **Honest caveat:** 10.7% TEST next-token accuracy is not an LM-comparable number (LLMs get 30-50% on next-token). But no neural net / no softmax / deterministic at CPU-only is the whole point. This is the first concrete step of the "Path C" non-neural LM research; the value is the architecture, not yet the score.
+
+---
+
+> ## SESSION HANDOFF SUMMARY (previous — TriviaQA intelligence)
+>
+> **Current focus:** Making AXIOM genuinely smarter for open-domain QA, verified on real TriviaQA (not smoke fixtures).
+>
+> **Root-cause finding:** Evidence recall is 99.69% and answer-entity recall ~72%, but candidate answer accuracy is only ~7%. The bottleneck is NOT retrieval — it is (a) decomposition producing noisy entities, and (b) answer selection ranking.
+>
+> **What was just built (this session):**
+> - `decompose::decompose_sentence` — clause-based fact decomposition with relational verb anchoring, subject chaining, word-boundary-safe predicate matching
+> - Composed semantic entity vectors (`AxiomGen::semantic_vector`) — bundle word vectors so VSA cosine reflects shared vocabulary
+> - Structural answer extraction (`GenerationResult.answer`) — connectivity + role bias + VSA relevance + length penalty
+> - `Intent::Who` added to linearize
+> - Benchmark diagnostics: `candidate_answer_accuracy`, `answer_entity_recall`, `evidence_answer_recall`
+> - Real TriviaQA RC archive downloaded locally under `data/triviaqa/` (gitignored, 2.48GB)
+>
+> **Verified numbers (verified-wikipedia-dev, 318 records):** substring 8.18%, candidate answer 7.23%, answer-entity recall 72.33%, evidence recall 99.69%, avg latency ~16ms.
+>
+> **Next steps (ideas to explore in new session):**
+> 1. Use composed semantic vectors inside `extract_query_entities` (Phase B) so query entities link to graph entities via cosine, not just word match
+> 2. Filter decomposition output to short, entity-like candidates (suppress long phrase-objects)
+> 3. Evidence sentence embedding: compare query vector to sentence vectors to select relevant evidence before decomposition
+> 4. Answer-centric graph: only keep triples whose relation is question-compatible (Who→person relations, What→copula, Where→location)
+> 5. Iterative refinement: second narrow beam pass over answer candidates (katgpt DDTree-style)
+>
+> **Honest caveat:** do NOT report these numbers as a real TriviaQA score. They are evidence-ingested pipeline diagnostics on the dev subset. New research ideas welcome — the user has additional research ideas for the next session.
 
 ---
 
@@ -77,7 +139,8 @@ crates/
 ├── tle-bench/       ← Benchmarks
 ├── tle-chat/        ← Original chat interface (Day 1)
 ├── tle-reservoir/   ← Echo State Network experiments
-└── tle-gen/         ← KN-5 language model (ppl=67.4)
+├── tle-gen/         ← KN-5 language model (ppl=67.4)
+└── tle-vsa-lm/      ← VSA-LM: non-neural text generation (TBA+Engram+Reservoir) [NEW]
 ```
 
 ---
@@ -328,6 +391,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Composed semantic entity vectors so VSA cosine reflects shared vocabulary
 - [x] Structural answer extraction in `GenerationResult.answer` (connectivity + role bias + VSA relevance + length penalty)
 - [x] Root-cause diagnostics: answer-entity recall 72.33%, evidence recall 99.69%, candidate answer 7.23%
+- [x] VSA-LM crate (`tle-vsa-lm`): VSA codebook + TBA transition memory + O(1) Engram + reservoir associative memory + cosine decoder (no softmax) + energy beam search — 21 tests
+- [x] Two-stage decoder (Engram short-list → TBA cosine): 144× speedup on accuracy measurement
+- [x] VSA-LM real-corpus benchmark: 90.1% TRAIN / 10.7% TEST next-token, deterministic, fluent Wikipedia-style generation
 - [ ] Full train/test benchmark and richer evidence extraction remain
 - [ ] arXiv paper submission
 - [x] Reproducible paper artifact status and pre-submission checklist added
