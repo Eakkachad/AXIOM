@@ -40,6 +40,13 @@ pub struct GenerationResult {
     pub path_length: usize,
 }
 
+/// Policy used when a new fact conflicts with an existing subject/relation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContradictionPolicy {
+    ReportOnly,
+    LatestWins,
+}
+
 /// The main AXIOM-Gen engine for compositional text generation.
 pub struct AxiomGen {
     /// The knowledge graph storing all facts.
@@ -52,6 +59,7 @@ pub struct AxiomGen {
     pub search_config: SearchConfig,
     /// Template bank for varied linearization.
     pub template_bank: TemplateBank,
+    pub contradiction_policy: ContradictionPolicy,
 }
 
 impl AxiomGen {
@@ -63,6 +71,7 @@ impl AxiomGen {
             energy_config: EnergyConfig::default(),
             search_config: SearchConfig::default(),
             template_bank: TemplateBank::new(),
+            contradiction_policy: ContradictionPolicy::ReportOnly,
         }
     }
 
@@ -78,6 +87,7 @@ impl AxiomGen {
             energy_config,
             search_config,
             template_bank: TemplateBank::new(),
+            contradiction_policy: ContradictionPolicy::ReportOnly,
         }
     }
 
@@ -85,6 +95,9 @@ impl AxiomGen {
     ///
     /// Automatically registers entities and relations in the codebook.
     pub fn add_fact(&mut self, subject: &str, relation: &str, object: &str) {
+        if self.contradiction_policy == ContradictionPolicy::LatestWins {
+            self.graph.remove_conflicting_triples(subject, relation);
+        }
         // Add to knowledge graph
         self.graph.add_triple(subject, relation, object);
 
@@ -92,6 +105,10 @@ impl AxiomGen {
         self.codebook.get_or_insert(subject);
         self.codebook.get_or_insert(relation);
         self.codebook.get_or_insert(object);
+    }
+
+    pub fn set_contradiction_policy(&mut self, policy: ContradictionPolicy) {
+        self.contradiction_policy = policy;
     }
 
     /// Generate a compositional sentence answering the query.
@@ -331,6 +348,17 @@ mod tests {
         gen.add_fact("cat", "is", "animal");
         let entities = gen.extract_query_entities("what are cats?");
         assert!(entities.contains(&gen.graph.entity_id("cat").unwrap()));
+    }
+
+    #[test]
+    fn test_latest_wins_contradiction_policy() {
+        let mut gen = AxiomGen::new(2048);
+        gen.set_contradiction_policy(ContradictionPolicy::LatestWins);
+        gen.add_fact("sky", "color", "blue");
+        gen.add_fact("sky", "color", "green");
+        assert!(gen.graph.contradictions().is_empty());
+        assert_eq!(gen.graph.triples.len(), 1);
+        assert_eq!(gen.graph.entity_name(gen.graph.triples[0].object_id), "green");
     }
 
     #[test]

@@ -189,6 +189,17 @@ impl KnowledgeGraph {
         }
         conflicts
     }
+
+    /// Remove earlier values for a subject/relation before inserting a replacement.
+    pub fn remove_conflicting_triples(&mut self, subject: &str, relation: &str) -> usize {
+        let Some(&subject_id) = self.entity_index.get(subject) else { return 0; };
+        let Some(&relation_id) = self.relation_index.get(relation) else { return 0; };
+        let before = self.triples.len();
+        self.triples.retain(|triple| {
+            triple.subject_id != subject_id || triple.relation_id != relation_id
+        });
+        before - self.triples.len()
+    }
 }
 
 impl Default for KnowledgeGraph {

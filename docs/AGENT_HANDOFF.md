@@ -295,8 +295,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 ### 🔲 TODO (Phase 3 — remaining):
  - [x] **PTG recursive composition** (bounded safely to 64 hops)
  - [x] **VSA Entity Linking** (fuzzy cosine match plus normalized surface forms)
- - [x] **Contradiction detection** (conflict reporting; resolution policy remains)
-- [ ] **Wire AttractorReasoner into question answering** (use for disambiguation)
+ - [x] **Contradiction detection** (conflict reporting)
+ - [x] **Contradiction resolution policy** (`ReportOnly` / `LatestWins`)
+ - [x] **Wire AttractorReasoner into question answering** (query-topic disambiguation)
 
 ### 🔲 TODO (Phase 4 — Deploy):
 - [ ] Background web learning daemon

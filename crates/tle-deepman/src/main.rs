@@ -627,7 +627,13 @@ fn main() {
 
         // Compose morpheme vectors before intent matching so OOV forms share
         // algebraic signal with known roots and affixes.
-        let _morph_query = morph_tokenizer.encode_sentence(&effective_input, &mut intent_codebook);
+        let morph_query = morph_tokenizer.encode_sentence(&effective_input, &mut intent_codebook);
+        let attractor_result = attractor.reason(&morph_query);
+        let linked_query = attractor
+            .identify_attractor(&attractor_result.state)
+            .filter(|(_, confidence)| *confidence > 0.2)
+            .map(|(label, _)| format!("{} {}", effective_input, label))
+            .unwrap_or_else(|| effective_input.clone());
 
         // Try VSA intent detection first
         let (vsa_intent, vsa_confidence) = vsa_intent_detector.detect(&effective_input, &mut intent_codebook);
@@ -636,7 +642,7 @@ fn main() {
             match vsa_intent {
                 tle_afc::VsaIntent::Why | tle_afc::VsaIntent::How => {
                     // Try AXIOM-Gen for compositional answer
-                    let gen_result = axiom_gen.generate(&effective_input);
+                    let gen_result = axiom_gen.generate(&linked_query);
                     if gen_result.path_length >= 2 {
                         println!("  {} [{:?}]", gen_result.sentence, start.elapsed());
                         if !gen_result.reasoning.is_empty() {
@@ -679,7 +685,7 @@ fn main() {
             }
             Intent::Question(topic) => {
                 // Try AXIOM-Gen compositional generation first
-                let gen_result = axiom_gen.generate(&effective_input);
+                let gen_result = axiom_gen.generate(&linked_query);
                 if gen_result.path_length >= 2 {
                     println!("  {} [{:?}]", gen_result.sentence, start.elapsed());
                     if !gen_result.reasoning.is_empty() {
