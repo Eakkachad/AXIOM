@@ -18,119 +18,110 @@
 //! This is the "algebraic softmax": the decoder is a similarity lookup over
 //! the codebook, not a learned projection matrix.
 
-use tle_vsa::{bind, cosine_similarity, HyperVector};
+use std::collections::HashMap;
 
-use crate::vocab::Vocab;
+use tle_vsa::{cosine_similarity, HyperVector};
 
 /// A bundled bigram transition memory for one direction of a token stream.
+///
+/// Per-source-word vectors eliminate crosstalk: TM["the"] bundles all next
+/// tokens after "the", TM["cat"] bundles all next tokens after "cat".  The
+/// prediction is a direct lookup — no global unbinding needed.
 #[derive(Debug, Clone)]
 pub struct TransitionMemory {
-    /// Superposed bigram bindings: ρ(C(w_i)) ⊙ C(w_{i+1}).
-    pub memory: HyperVector,
-    /// Number of transitions accumulated (for capacity / SNR diagnostics).
+    per_word: HashMap<usize, HyperVector>,
+    dim: usize,
     pub transitions: u64,
 }
 
 impl TransitionMemory {
     pub fn new(dim: usize) -> Self {
-        Self { memory: HyperVector::zeros(dim), transitions: 0 }
+        Self { per_word: HashMap::new(), dim, transitions: 0 }
     }
 
-    /// Add a transition binding current -> next.
-    pub fn learn(&mut self, current: &HyperVector, next: &HyperVector) {
-        let shifted = current.permute(1);
-        let binding = bind(&shifted, next);
-        self.memory = self.memory.add(&binding);
+    /// Add a transition: current → next.
+    pub fn learn(&mut self, current_id: usize, next: &HyperVector) {
+        let entry = self
+            .per_word
+            .entry(current_id)
+            .or_insert_with(|| HyperVector::zeros(self.dim));
+        *entry = entry.add(next);
         self.transitions += 1;
     }
 
     /// Learn all adjacent pairs in a token-id sequence.
-    pub fn learn_ids(&mut self, ids: &[usize], vocab: &Vocab) {
+    pub fn learn_ids(&mut self, ids: &[usize], _vocab: &crate::vocab::Vocab) {
         for window in ids.windows(2) {
-            if let (Some(cur), Some(next)) =
-                (vocab.vector_by_id(window[0]), vocab.vector_by_id(window[1]))
-            {
-                self.learn(cur, next);
+            if let Some(next) = _vocab.vector_by_id(window[1]) {
+                self.learn(window[0], next);
             }
         }
     }
 
-    /// Predict the next-token vector after `current`.
-    ///
-    /// The unbinding retrieves a superposition of all next tokens that ever
-    /// followed `current`, weighted by frequency, plus crosstalk noise.
-    pub fn predict(&self, current: &HyperVector) -> HyperVector {
-        let shifted = current.permute(1);
-        bind(&shifted, &self.memory)
+    /// Predict the next-token bundle after `current_id`.
+    /// Returns None if the word was never seen as a transition source.
+    pub fn predict(&self, current_id: usize) -> Option<HyperVector> {
+        self.per_word.get(&current_id).cloned()
     }
 
-    /// Score a candidate as the next token after `current`.
-    pub fn score(&self, current: &HyperVector, candidate: &HyperVector) -> f32 {
-        let pred = self.predict(current);
-        cosine_similarity(&pred, candidate)
+    /// Score a candidate as the next token after `current_id`.
+    pub fn score(&self, current_id: usize, candidate: &HyperVector) -> f32 {
+        match self.predict(current_id) {
+            Some(bundle) => cosine_similarity(&bundle, candidate),
+            None => 0.0,
+        }
     }
 }
 
-/// Trigram Transition Memory: encodes (w_{i-1}, w_i) → w_{i+1} patterns.
+/// Trigram Transition Memory: per-(prev,current) pair vectors.
 ///
-/// ```text
-/// TM = Σ ρ²(C(w_{i-1})) ⊙ ρ(C(w_i)) ⊙ C(w_{i+1})
-/// ```
-///
-/// Prediction for context (prev, current):
-/// ```text
-/// pred = ρ²(C(prev)) ⊙ ρ(C(current)) ⊙ TM
-/// ```
-///
-/// Because fewer trigrams share the same (prev, current) pair than bigrams
-/// share a single current, the trigram signal-to-noise ratio is inherently
-/// better — this is the algebraic analog of "higher-order n-gram smoothing."
+/// Each unique (prev_id, current_id) pair stores the bundled next-token
+/// vectors seen after that context.  No crosstalk between different source
+/// pairs.
 #[derive(Debug, Clone)]
 pub struct TrigramMemory {
-    pub memory: HyperVector,
+    per_pair: HashMap<(usize, usize), HyperVector>,
+    dim: usize,
     pub transitions: u64,
 }
 
 impl TrigramMemory {
     pub fn new(dim: usize) -> Self {
-        Self { memory: HyperVector::zeros(dim), transitions: 0 }
+        Self { per_pair: HashMap::new(), dim, transitions: 0 }
     }
 
-    pub fn learn(&mut self, prev: &HyperVector, current: &HyperVector, next: &HyperVector) {
-        let p2 = prev.permute(2);
-        let p1 = current.permute(1);
-        let binding = bind(&p2, &bind(&p1, next));
-        self.memory = self.memory.add(&binding);
+    pub fn learn(&mut self, prev_id: usize, current_id: usize, next: &HyperVector) {
+        let entry = self
+            .per_pair
+            .entry((prev_id, current_id))
+            .or_insert_with(|| HyperVector::zeros(self.dim));
+        *entry = entry.add(next);
         self.transitions += 1;
     }
 
-    pub fn learn_ids(&mut self, ids: &[usize], vocab: &Vocab) {
+    pub fn learn_ids(&mut self, ids: &[usize], _vocab: &crate::vocab::Vocab) {
         for w in ids.windows(3) {
-            if let (Some(p), Some(c), Some(n)) = (
-                vocab.vector_by_id(w[0]),
-                vocab.vector_by_id(w[1]),
-                vocab.vector_by_id(w[2]),
-            ) {
-                self.learn(p, c, n);
+            if let Some(next) = _vocab.vector_by_id(w[2]) {
+                self.learn(w[0], w[1], next);
             }
         }
     }
 
-    pub fn predict(&self, prev: &HyperVector, current: &HyperVector) -> HyperVector {
-        let p2 = prev.permute(2);
-        let p1 = current.permute(1);
-        bind(&p2, &bind(&p1, &self.memory))
+    pub fn predict(&self, prev_id: usize, current_id: usize) -> Option<HyperVector> {
+        self.per_pair.get(&(prev_id, current_id)).cloned()
     }
 
-    pub fn score(&self, prev: &HyperVector, current: &HyperVector, candidate: &HyperVector) -> f32 {
-        let pred = self.predict(prev, current);
-        cosine_similarity(&pred, candidate)
+    pub fn score(&self, prev_id: usize, current_id: usize, candidate: &HyperVector) -> f32 {
+        match self.predict(prev_id, current_id) {
+            Some(bundle) => cosine_similarity(&bundle, candidate),
+            None => 0.0,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::*;    use crate::vocab::Vocab;
 
     #[test]
     fn test_tba_recovers_exact_transition() {
@@ -143,12 +134,11 @@ mod tests {
         let mut tm = TransitionMemory::new(dim);
         tm.learn_ids(&[the, cat], &vocab);
 
-        let the_vec = vocab.vector_by_id(the).unwrap();
         let cat_vec = vocab.vector_by_id(cat).unwrap();
         let dog_vec = vocab.vector_by_id(dog).unwrap();
 
-        let score_cat = tm.score(the_vec, cat_vec);
-        let score_dog = tm.score(the_vec, dog_vec);
+        let score_cat = tm.score(the, cat_vec);
+        let score_dog = tm.score(the, dog_vec);
         assert!(
             score_cat > score_dog,
             "Recovered transition should score higher: cat={}, dog={}",
@@ -166,15 +156,11 @@ mod tests {
         let c = vocab.get_or_add("c");
 
         let mut tm = TransitionMemory::new(dim);
-        // a->b 3 times, a->c 1 time
-        for _ in 0..3 {
-            tm.learn_ids(&[a, b], &vocab);
-        }
+        for _ in 0..3 { tm.learn_ids(&[a, b], &vocab); }
         tm.learn_ids(&[a, c], &vocab);
 
-        let a_vec = vocab.vector_by_id(a).unwrap();
-        let score_b = tm.score(a_vec, vocab.vector_by_id(b).unwrap());
-        let score_c = tm.score(a_vec, vocab.vector_by_id(c).unwrap());
+        let score_b = tm.score(a, vocab.vector_by_id(b).unwrap());
+        let score_c = tm.score(a, vocab.vector_by_id(c).unwrap());
         assert!(score_b > score_c, "More frequent next token should win");
     }
 }

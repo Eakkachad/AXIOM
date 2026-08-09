@@ -173,8 +173,8 @@ impl VsaLm {
             return None;
         }
         let last = context.last()?;
-        let vec = self.vocab.vector(last)?;
-        Some(self.tba.predict(vec))
+        let id = self.vocab.id(last)?;
+        self.tba.predict(id)
     }
 
     /// Raw trigram TBA prediction for the last two tokens in context.
@@ -182,9 +182,9 @@ impl VsaLm {
         if self.trigram.transitions == 0 || context.len() < 2 {
             return None;
         }
-        let prev = self.vocab.vector(&context[context.len() - 2])?;
-        let current = self.vocab.vector(&context[context.len() - 1])?;
-        Some(self.trigram.predict(prev, current))
+        let prev_id = self.vocab.id(&context[context.len() - 2])?;
+        let curr_id = self.vocab.id(&context[context.len() - 1])?;
+        self.trigram.predict(prev_id, curr_id)
     }
 
     /// Combined prediction: blend TBA cosine, Engram n-gram probability, and
