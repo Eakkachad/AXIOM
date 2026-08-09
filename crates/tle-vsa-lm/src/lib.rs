@@ -15,10 +15,12 @@
 
 pub mod decode;
 pub mod engram;
+pub mod knowledge;
 pub mod reservoir;
 pub mod tba;
 pub mod vocab;
 
+pub use knowledge::KnowledgePrior;
 pub use reservoir::{ReservoirConfig, ReservoirMemory};
 
 use std::collections::HashSet;
@@ -48,6 +50,8 @@ pub struct LmConfig {
     pub w_engram: f32,
     /// Weight of the reservoir associative-memory score in prediction.
     pub w_reservoir: f32,
+    /// Weight of the knowledge-prior (fact-grounded) score in prediction.
+    pub w_knowledge: f32,
     /// Reservoir configuration (dimension, leak, etc.).
     pub reservoir_config: Option<ReservoirConfig>,
     /// Anti-repetition penalty strength.
@@ -66,6 +70,7 @@ impl Default for LmConfig {
             w_tba: 1.0,
             w_engram: 1.5,
             w_reservoir: 0.5,
+            w_knowledge: 2.0,
             reservoir_config: None,
             w_repeat: 0.15,
             repeat_window: 3,
@@ -86,6 +91,8 @@ pub struct VsaLm {
     pub reservoir: Option<Reservoir>,
     /// Non-parametric reservoir associative memory.
     pub reservoir_mem: Option<ReservoirMemory>,
+    /// Knowledge-grounded fact prior.
+    pub knowledge: KnowledgePrior,
     /// Configuration.
     pub config: LmConfig,
 }
@@ -107,6 +114,7 @@ impl VsaLm {
             tba: TransitionMemory::new(dim),
             reservoir,
             reservoir_mem,
+            knowledge: KnowledgePrior::new(),
             config,
         }
     }
@@ -149,6 +157,9 @@ impl VsaLm {
 
     /// Raw TBA prediction vector for the last token in `context`.
     pub fn tba_prediction(&self, context: &[String]) -> Option<HyperVector> {
+        if self.tba.transitions == 0 {
+            return None;
+        }
         let last = context.last()?;
         let vec = self.vocab.vector(last)?;
         Some(self.tba.predict(vec))
@@ -189,42 +200,59 @@ impl VsaLm {
         candidates
     }
 
-    /// Fast combined prediction (TBA + Engram, no reservoir k-NN).
+    /// Fast combined prediction (TBA + Engram + knowledge, no reservoir k-NN).
     ///
     /// Uses a two-stage decode to avoid O(V·D) full-vocabulary scoring:
     /// 1. Engram builds a short-list of candidate ids (O(V) hash lookups).
     /// 2. TBA cosine scores only the short-list (O(candidates·D)).
+    /// 3. The KnowledgePrior boosts fact-connected candidates.
     pub fn predict_next_fast(&self, context: &[String], k: usize) -> Vec<DecodedToken> {
         let context_ids: Vec<usize> = context.iter().filter_map(|w| self.vocab.id(w)).collect();
         let shortlist = self.engram.top_candidates(&context_ids, 32);
         let tba_signal = self.tba_prediction(context);
 
+        // Knowledge prior over the trailing context words.
+        let knowledge_context: Vec<String> = context
+            .iter()
+            .rev()
+            .take(self.config.repeat_window * 3)
+            .cloned()
+            .collect();
+        let knowledge = self.knowledge.candidates(&knowledge_context);
+
         let mut candidates: Vec<DecodedToken> = shortlist
             .iter()
             .map(|&id| {
+                let word = self.vocab.word(id).to_string();
                 let mut score = self.config.w_engram * engram_probability(self, &context_ids, id);
                 if let Some(signal) = &tba_signal {
                     let sim = tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
                     score += self.config.w_tba * sim;
                 }
-                DecodedToken {
-                    id,
-                    word: self.vocab.word(id).to_string(),
-                    similarity: score,
+                if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
+                    score += self.config.w_knowledge * boost;
                 }
+                DecodedToken { id, word, similarity: score }
             })
             .collect();
 
-        // If no context matched any n-gram, fall back to TBA-only scoring
-        // over the full vocabulary (small corpora, cold context).
+        // If no context matched any n-gram, fall back to knowledge/TBA-only
+        // scoring over the full vocabulary (small corpora, cold context).
         if candidates.is_empty() {
-            if let Some(signal) = tba_signal {
+            if tba_signal.is_some() || !knowledge.is_empty() {
                 candidates = self
                     .vocab
                     .iter()
                     .map(|(id, word)| {
-                        let sim = tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
-                        DecodedToken { id, word: word.to_string(), similarity: sim }
+                        let word = word.to_string();
+                        let mut score = 0.0f32;
+                        if let Some(signal) = &tba_signal {
+                            score += tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
+                        }
+                        if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
+                            score += self.config.w_knowledge * boost;
+                        }
+                        DecodedToken { id, word, similarity: score }
                     })
                     .collect();
             }
@@ -302,6 +330,18 @@ impl VsaLm {
                                 rep += self.config.w_repeat * 2.0;
                                 break;
                             }
+                        }
+                    }
+
+                    // Repetition of any word already emitted is penalized.
+                    // This is calibrated against the knowledge boost
+                    // (~2×w_knowledge per fact hit): a repeated knowledge word
+                    // should lose just enough to let a fresh fact word win,
+                    // without suppressing legitimate short answers.
+                    if new_seq.len() >= 2 {
+                        let count = new_seq.iter().filter(|w| *w == &cand.word).count();
+                        if count >= 1 {
+                            rep += 0.6 * self.config.w_knowledge * count as f32;
                         }
                     }
                     next_beam.push((new_seq, score + cand.similarity - rep));
@@ -517,6 +557,42 @@ mod tests {
         let out = lm.generate("zzzz", Some(4));
         // Should not panic; may return just the prompt.
         assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn test_knowledge_prior_steers_generation() {
+        // A bare engine with only knowledge facts — no corpus. The knowledge
+        // prior alone must be able to answer a taught fact.
+        let config = LmConfig { dim: 2048, max_order: 2, beam_width: 4, max_gen_tokens: 6, ..Default::default() };
+        let mut lm = VsaLm::new(config);
+        // Teach: sky is blue ; blue has short wavelength
+        lm.knowledge.add_fact("sky", "is", "blue");
+        lm.knowledge.add_fact("blue", "has", "short_wavelength");
+        lm.vocab.get_or_add("sky");
+        lm.vocab.get_or_add("is");
+        lm.vocab.get_or_add("blue");
+        lm.vocab.get_or_add("has");
+        lm.vocab.get_or_add("short");
+        lm.vocab.get_or_add("wavelength");
+
+        // Context "sky is" → knowledge should surface "blue" as a candidate.
+        let ctx = vec!["sky".to_string(), "is".to_string()];
+        let pred = lm.predict_next_fast(&ctx, 5);
+        assert!(!pred.is_empty());
+        assert!(
+            pred.iter().any(|t| t.word == "blue"),
+            "knowledge prior should surface blue after 'sky is', got {:?}",
+            pred.iter().map(|t| t.word.clone()).collect::<Vec<_>>()
+        );
+
+        // Multi-hop: after "blue", "wavelength" should surface.
+        let ctx2 = vec!["sky".to_string(), "is".to_string(), "blue".to_string()];
+        let pred2 = lm.predict_next_fast(&ctx2, 8);
+        assert!(
+            pred2.iter().any(|t| t.word == "wavelength"),
+            "knowledge prior should chain blue -> wavelength, got {:?}",
+            pred2.iter().map(|t| t.word.clone()).collect::<Vec<_>>()
+        );
     }
 
     #[test]

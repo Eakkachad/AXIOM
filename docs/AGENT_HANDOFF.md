@@ -13,14 +13,15 @@
 > - katgpt-rs has no VSA code, but contributes engineering patterns: Engram (O(1) n-gram hash — already in AXIOM), KARC (reservoir + basis expansion), CompressionDrafter (beam search where scoring = compression length; the *concept* → VSA beam search), sigmoid-never-softmax design rule.
 >
 > **What was built this session:**
-> - New crate `crates/tle-vsa-lm/` (workspace member) — 21 tests passing:
+> - New crate `crates/tle-vsa-lm/` (workspace member) — 27 tests passing:
 >   - `vocab.rs` — deterministic word↔id + VSA bipolar codebook
 >   - `engram.rs` — O(1) FNV-hash n-gram memory (multi-order, additive smoothing) + `top_candidates` short-list
 >   - `tba.rs` — Transition Binding Algebra: TM = Σ ρ(C(w_i))⊙C(w_{i+1}); predict = ρ(C(current))⊙TM; score via cosine
 >   - `reservoir.rs` — leaky echo-state reservoir + `ReservoirMemory` (non-parametric k-NN associative readout, bounded eviction)
+>   - `knowledge.rs` — `KnowledgePrior`: fact-store that steers generation toward fact-consistent words. **Entity-level matching** (a fact fires only when the FULL entity appears in context, not partial words) so `wavelength` can't falsely trigger `short_wavelength` facts
 >   - `decode.rs` — VSA cosine decoder (no softmax) + penalty closure
 >   - `lib.rs` — `VsaLm` engine: learn/generate/predict, two-stage decoder, energy-guided beam search with VSA anti-repetition (bundle recent context, penalize similar candidates) + bigram loop-breaker
-> - Binaries: `vsalm-bench` (toy 97-sentence corpus) and `vsalm-corpus <file> [ratio]` (real-corpus benchmark)
+> - Binaries: `vsalm-bench` (toy 97-sentence corpus), `vsalm-corpus <file> [ratio]` (real-corpus benchmark), and `vsalm-knowledge` (teach facts → generate answers)
 >
 > **Verified numbers (real Wikipedia wiki_train.txt, 300 sentences, 240 train):**
 > - TRAIN next-token accuracy **90.1%**, TEST **10.7%** (no softmax, no backprop, no sampling)
@@ -28,13 +29,15 @@
 > - Generation is genuinely fluent Wikipedia-style text, e.g. `"the player characters rest in a camp where units can be customized and character"` — no catastrophic repetition after VSA anti-repetition fix
 > - **Deterministic: 5 identical runs ✓**
 > - Two-stage decoder (Engram short-list 32 → TBA cosine only on short-list): **accuracy pass 184s → 1.2s (144× speedup)** with <4pt accuracy cost
+> - **Knowledge-guided generation (vsalm-knowledge):** teach `(cat,is,animal)`, `(animal,has,heart)` → "does a cat have" → "animal heart" (multi-hop chaining works). `(water,is,liquid)` → "liquid", `(Mars,is,red_planet)` → "red planet", `(bird,has,wings)` → "wings"
 >
 > **Next steps (VSA-LM):**
 > 1. Reservoir signal currently only helps slightly (TRAIN 80.4→81.5% on toy); the k-NN associative readout needs a smarter neighbor search (hierarchical/tree index) and larger reservoir to be competitive
 > 2. Larger real corpus run (currently capped at ~300 sentences due to reservoir cost; the TBA+Engram core handles thousands of sentences fast)
-> 3. Improve generation coherence: integrate AXIOM-Gen KG as a *knowledge prior* (steer next-token toward fact-consistent words), then use VSA-LM as the fluency layer — this is the roadmap to conversational AXIOM
-> 4. Compare VSA-LM vs HRBM ridge readout (`tle-reservoir`) on the same corpus for a fair "VSA decode vs neural readout" number
-> 5. Consider KARC-style basis expansion (Chebyshev/Fourier) in the reservoir
+> 3. **Integrate AXIOM-Gen KG as the actual knowledge source** — wire `KnowledgePrior` to ingest from `AxiomGen.graph` triples (currently `vsalm-knowledge` teaches facts manually via `add_fact`), then AXIOM can answer from real evidence
+> 4. Add a proper EOS/stop signal so knowledge answers don't tail into noise (currently answers are correct-but-noisy after the fact chain is exhausted)
+> 5. Compare VSA-LM vs HRBM ridge readout (`tle-reservoir`) on the same corpus for a fair "VSA decode vs neural readout" number
+> 6. Consider KARC-style basis expansion (Chebyshev/Fourier) in the reservoir
 >
 > **Honest caveat:** 10.7% TEST next-token accuracy is not an LM-comparable number (LLMs get 30-50% on next-token). But no neural net / no softmax / deterministic at CPU-only is the whole point. This is the first concrete step of the "Path C" non-neural LM research; the value is the architecture, not yet the score.
 

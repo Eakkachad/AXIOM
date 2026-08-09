@@ -17,3 +17,7 @@ path = "src/bin/vsalm-bench.rs"
 [[bin]]
 name = "vsalm-corpus"
 path = "src/bin/vsalm-corpus.rs"
+
+[[bin]]
+name = "vsalm-knowledge"
+path = "src/bin/vsalm-knowledge.rs"
