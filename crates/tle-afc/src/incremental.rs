@@ -56,6 +56,8 @@ pub struct IncrConfig {
     pub compaction_interval: usize,
     /// Keep at most this many newest facts for each subject.
     pub max_facts_per_subject: usize,
+    /// Merge multiple values for the same subject and relation.
+    pub merge_same_relation: bool,
 }
 
 impl Default for IncrConfig {
@@ -66,6 +68,7 @@ impl Default for IncrConfig {
             seed: 0xAB10_CAFE_1234_5678,
             compaction_interval: 10_000,
             max_facts_per_subject: 100,
+            merge_same_relation: true,
         }
     }
 }
@@ -79,6 +82,7 @@ pub struct IncrStats {
     pub vocab_size: usize,
     pub compactions: usize,
     pub facts_pruned: usize,
+    pub facts_merged: usize,
 }
 
 /// Result of a production knowledge compaction pass.
@@ -88,6 +92,7 @@ pub struct CompactionReport {
     pub facts_after: usize,
     pub duplicates_removed: usize,
     pub facts_pruned: usize,
+    pub facts_merged: usize,
 }
 
 /// Simple vocabulary for incremental store.
@@ -308,12 +313,33 @@ impl IncrementalStore {
         }
         retained.reverse();
 
+        let facts_before_merge = retained.len();
+        if self.config.merge_same_relation {
+            let mut positions: HashMap<(String, String), usize> = HashMap::new();
+            let mut merged: Vec<(String, String, String)> = Vec::with_capacity(retained.len());
+            for (subject, relation, object) in retained {
+                let key = (subject.clone(), relation.clone());
+                if let Some(&position) = positions.get(&key) {
+                    let existing = &mut merged[position].2;
+                    if !existing.split("; ").any(|value| value == object) {
+                        existing.push_str("; ");
+                        existing.push_str(&object);
+                    }
+                } else {
+                    positions.insert(key, merged.len());
+                    merged.push((subject, relation, object));
+                }
+            }
+            retained = merged;
+        }
+
         let facts_after = retained.len();
         let report = CompactionReport {
             facts_before,
             facts_after,
             duplicates_removed: facts_before - seen.len(),
             facts_pruned: seen.len() - facts_after,
+            facts_merged: facts_before_merge - facts_after,
         };
 
         self.fact_log = retained;
@@ -325,11 +351,15 @@ impl IncrementalStore {
                 .entry(subject.clone())
                 .or_default()
                 .push((relation.clone(), object.clone()));
+            self.codebook.get_or_insert(&subject);
+            self.codebook.get_or_insert(&relation);
+            self.codebook.get_or_insert(&object);
             self.encode_fact_into_kg(&subject, &relation, &object);
         }
 
         self.stats.compactions += 1;
         self.stats.facts_pruned += report.duplicates_removed + report.facts_pruned;
+        self.stats.facts_merged += report.facts_merged;
         report
     }
 
@@ -561,6 +591,7 @@ mod tests {
             seed: 42,
             compaction_interval: 3,
             max_facts_per_subject: 2,
+            merge_same_relation: true,
         });
 
         store.learn_fact("cat", "has", "four legs");
@@ -574,5 +605,25 @@ mod tests {
         assert_eq!(store.stats.compactions, 1);
         assert_eq!(store.stats.facts_pruned, 1);
         assert!(store.query_fact("cat", "likes").is_some());
+    }
+
+    #[test]
+    fn test_compaction_merges_values_for_same_relation() {
+        let mut store = IncrementalStore::with_config(IncrConfig {
+            dim: 128,
+            max_order: 3,
+            seed: 42,
+            compaction_interval: 0,
+            max_facts_per_subject: 10,
+            merge_same_relation: true,
+        });
+
+        store.learn_fact("rust", "supports", "ownership");
+        store.learn_fact("rust", "supports", "zero cost abstractions");
+        let report = store.compact_knowledge();
+
+        assert_eq!(report.facts_merged, 1);
+        assert_eq!(store.get_facts("rust"), vec![("supports", "ownership; zero cost abstractions")]);
+        assert!(store.query_fact("rust", "supports").is_some());
     }
 }

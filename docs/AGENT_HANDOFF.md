@@ -218,7 +218,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [x] Rebuilds exact fact store and VSA KG memory after pruning
   - [x] `/stats` reports compaction runs and pruned facts
   - [x] Production compaction regression test added
-  - [x] `cargo test -p tle-afc`: 46 tests pass
+  - [x] `cargo test -p tle-afc`: 47 tests pass
+  - [x] Same-subject/relation values merge deterministically during compaction
+  - [x] `/stats` reports merged values
 
 ### ✅ COMPLETED (Phase 1.4 — Web Learning MVP):
 - [x] Bounded HTTP/HTTPS fetch with timeout and response-size limit
@@ -254,7 +256,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
   - [ ] Increase real-page extraction coverage to 300+ facts without lowering precision
 - [ ] **Week 3:** Knowledge Compaction
    - [ ] Topic clustering (cosine similarity)
-   - [ ] Fact merging (shared subject → combine objects)
+   - [x] Fact merging (shared subject + relation → combine distinct objects)
    - [ ] Automatic age-based stale fact pruning
    - [x] Auto-trigger every 10K facts
 
