@@ -280,6 +280,10 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] Thai root-token and mixed Thai-English deterministic tokenization tests
 - [x] Added `axiom-bench` deterministic 10-hop benchmark binary
 - [x] Benchmark verified: 10-hop path, deterministic trace, ~15-17ms generation
+- [x] Background web-learning job boundary added via `/learn-url-bg`
+- [x] Fetch/extract runs off-thread; knowledge mutation remains on the REPL thread
+- [x] Persistent `/queue-url` queue with retry state and line-based persistence
+- [x] Queue validation/retry persistence tests added
 
 ### ✅ COMPLETED (Phase 1 — Knowledge Infrastructure):
 - [x] **Week 2:** Auto-learn from web
@@ -306,7 +310,7 @@ Goal: 100% Algebraic — zero rule-based, zero neural
  - [x] **Wire AttractorReasoner into question answering** (query-topic disambiguation)
 
 ### 🔲 TODO (Phase 4 — Deploy):
-- [ ] Background web learning daemon
+- [ ] Background web learning daemon (persistent queue MVP exists; worker scheduler/auto-retry wiring remains)
 - [x] **Multi-language foundation** (Thai + English tokenization coverage)
 - [ ] TriviaQA benchmark
 - [ ] arXiv paper submission

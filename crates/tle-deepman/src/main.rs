@@ -31,6 +31,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Instant;
 
 use tle_vsa::{cosine_similarity, HyperVector, Codebook};
@@ -39,6 +40,7 @@ use tle_engram::fusion::SigmoidFusion;
 use tle_engram::hash::NgramHash;
 
 mod web_learning;
+mod daemon;
 
 // ═══════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -510,6 +512,8 @@ fn main() {
     println!("  /ask <S> <R>        Query knowledge (e.g., /ask bangkok capital_of)");
     println!("  /load <file.txt>    Load and learn from a text file");
     println!("  /learn-url <url>    Fetch a web page and learn its facts");
+    println!("  /learn-url-bg <url> Fetch a web page in the background");
+    println!("  /queue-url <url>   Persist a URL for daemon processing");
     println!("  /save <file.json>   Save learned knowledge to file");
     println!("  /restore <file.json> Restore previously saved knowledge");
     println!("  /stats              Show engine statistics");
@@ -520,7 +524,11 @@ fn main() {
 
     // REPL loop
     let stdin = std::io::stdin();
+    let mut web_queue = daemon::WebLearnQueue::load("data/axiom_web_queue.tsv");
+    let mut background_jobs: Vec<Receiver<Result<web_learning::ExtractedPage, String>>> = Vec::new();
     loop {
+        poll_background_learns(&mut background_jobs, &mut store, &mut axiom_gen);
+
         // Prompt
         eprint!("AXIOM> ");
         use std::io::Write;
@@ -553,6 +561,7 @@ fn main() {
                 st.compactions, st.facts_pruned, st.facts_merged);
             println!("  AXIOM-Gen contradictions: {}",
                 axiom_gen.graph.contradictions().len());
+            println!("  Web queue: {} pending jobs", web_queue.len());
             continue;
         }
 
@@ -592,6 +601,19 @@ fn main() {
 
         if let Some(url) = trimmed.strip_prefix("/learn-url ") {
             handle_learn_url(&mut store, &mut axiom_gen, url.trim());
+            continue;
+        }
+
+        if let Some(url) = trimmed.strip_prefix("/learn-url-bg ") {
+            handle_learn_url_background(&mut background_jobs, url.trim());
+            continue;
+        }
+
+        if let Some(url) = trimmed.strip_prefix("/queue-url ") {
+            match web_queue.enqueue(url.trim()) {
+                Ok(()) => println!("  ✓ Queued '{}' ({} pending)", url.trim(), web_queue.len()),
+                Err(error) => println!("  ✗ Could not queue URL: {}", error),
+            }
             continue;
         }
 
@@ -1459,20 +1481,65 @@ fn handle_learn_url(store: &mut tle_afc::IncrementalStore, axiom_gen: &mut tle_a
     match web_learning::fetch_html(url) {
         Ok(html) => {
             let page = web_learning::extract_html(&html);
-            for sentence in &page.sentences {
-                store.learn_text(sentence);
-            }
-            for fact in &page.facts {
-                store.learn_fact(&fact.subject, &fact.relation, &fact.object);
-                axiom_gen.add_fact(&fact.subject.to_lowercase(), &fact.relation, &fact.object.to_lowercase());
-            }
-
-            let title = page.title.as_deref().unwrap_or("untitled page");
-            println!("  ✓ Learned '{}': {} sentences, {} facts [{:?}]",
-                title, page.sentences.len(), page.facts.len(), start.elapsed());
+            let (title, sentences, facts) = learn_extracted_page(store, axiom_gen, &page);
+            println!("  ✓ Learned '{}': {} sentences, {} facts [{:?}]", title, sentences, facts, start.elapsed());
         }
         Err(error) => println!("  ✗ Could not learn '{}': {}", url, error),
     }
+}
+
+fn handle_learn_url_background(
+    jobs: &mut Vec<Receiver<Result<web_learning::ExtractedPage, String>>>,
+    url: &str,
+) {
+    if url.is_empty() {
+        println!("  Usage: /learn-url-bg <http(s)://...>");
+        return;
+    }
+    let url = url.to_string();
+    let worker_url = url.clone();
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = web_learning::fetch_html(&worker_url).map(|html| web_learning::extract_html(&html));
+        let _ = sender.send(result);
+    });
+    jobs.push(receiver);
+    println!("  ✓ Background learning started for '{}'", url);
+}
+
+fn poll_background_learns(
+    jobs: &mut Vec<Receiver<Result<web_learning::ExtractedPage, String>>>,
+    store: &mut tle_afc::IncrementalStore,
+    axiom_gen: &mut tle_axiom_gen::AxiomGen,
+) {
+    let mut remaining = Vec::with_capacity(jobs.len());
+    for receiver in jobs.drain(..) {
+        match receiver.try_recv() {
+            Ok(Ok(page)) => {
+                let (title, sentences, facts) = learn_extracted_page(store, axiom_gen, &page);
+                println!("  ✓ Background learned '{}': {} sentences, {} facts", title, sentences, facts);
+            }
+            Ok(Err(error)) => println!("  ✗ Background learning failed: {}", error),
+            Err(TryRecvError::Empty) => remaining.push(receiver),
+            Err(TryRecvError::Disconnected) => println!("  ✗ Background learning worker disconnected"),
+        }
+    }
+    *jobs = remaining;
+}
+
+fn learn_extracted_page(
+    store: &mut tle_afc::IncrementalStore,
+    axiom_gen: &mut tle_axiom_gen::AxiomGen,
+    page: &web_learning::ExtractedPage,
+) -> (String, usize, usize) {
+    for sentence in &page.sentences {
+        store.learn_text(sentence);
+    }
+    for fact in &page.facts {
+        store.learn_fact(&fact.subject, &fact.relation, &fact.object);
+        axiom_gen.add_fact(&fact.subject.to_lowercase(), &fact.relation, &fact.object.to_lowercase());
+    }
+    (page.title.clone().unwrap_or_else(|| "untitled page".to_string()), page.sentences.len(), page.facts.len())
 }
 
 /// Handle /save command — save learned knowledge to JSON.
