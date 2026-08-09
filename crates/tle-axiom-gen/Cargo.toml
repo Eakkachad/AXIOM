@@ -8,3 +8,5 @@ description = "AXIOM-Gen: Compositional generation via energy-guided knowledge g
 
 [dependencies]
 tle-vsa = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

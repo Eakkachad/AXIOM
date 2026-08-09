@@ -1,0 +1,5 @@
+{"question":"what is the sky?","answers":["the sky is blue."],"facts":[["sky","is","blue"]]}
+{"question":"why is the sky blue?","answers":["blue"],"facts":[["sky","is","blue"],["blue","has","short_wavelength"]]}
+{"question":"what is rust?","answers":["rust is a systems language."],"facts":[["rust","is","a systems language"]]}
+{"question":"what does a cat have?","answers":["four legs"],"facts":[["cat","has","four legs"]]}
+{"question":"where is paris?","answers":["france"],"facts":[["paris","located_in","france"]]}

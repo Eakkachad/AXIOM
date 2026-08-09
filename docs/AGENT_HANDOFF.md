@@ -315,9 +315,12 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] **Multi-language foundation** (Thai + English tokenization coverage)
 - [x] Thai fact extraction for `เป็น`, `คือ`, `มี`, `อยู่ใน`, and `เกิดใน`
 - [x] Thai no-whitespace sentence handling regression tests
-- [ ] TriviaQA benchmark
+- [ ] Full TriviaQA benchmark run (dataset acquisition and evidence ingestion remain)
+- [x] TriviaQA-compatible JSONL harness (`triviaqa-bench`) with exact/substring accuracy and latency metrics
+- [x] TriviaQA native `Data` JSON format reader added
 - [ ] arXiv paper submission
 - [ ] Pre-built binary release
+- [x] Reproducible release profile and `docs/RELEASE.md` added
 
 ---
 
