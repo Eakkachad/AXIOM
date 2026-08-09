@@ -13,6 +13,15 @@ pub struct Triple {
     pub object_id: usize,
 }
 
+/// A pair of facts that disagree on the object for the same subject/relation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Contradiction {
+    pub subject: String,
+    pub relation: String,
+    pub first_object: String,
+    pub second_object: String,
+}
+
 /// A knowledge graph storing entities, relations, and their connections as triples.
 #[derive(Debug, Clone)]
 pub struct KnowledgeGraph {
@@ -155,6 +164,31 @@ impl KnowledgeGraph {
 
         result_triples
     }
+
+    /// Find deterministic subject/relation conflicts in insertion order.
+    pub fn contradictions(&self) -> Vec<Contradiction> {
+        let mut seen: HashMap<(usize, usize), usize> = HashMap::new();
+        let mut conflicts = Vec::new();
+        for triple in &self.triples {
+            let key = (triple.subject_id, triple.relation_id);
+            if let Some(&first_object) = seen.get(&key) {
+                if first_object != triple.object_id {
+                    let conflict = Contradiction {
+                        subject: self.entity_name(triple.subject_id).to_string(),
+                        relation: self.relation_name(triple.relation_id).to_string(),
+                        first_object: self.entity_name(first_object).to_string(),
+                        second_object: self.entity_name(triple.object_id).to_string(),
+                    };
+                    if !conflicts.contains(&conflict) {
+                        conflicts.push(conflict);
+                    }
+                }
+            } else {
+                seen.insert(key, triple.object_id);
+            }
+        }
+        conflicts
+    }
 }
 
 impl Default for KnowledgeGraph {
@@ -217,6 +251,18 @@ mod tests {
         let id2 = kg.add_entity("sky");
         assert_eq!(id1, id2);
         assert_eq!(kg.entities.len(), 1);
+    }
+
+    #[test]
+    fn test_contradictions_ignore_duplicates() {
+        let mut kg = KnowledgeGraph::new();
+        kg.add_triple("sky", "color", "blue");
+        kg.add_triple("sky", "color", "blue");
+        kg.add_triple("sky", "color", "green");
+        let conflicts = kg.contradictions();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].first_object, "blue");
+        assert_eq!(conflicts[0].second_object, "green");
     }
 
     #[test]

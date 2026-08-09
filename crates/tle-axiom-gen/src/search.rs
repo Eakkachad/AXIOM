@@ -4,6 +4,7 @@
 //! starting from seed entities, expanding paths by following adjacent triples,
 //! and pruning by energy score to maintain only the most promising candidates.
 
+use std::collections::HashSet;
 use tle_vsa::{Codebook, HyperVector};
 
 use crate::energy::{compute_energy, EnergyConfig};
@@ -24,7 +25,7 @@ impl Default for SearchConfig {
     fn default() -> Self {
         Self {
             beam_width: 32,
-            max_hops: 4,
+            max_hops: 10,
             energy_threshold: 0.8,
         }
     }
@@ -91,7 +92,8 @@ pub fn beam_search(
     let mut all_paths: Vec<ScoredPath> = beam.clone();
 
     // Step 2: Iteratively expand paths
-    for _hop in 1..search_config.max_hops {
+    // Keep recursion bounded for safety while allowing deep compositional chains.
+    for _hop in 1..search_config.max_hops.min(64) {
         let mut candidates: Vec<ScoredPath> = Vec::new();
 
         for scored_path in &beam {
@@ -105,6 +107,20 @@ pub fn beam_search(
                 for (idx, triple) in graph.triples.iter().enumerate() {
                     // Skip triples already in the path
                     if scored_path.path.contains(&idx) {
+                        continue;
+                    }
+
+                    // Prevent graph cycles: a path may revisit its frontier, but
+                    // the newly introduced endpoint must not already be in the path.
+                    let mut visited_entities = HashSet::new();
+                    for &path_idx in &scored_path.path {
+                        let previous = graph.triples[path_idx];
+                        visited_entities.insert(previous.subject_id);
+                        visited_entities.insert(previous.object_id);
+                    }
+                    let introduces_new_entity = !visited_entities.contains(&triple.subject_id)
+                        || !visited_entities.contains(&triple.object_id);
+                    if !introduces_new_entity {
                         continue;
                     }
 
@@ -284,5 +300,43 @@ mod tests {
                 "Results should be sorted by descending energy"
             );
         }
+    }
+
+    #[test]
+    fn test_recursive_composition_reaches_ten_hops() {
+        let mut kg = KnowledgeGraph::new();
+        for i in 0..10 {
+            kg.add_triple(&format!("n{}", i), "leads_to", &format!("n{}", i + 1));
+        }
+        let mut codebook = Codebook::new(2048, 42);
+        let query_vec = codebook.get_or_insert("n0").clone();
+        let results = beam_search(
+            &kg,
+            &[kg.entity_id("n0").unwrap()],
+            &query_vec,
+            &mut codebook,
+            &EnergyConfig::default(),
+            &SearchConfig { beam_width: 32, max_hops: 10, energy_threshold: 0.0 },
+        );
+        assert_eq!(results.iter().map(|path| path.path.len()).max(), Some(10));
+    }
+
+    #[test]
+    fn test_recursive_composition_rejects_cycles() {
+        let mut kg = KnowledgeGraph::new();
+        kg.add_triple("a", "to", "b");
+        kg.add_triple("b", "to", "a");
+        kg.add_triple("b", "to", "c");
+        let mut codebook = Codebook::new(2048, 42);
+        let query_vec = codebook.get_or_insert("a").clone();
+        let results = beam_search(
+            &kg,
+            &[kg.entity_id("a").unwrap()],
+            &query_vec,
+            &mut codebook,
+            &EnergyConfig::default(),
+            &SearchConfig { beam_width: 16, max_hops: 10, energy_threshold: 0.0 },
+        );
+        assert!(results.iter().all(|path| path.path.len() <= 2));
     }
 }

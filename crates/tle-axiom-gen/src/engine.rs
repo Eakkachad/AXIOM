@@ -19,7 +19,7 @@
 //! println!("{}", result.sentence);
 //! ```
 
-use tle_vsa::{Codebook, HyperVector};
+use tle_vsa::{cosine_similarity, Codebook, HyperVector};
 
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
@@ -187,7 +187,7 @@ impl AxiomGen {
     }
 
     /// Extract entity IDs mentioned in the query that exist in the knowledge graph.
-    fn extract_query_entities(&self, query: &str) -> Vec<usize> {
+    fn extract_query_entities(&mut self, query: &str) -> Vec<usize> {
         let lower = query.to_lowercase();
         // Remove punctuation for matching
         let cleaned: String = lower
@@ -198,19 +198,53 @@ impl AxiomGen {
 
         let mut found_entities: Vec<usize> = Vec::new();
 
-        // Try to match entities in the graph
+        let normalized_query: Vec<String> = words.iter().map(|word| normalize_entity_token(word)).collect();
+
+        // Try exact and normalized matches first.
         for (name, &id) in &self.graph.entity_index {
             let entity_lower = name.to_lowercase();
             let entity_words: Vec<&str> = entity_lower.split('_').collect();
 
-            // Check if any entity word appears in the query
-            let matches = entity_words.iter().any(|ew| words.contains(ew));
+            let matches = entity_words.iter().any(|ew| {
+                words.contains(ew) || normalized_query.iter().any(|word| word == &normalize_entity_token(ew))
+            });
             if matches && !found_entities.contains(&id) {
                 found_entities.push(id);
             }
         }
 
+        // VSA fuzzy linking for multi-word entities and OOV surface forms.
+        if found_entities.is_empty() {
+            let query_vector = self.compose_entity_vector(&normalized_query);
+            let candidates: Vec<(String, usize)> = self.graph.entity_index.iter()
+                .map(|(name, &id)| (name.clone(), id))
+                .collect();
+            for (name, id) in candidates {
+                let entity_words: Vec<String> = name
+                    .to_lowercase()
+                    .split('_')
+                    .map(normalize_entity_token)
+                    .collect();
+                let overlap = entity_words.iter().any(|word| normalized_query.contains(word));
+                if !overlap {
+                    continue;
+                }
+                let entity_vector = self.compose_entity_vector(&entity_words);
+                if cosine_similarity(&query_vector, &entity_vector) >= 0.35 {
+                    found_entities.push(id);
+                }
+            }
+        }
+
         found_entities
+    }
+
+    fn compose_entity_vector(&mut self, words: &[String]) -> HyperVector {
+        let mut result = HyperVector::zeros(self.codebook.dim());
+        for word in words.iter().filter(|word| !word.is_empty()) {
+            result = result.add(&self.codebook.get_or_insert(word));
+        }
+        result.normalize()
     }
 
     /// Build a query vector by bundling vectors of all words in the query.
@@ -238,6 +272,16 @@ impl AxiomGen {
 
 // Base seed for AXIOM-Gen codebook
 const _AXIOM_GEN_SEED: u64 = 0xAA10_CAFE_BEAD_0001;
+
+fn normalize_entity_token(token: &str) -> String {
+    let token = token.trim_matches(|c: char| !c.is_alphanumeric());
+    let token = token.strip_suffix("'s").unwrap_or(token);
+    if token.len() > 3 && token.ends_with('s') {
+        token[..token.len() - 1].to_string()
+    } else {
+        token.to_string()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -279,6 +323,14 @@ mod tests {
             entities.contains(&sky_id) || entities.contains(&blue_id),
             "Should find sky or blue in query"
         );
+    }
+
+    #[test]
+    fn test_fuzzy_entity_linking_plural_form() {
+        let mut gen = AxiomGen::new(2048);
+        gen.add_fact("cat", "is", "animal");
+        let entities = gen.extract_query_entities("what are cats?");
+        assert!(entities.contains(&gen.graph.entity_id("cat").unwrap()));
     }
 
     #[test]

@@ -256,6 +256,25 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] TemplateBank wired into AXIOM-Gen linearization for single and multi-hop paths
 - [x] Verified focused suites: AFC 49, AXIOM-Gen 41, Deepman 5, Knowledge 15 tests
 
+### ✅ COMPLETED (Phase 3.2 — Recursive Composition):
+- [x] Beam search supports recursive composition up to 64 guarded hops
+- [x] Default reasoning depth increased from 4 to 10 hops
+- [x] Visited-entity cycle guard prevents repetitive graph paths
+- [x] 10-hop chain and cycle regression tests added
+- [x] `cargo test -p tle-axiom-gen`: 43 tests pass
+
+### ✅ COMPLETED (Phase 3.3 — Entity Linking):
+- [x] Query entity matching normalizes plural and possessive surface forms
+- [x] Multi-word entities use composed VSA vectors and cosine similarity
+- [x] Fuzzy entity-linking regression test added (`cats` → `cat`)
+- [x] `cargo test -p tle-axiom-gen`: 44 tests pass
+
+### ✅ COMPLETED (Phase 3.4 — Contradiction Detection):
+- [x] KnowledgeGraph detects conflicting objects for the same subject/relation
+- [x] Duplicate facts are ignored as non-conflicts
+- [x] `/stats` reports detected AXIOM-Gen contradictions
+- [x] `cargo test -p tle-axiom-gen`: 45 tests pass
+
 ### 🔲 TODO (Phase 1 — remaining):
 - [ ] **Week 2:** Auto-learn from web (MVP complete; quality gate remains)
   - [x] HTTP fetch + HTML extraction (MVP)
@@ -274,9 +293,9 @@ Goal: 100% Algebraic — zero rule-based, zero neural
 - [x] **Wire TemplateBank into AXIOM-Gen linearizer** (single and multi-hop paths)
 
 ### 🔲 TODO (Phase 3 — remaining):
-- [ ] **PTG recursive composition** (unbounded reasoning depth)
-- [ ] **VSA Entity Linking** (fuzzy cosine match, replace exact string match)
-- [ ] **Contradiction detection** (conflict alert + resolution)
+ - [x] **PTG recursive composition** (bounded safely to 64 hops)
+ - [x] **VSA Entity Linking** (fuzzy cosine match plus normalized surface forms)
+ - [x] **Contradiction detection** (conflict reporting; resolution policy remains)
 - [ ] **Wire AttractorReasoner into question answering** (use for disambiguation)
 
 ### 🔲 TODO (Phase 4 — Deploy):

@@ -551,6 +551,8 @@ fn main() {
                 st.facts_added, st.tokens_ingested, st.transitions_added);
             println!("  Compaction: {} runs, {} facts pruned, {} values merged",
                 st.compactions, st.facts_pruned, st.facts_merged);
+            println!("  AXIOM-Gen contradictions: {}",
+                axiom_gen.graph.contradictions().len());
             continue;
         }
 
