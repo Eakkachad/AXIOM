@@ -206,7 +206,7 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
             processed.insert(sentence.clone());
         }
 
-        // Bonus: top-3 overlap sentences (word match) not already processed.
+        // Bonus: top-2 overlap sentences (word match) not already processed.
         // These carry proper-noun entities that VSA might miss.
         let mut overlap_ranked: Vec<(usize, String)> = candidates.iter()
             .filter(|s| !processed.contains(*s))
