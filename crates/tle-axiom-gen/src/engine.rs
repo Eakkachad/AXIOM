@@ -432,7 +432,22 @@ impl AxiomGen {
                 let name = graph.entity_name(entity_id);
                 let lower = name.to_lowercase();
                 let ov = content_words.iter().filter(|w| lower.contains(w.as_str())).count() as f32;
-                let conn = if connected_id == Some(entity_id) { 2.5 * triple_conf } else { 0.0 };
+                // Relation-typed connectivity: strong facts (location, family,
+                // role) are more reliable answer links than weak mentions.
+                let rel_name = graph.relations.get(triple.relation_id).map(|s| s.as_str()).unwrap_or("");
+                let rel_weight = match rel_name {
+                    "located_in" | "located_at" | "capital_of" | "born_in" | "born_on"
+                    | "died_in" | "founded_in" | "took_place_in" | "occurred_in"
+                    | "part_of" | "home_to" | "lived_in" | "played_for" | "won"
+                    | "wrote" | "directed" | "painted" | "discovered" | "invented"
+                    | "founded" | "designed" | "built" | "created" | "developed"
+                    | "president_of" | "founder_of" | "leader_of" | "author_of"
+                    | "child_of" | "has_parent" | "married_to" | "known_for"
+                    | "released" | "published" => 2.0,
+                    "mentions" | "is_related_to" | "named_after" => 0.8,
+                    _ => 1.0,
+                };
+                let conn = if connected_id == Some(entity_id) { 2.5 * triple_conf * rel_weight } else { 0.0 };
                 let role = if connected_id == Some(entity_id) {
                     let rb = match intent {
                         Intent::Who => if subject_in_query { 3.0 } else { 0.0 },
