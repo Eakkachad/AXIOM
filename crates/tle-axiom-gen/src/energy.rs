@@ -271,14 +271,26 @@ pub fn encode_triple(
     let relation_name = &relations[triple.relation_id];
     let object_name = &entities[triple.object_id];
 
-    // Prefer `get` (O(1) lookup, no insertion) since add_fact already
-    // registered every symbol; fall back to insertion only if somehow missing.
+    // GF(2) fast path: all codebook vectors are bipolar → XOR on packed bits.
+    if let (Some(s_vec), Some(r_vec), Some(o_vec)) = (
+        codebook.get(subject_name),
+        codebook.get(relation_name),
+        codebook.get(object_name),
+    ) {
+        if let (Some(sp), Some(rp), Some(op)) = (&s_vec.packed, &r_vec.packed, &o_vec.packed) {
+            let shifted = HyperVector::gf2_shift(op);
+            let mut bits = vec![0u64; sp.len()];
+            for i in 0..sp.len() { bits[i] = sp[i] ^ rp[i] ^ shifted[i]; }
+            return HyperVector::from_packed(bits, s_vec.dim());
+        }
+    }
+
+    // Fallback: f32 Hadamard product for non-packed vectors.
     if let (Some(s_vec), Some(r_vec), Some(o_vec)) = (
         codebook.get(subject_name).cloned(),
         codebook.get(relation_name).cloned(),
         codebook.get(object_name).cloned(),
     ) {
-        // C(s) ⊙ C(r) ⊙ ρ(C(o))
         let o_permuted = o_vec.permute(1);
         return s_vec.hadamard(&r_vec).hadamard(&o_permuted);
     }
@@ -287,7 +299,6 @@ pub fn encode_triple(
     let r_vec = codebook.get_or_insert(relation_name).clone();
     let o_vec = codebook.get_or_insert(object_name).clone();
 
-    // C(s) ⊙ C(r) ⊙ ρ(C(o))
     let o_permuted = o_vec.permute(1);
     s_vec.hadamard(&r_vec).hadamard(&o_permuted)
 }

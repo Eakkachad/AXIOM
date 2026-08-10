@@ -80,6 +80,12 @@ impl HyperVector {
         Self { data: UnsafeCell::new(vec![0.0; dim]), packed: None, dim }
     }
 
+    /// Create a hypervector from pre-packed bits (no f32 data).
+    /// Used for GF(2) triple encoding that produces packed-only results.
+    pub fn from_packed(bits: Vec<u64>, dim: usize) -> Self {
+        Self { data: UnsafeCell::new(Vec::new()), packed: Some(bits), dim }
+    }
+
     /// Ensure f32 data is available, decompressing from packed if needed.
     /// SAFETY: must not be called concurrently with write access.
     #[inline]
@@ -222,6 +228,62 @@ impl HyperVector {
     }
 
     #[inline] pub fn inv_permute(&self, amount: i32) -> Self { self.permute(-amount) }
+
+    // ── GF(2) Binding (VaCoAl-inspired) ─────────────────────────────────
+
+    /// Rotate each u64 word left by 1 bit.  Uses primitive-polynomial
+    /// LFSR shift for non-commutative binding over GF(2).
+    #[inline]
+    pub fn gf2_shift(packed: &[u64]) -> Vec<u64> {
+        packed.iter().map(|&w| w.rotate_left(1)).collect()
+    }
+
+    /// Inverse LFSR shift (rotate right by 1).
+    #[inline]
+    fn gf2_unshift(packed: &[u64]) -> Vec<u64> {
+        packed.iter().map(|&w| w.rotate_right(1)).collect()
+    }
+
+    /// GF(2) non-commutative binding: `bind(R, F) = R ⊕ shift(F)`.
+    /// Both vectors must be packed (bipolar).  Direction is preserved
+    /// because shift is non-commutative with respect to XOR.
+    pub fn bind_gf2(&self, other: &Self) -> Self {
+        let ap = self.packed.as_ref().expect("gf2 bind requires packed");
+        let bp = other.packed.as_ref().expect("gf2 bind requires packed");
+        let shifted = Self::gf2_shift(bp);
+        let mut result = vec![0u64; ap.len()];
+        for i in 0..ap.len() { result[i] = ap[i] ^ shifted[i]; }
+        Self { data: UnsafeCell::new(Vec::new()), packed: Some(result), dim: self.dim }
+    }
+
+    /// GF(2) unbind: `unbind(R, bind(R, F)) = unshift(R ⊕ bind) = F`.
+    pub fn unbind_gf2(&self, bound: &Self) -> Self {
+        let rp = self.packed.as_ref().expect("gf2 unbind requires packed");
+        let bp = bound.packed.as_ref().expect("gf2 unbind requires packed");
+        let mut xor = vec![0u64; rp.len()];
+        for i in 0..rp.len() { xor[i] = rp[i] ^ bp[i]; }
+        Self { data: UnsafeCell::new(Vec::new()), packed: Some(Self::gf2_unshift(&xor)), dim: self.dim }
+    }
+
+    /// CR2 path-integral confidence for multi-hop reasoning.
+    /// `prod_i 1/(1 + α·tan²(φ_i))` where φ_i is the deviation at each hop.
+    /// Higher values → more reliable path.
+    pub fn cr2_confidence(path_vectors: &[&[u64]]) -> f32 {
+        if path_vectors.is_empty() { return 0.0; }
+        let n = path_vectors[0].len();
+        let mut product = 1.0f32;
+        for k in 1..path_vectors.len() {
+            let prev = path_vectors[k - 1];
+            let curr = path_vectors[k];
+            let mut matches: u32 = 0;
+            for i in 0..n { matches += (!(prev[i] ^ curr[i])).count_ones(); }
+            let total_bits = (n * 64) as f32;
+            let cos = 2.0 * matches as f32 / total_bits - 1.0;
+            let tan_sq = (1.0 - cos * cos).max(0.0) / (cos * cos).max(1e-6);
+            product *= 1.0 / (1.0 + 0.5 * tan_sq);  // α = 0.5
+        }
+        product
+    }
 }
 
 impl fmt::Debug for HyperVector {
