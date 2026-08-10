@@ -465,7 +465,13 @@ impl AxiomGen {
             let role = *raw_role.get(id).unwrap_or(&0.0);
             let ov = *raw_overlap.get(id).unwrap_or(&0.0);
             let rel = relevance_cache.get(id).copied().unwrap_or(0.0);
-            let score = conn + role + ov + rel * 2.0 + heur;
+            // Query-named penalty: entities that appear in the question are
+            // what we're asking ABOUT, not the answer.  Suppress them so
+            // connected entities (the actual answers) can surface.
+            let is_query_named = query_entities.contains(id);
+            let query_penalty = if is_query_named { 0.2 } else { 1.0 };
+            // Connectivity-first: overlap is a weak tiebreaker, not primary.
+            let score = (conn + role * 0.8 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
             ranked.push((score, name.to_string(), conn, role, ov, rel * 2.0, heur));
         }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
