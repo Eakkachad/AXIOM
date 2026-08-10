@@ -9,20 +9,20 @@
 //! `wavelength` (part of `short_wavelength`) from falsely triggering facts
 //! about `short_wavelength`.
 //!
-//! Example:
-//! - context contains `cat` and fact `(cat, is, animal)` → boost `animal`
-//! - then context contains `animal`, fact `(animal, has, heart)` → boost
-//!   `heart` → **knowledge-guided multi-hop chaining**
+//! **O(1) hash index:** facts are indexed by their first entity word for
+//! sub-linear lookup instead of O(F) linear scan.  Scales to 100K+ facts.
 
 use std::collections::HashMap;
 
 /// A fact-aware candidate scorer for the VSA-LM.
 #[derive(Debug, Clone, Default)]
 pub struct KnowledgePrior {
-    /// Full subject entity → list of (relation, object words)
+    /// Full subject entity → (relation, object words) indexed by first word.
     forward: Vec<(Vec<String>, String, Vec<String>)>,
-    /// Full object entity → list of (relation, subject words)
+    forward_index: HashMap<String, Vec<usize>>,
+    /// Full object entity → (relation, subject words) indexed by first word.
     reverse: Vec<(Vec<String>, String, Vec<String>)>,
+    reverse_index: HashMap<String, Vec<usize>>,
     /// Number of facts stored.
     pub facts: usize,
 }
@@ -34,47 +34,45 @@ impl KnowledgePrior {
 
     /// Add a fact triple. Entity names are split on spaces/underscores so
     /// `short_wavelength` becomes the words `["short", "wavelength"]` that the
-    /// word-tokenizer can actually generate. Matching, however, requires the
-    /// full word sequence of the entity to be present in the context.
+    /// word-tokenizer can actually generate.
     pub fn add_fact(&mut self, subject: &str, relation: &str, object: &str) {
         let subj_words = split_entity(subject);
         let obj_words = split_entity(object);
-        if subj_words.is_empty() || obj_words.is_empty() {
-            return;
-        }
-        self.forward
-            .push((subj_words.clone(), relation.to_string(), obj_words.clone()));
-        self.reverse
-            .push((obj_words.clone(), relation.to_string(), subj_words.clone()));
+        if subj_words.is_empty() || obj_words.is_empty() { return; }
+        let idx = self.forward.len();
+        self.forward.push((subj_words.clone(), relation.to_string(), obj_words.clone()));
+        self.forward_index.entry(subj_words[0].clone()).or_default().push(idx);
+        self.reverse.push((obj_words.clone(), relation.to_string(), subj_words.clone()));
+        self.reverse_index.entry(obj_words[0].clone()).or_default().push(idx);
         self.facts += 1;
     }
 
     /// Fact-connected candidate words for the given context words, with boost
-    /// scores. Returns `(word, score)` pairs, highest score first.
-    ///
-    /// - A context that contains a full subject entity boosts its object words.
-    /// - A context that contains a full object entity boosts its subject words
-    ///   (handles "Who ..." / subject-answer questions).
-    /// - A candidate word already present in the context is NOT re-boosted.
+    /// scores. Uses first-word hash index for O(context_words × facts_per_word)
+    /// lookup instead of O(F) linear scan.
     pub fn candidates(&self, context: &[String]) -> Vec<(String, f32)> {
         let mut scores: HashMap<String, f32> = HashMap::new();
-        for (subj_words, _, obj_words) in &self.forward {
-            if !contains_all(context, subj_words) {
-                continue;
-            }
-            for obj in obj_words {
-                if !context.contains(obj) {
-                    *scores.entry(obj.clone()).or_insert(0.0) += 2.0;
+        for ctx_word in context {
+            if let Some(idxs) = self.forward_index.get(ctx_word) {
+                for &idx in idxs {
+                    let (subj_words, _, obj_words) = &self.forward[idx];
+                    if !contains_all(context, subj_words) { continue; }
+                    for obj in obj_words {
+                        if !context.contains(obj) {
+                            *scores.entry(obj.clone()).or_insert(0.0) += 2.0;
+                        }
+                    }
                 }
             }
-        }
-        for (obj_words, _, subj_words) in &self.reverse {
-            if !contains_all(context, obj_words) {
-                continue;
-            }
-            for subj in subj_words {
-                if !context.contains(subj) {
-                    *scores.entry(subj.clone()).or_insert(0.0) += 1.5;
+            if let Some(idxs) = self.reverse_index.get(ctx_word) {
+                for &idx in idxs {
+                    let (obj_words, _, subj_words) = &self.reverse[idx];
+                    if !contains_all(context, obj_words) { continue; }
+                    for subj in subj_words {
+                        if !context.contains(subj) {
+                            *scores.entry(subj.clone()).or_insert(0.0) += 1.5;
+                        }
+                    }
                 }
             }
         }
@@ -96,10 +94,7 @@ impl KnowledgePrior {
 
 /// Does the context contain every word of the entity, consecutively?
 fn contains_all(context: &[String], entity_words: &[String]) -> bool {
-    if entity_words.is_empty() || entity_words.len() > context.len() {
-        return false;
-    }
-    // Consecutive subsequence match.
+    if entity_words.is_empty() || entity_words.len() > context.len() { return false; }
     context.windows(entity_words.len()).any(|win| win == entity_words)
 }
 
@@ -120,15 +115,10 @@ mod tests {
         let mut kp = KnowledgePrior::new();
         kp.add_fact("sky", "is", "blue");
         kp.add_fact("blue", "has", "short_wavelength");
-
         let ctx = vec!["sky".to_string(), "is".to_string()];
         assert!(kp.score(&ctx, "blue") > 0.0);
-
-        // Full entity "short wavelength" must be present to trigger the
-        // short_wavelength fact — "blue" alone already fired blue's fact.
         let ctx2 = vec!["blue".to_string()];
         assert!(kp.score(&ctx2, "wavelength") > 0.0);
-
         let ctx3 = vec!["blue".to_string(), "has".to_string(), "short".to_string()];
         assert!(kp.score(&ctx3, "wavelength") > 0.0);
     }
@@ -137,11 +127,9 @@ mod tests {
     fn test_partial_word_does_not_trigger_fact() {
         let mut kp = KnowledgePrior::new();
         kp.add_fact("short_wavelength", "scatters", "in_atmosphere");
-        // Only "wavelength" present — NOT the full "short wavelength" entity.
         let ctx = vec!["wavelength".to_string()];
-        assert_eq!(kp.score(&ctx, "in"), 0.0, "partial entity must not fire the fact");
+        assert_eq!(kp.score(&ctx, "in"), 0.0);
         assert_eq!(kp.score(&ctx, "atmosphere"), 0.0);
-        // Full entity present → fires.
         let ctx2 = vec!["short".to_string(), "wavelength".to_string()];
         assert!(kp.score(&ctx2, "in") > 0.0);
     }
