@@ -234,12 +234,12 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
             })
             .collect();
         overlap_ranked.sort_by(|a, b| b.0.cmp(&a.0));
-        for (_, sentence) in overlap_ranked.iter().take(4) {
+        for (idx, (_, sentence)) in overlap_ranked.iter().take(6).enumerate() {
             for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
             }
-            if count_nonfront_capitals(sentence) >= 2 {
+            if idx < 4 && count_nonfront_capitals(sentence) >= 2 {
                 for fact in extract_sentence_entities(sentence, &subject) {
                     let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                     if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
