@@ -170,28 +170,32 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
         let subject = filename.trim_end_matches(".txt").replace('_', " ");
         let clean = clean_wikipedia_text(&text);
 
-        // Rank cleaned sentences by question-word overlap and decompose the
-        // top ones into structured triples so entities inside the sentence
-        // become graph nodes the beam search can traverse.
-        let mut sentences: Vec<(usize, String)> = clean
+        // Rank cleaned sentences by a hybrid score: question-word overlap +
+        // capitalization density, so proper-noun-rich sentences (likely to
+        // contain the answer entity) are lifted into the top-N window.
+        let mut ranked: Vec<(usize, String, usize)> = clean
             .split(|character| matches!(character, '.' | '!' | '?'))
             .take(300)
             .map(|sentence| sentence.split_whitespace().collect::<Vec<_>>().join(" "))
             .filter(|sentence| is_likely_sentence(sentence))
-            .map(|sentence| (question_overlap(question, &sentence), sentence))
+            .map(|sentence| {
+                let overlap = question_overlap(question, &sentence);
+                let caps = count_nonfront_capitals(&sentence);
+                (overlap + (caps >= 2) as usize, sentence, caps)
+            })
             .collect();
-        sentences.sort_by(|left, right| right.0.cmp(&left.0));
+        ranked.sort_by(|left, right| right.0.cmp(&left.0));
 
         let mut seen = std::collections::HashSet::new();
-        for (idx, (_, sentence)) in sentences.into_iter().take(5).enumerate() {
-            for fact in decompose_sentence(&sentence, &subject) {
+        for (idx, (_, sentence, _caps)) in ranked.iter().enumerate().take(5) {
+            for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
                     facts.push([fact.subject, fact.relation, fact.object]);
                 }
             }
-            if idx < 3 {
-                for fact in extract_sentence_entities(&sentence, &subject) {
+            if idx < 4 && count_nonfront_capitals(sentence) >= 2 {
+                for fact in extract_sentence_entities(sentence, &subject) {
                     let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                     if seen.insert(key.clone()) {
                         facts.push([fact.subject, fact.relation, fact.object]);
@@ -267,6 +271,13 @@ fn question_overlap(question: &str, sentence: &str) -> usize {
         .collect();
     let lower_sentence = sentence.to_lowercase();
     question_words.iter().filter(|word| lower_sentence.contains(word.as_str())).count()
+}
+
+fn count_nonfront_capitals(sentence: &str) -> usize {
+    sentence.split_whitespace()
+        .enumerate()
+        .filter(|(i, w)| *i > 0 && w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
+        .count()
 }
 
 fn read_evidence_text(directory: &str, files: &[String]) -> String {

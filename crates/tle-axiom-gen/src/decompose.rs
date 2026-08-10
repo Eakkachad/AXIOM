@@ -526,7 +526,7 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         // answers are often capitalized phrases buried inside long objects.
         // NOTE: extract_proper_nouns is expensive on long objects (O(n·m) with
         // many clauses); applied only when the object is short enough.
-        if object.split_whitespace().count() <= 20 {
+        if object.split_whitespace().count() <= 40 {
             for phrase in extract_proper_nouns(&object) {
                 if !facts.iter().any(|f| f.subject == subject && f.object == phrase) {
                     let f = DecomposedFact {
