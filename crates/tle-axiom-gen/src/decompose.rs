@@ -401,23 +401,21 @@ pub fn rank_answer_candidates(query: &str, candidates: &[String]) -> Vec<AnswerC
 /// Truncate a long object at clause boundaries so we keep the short, entity-like
 /// head of the object rather than the whole trailing clause.
 ///
-/// "the Eiffel Tower, which was built in 1889" → "the Eiffel Tower"
-/// "a Swiss professional tennis player who won ..." → "a Swiss professional tennis player"
+/// "the Eiffel Tower, which was built in 1889" → ("the Eiffel Tower", "which was built in 1889")
+/// "a Swiss professional tennis player who won ..." → ("a Swiss professional tennis player", "who won ...")
 ///
-/// We ONLY cut at strong clause boundaries (commas, relative pronouns,
-/// coordinators) — NOT at prepositions like " in ", " of ", " with " which are
-/// part of real entity names ("United States of America", "Mount McKinley").
-fn truncate_object(object: &str) -> String {
+/// Returns (head, tail) — the tail often contains additional entities.
+fn truncate_object(object: &str) -> (String, Option<String>) {
     for marker in [", ", " who ", " which ", " that ", " where ", " and ", " but ", " such ", " including "] {
         if let Some(position) = object.find(marker) {
-            let head = &object[..position];
-            let trimmed = head.trim();
-            if !trimmed.is_empty() {
-                return normalize(trimmed);
+            let head = object[..position].trim();
+            let tail = object[position..].trim();
+            if !head.is_empty() {
+                return (normalize(head), Some(tail.to_string()));
             }
         }
     }
-    normalize(object)
+    (normalize(object), None)
 }
 
 /// Is the subject a plausible entity (not a long lowercase descriptive phrase)?
@@ -495,7 +493,7 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         }
 
         // Truncate the object to its entity-like head span.
-        let object = truncate_object(&object);
+        let (object, tail) = truncate_object(&object);
         if object.is_empty() {
             continue;
         }
