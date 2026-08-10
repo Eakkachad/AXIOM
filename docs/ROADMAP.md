@@ -29,23 +29,31 @@
 Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 
 ### T1.1 Adaptive sentence coverage
-- [ ] Status: pending · Priority: P0 · Effort: 1 day · Depends: none
+- [x] Status: done (dead-end) · Priority: P0 · Effort: 1 day · Depends: none
 - **Goal:** recall +3-5pt. Replace fixed top-5/6 sentence selection with
-  relative threshold: keep sentences whose VSA score > mean + 0.5σ of the
-  evidence file (no fixed count cap).
+  relative threshold: keep sentences whose VSA score > mean + σ.
 - **File:** `crates/tle-axiom-gen/src/bin/triviaqa-bench.rs` (`extract_document_facts`)
 - **Verify:** full bench, recall should rise, watch latency
-- **Status:** — | **Result:** —
+- **Status:** REVERTED — VSA score signal is too weak (cos≈0.01) for a
+  meaningful threshold. Both configs regressed candidate:
+  - 0.5σ cap 8: candidate 16.67% (-2.2), recall 73.58% (+2.5), lat 124ms
+  - 1.0σ cap 6: candidate 18.24% (-0.6), recall 70.75% (-0.3), lat 103ms
+  - Fixed top-5 (baseline) stays optimal: 18.87% / 71.07% / 213ms.
+  - **Lesson:** VSA cosine can't discriminate sentences well. Adaptive
+    coverage needs a stronger signal (T3.1 semantic codebook), not count math.
 
 ### T1.2 Lowercase noun-phrase extraction
-- [ ] Status: pending · Priority: P0 · Effort: 1 day · Depends: none
+- [x] Status: done · Priority: P0 · Effort: 1 day · Depends: none
 - **Goal:** recall +2-3pt. Extract 2-4 word lowercase phrases after
   prepositions ("collapsible support assembly") using the existing
   mentions gate to filter noise. Previous attempt failed (too noisy) —
   this time reuse `mentions`/`is_related_to` all-caps gate.
 - **File:** `crates/tle-axiom-gen/src/decompose.rs`
 - **Verify:** full bench, recall up, candidate NOT down
-- **Status:** — | **Result:** —
+- **Status:** KEPT — 3+ word all-lowercase phrases pass, 1-2 word rejected.
+  candidate 18.55-18.87% (no regression), recall 71.38% (+0.3pt),
+  latency 103ms (2× faster, likely fewer junk facts in graph).
+  **Result:** recall +0.3pt, latency -110ms
 
 ### T1.3 Entity consolidation 2.0
 - [ ] Status: pending · Priority: P0 · Effort: 1 day · Depends: none

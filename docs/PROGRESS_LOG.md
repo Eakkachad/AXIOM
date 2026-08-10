@@ -5,10 +5,37 @@
 
 ---
 
+## 2026-08-10 — v14 (continuous-dev system bootstrap + T1.1/T1.2)
+
+**Commits:** `a66c92f`, `22a800e`
+
+### What changed
+- **System**: created continuous-dev system — ROADMAP.md (task board),
+  PROGRESS_LOG.md (journal), AGENT_WORKFLOW.md (operating procedure).
+  Baseline locked: candidate 18.87%, recall 71.07%, latency 213ms.
+- **T1.1 Adaptive sentence coverage** — REVERTED (dead-end). VSA score signal
+  too weak (cos≈0.01) for meaningful threshold. Both configs regressed
+  candidate (16.67%, 18.24%). Fixed top-5 stays optimal.
+- **T1.2 Lowercase noun-phrase extraction** — KEPT. extract_lowercase_noun_phrases
+  (3+ word all-lowercase from tail) + is_fact_worthy lowercase fallback.
+
+### Measured results (full 318 bench)
+| Metric | v13 baseline | v14 after T1.2 |
+|--------|:---:|:---:|
+| candidate_answer_accuracy | 18.87% | 18.55-18.87% |
+| answer_entity_recall | 71.07% | **71.38%** (+0.3) |
+| avg_latency | 213ms | **103ms** (2×) |
+
+### Key findings
+- VSA cosine can't discriminate sentences (T1.1 lesson) — adaptive coverage
+  needs semantic codebook (T3.1), not threshold math.
+- Tight lowercase gate (3+ words) extracts answers without v10's noise.
+
+---
+
 ## 2026-08-10 — v13 (continuous-dev system bootstrap)
 
-**Commits:** `3ea9368`, `7d7e2b9`, `860f320`, `ff9f96e`, `9f78d56`, `d3d04af`,
-`feb4a96`, `97542fb`, `6112bdc`, `2d4e44c`
+**Commits:** `a66c92f`
 
 ### What changed
 - **v11**: Diagnostic mode (`AXIOM_TRIVIA_DEBUG` prints top-5 entity score
