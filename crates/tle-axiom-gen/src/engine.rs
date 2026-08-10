@@ -24,6 +24,7 @@ use tle_vsa::{cosine_similarity, Codebook, HyperVector};
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
 use crate::linearize::{classify_intent, linearize_with_templates, Intent};
+use crate::semantic::SemanticLayer;
 use crate::templates::TemplateBank;
 use crate::search::{beam_search, ScoredPath, SearchConfig};
 
@@ -60,6 +61,8 @@ pub struct AxiomGen {
     /// Template bank for varied linearization.
     pub template_bank: TemplateBank,
     pub contradiction_policy: ContradictionPolicy,
+    /// Co-occurrence semantic layer (T3.1) — enriches VSA relevance.
+    pub semantic: SemanticLayer,
 }
 
 impl AxiomGen {
@@ -72,6 +75,7 @@ impl AxiomGen {
             search_config: SearchConfig::default(),
             template_bank: TemplateBank::new(),
             contradiction_policy: ContradictionPolicy::ReportOnly,
+            semantic: SemanticLayer::new(),
         }
     }
 
@@ -88,6 +92,7 @@ impl AxiomGen {
             search_config,
             template_bank: TemplateBank::new(),
             contradiction_policy: ContradictionPolicy::ReportOnly,
+            semantic: SemanticLayer::new(),
         }
     }
 
@@ -638,13 +643,16 @@ impl AxiomGen {
             .split(|c: char| c == ' ' || c == '_' || c == '-')
             .filter(|w| !w.is_empty())
             .collect();
-        let mut result = HyperVector::zeros(self.codebook.dim());
+        let dim = self.codebook.dim();
+        let mut result = HyperVector::zeros(dim);
         let mut found = 0usize;
         for word in words.iter() {
-            if let Some(vec) = self.codebook.get(word) {
-                // Bundle word vectors without permutation so that words shared
-                // between query and entity contribute positive cosine signal,
-                // matching how build_query_vector bundles query words.
+            // Prefer the co-occurrence semantic vector when available —
+            // gives "capital" ≈ "Paris" signal that random codebook lacks.
+            if let Some(svec) = self.semantic.vector(word) {
+                result = result.add(svec);
+                found += 1;
+            } else if let Some(vec) = self.codebook.get(word) {
                 result = result.add(vec);
                 found += 1;
             }

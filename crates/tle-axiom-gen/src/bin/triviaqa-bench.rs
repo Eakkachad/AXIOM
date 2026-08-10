@@ -51,8 +51,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let limit = env::var("AXIOM_TRIVIA_LIMIT").ok().and_then(|value| value.parse().ok());
     let debug = env::var("AXIOM_TRIVIA_DEBUG").ok().map(|_| ());
+
+    // T3.1: build a shared co-occurrence semantic layer once from all
+    // evidence, so semantic vectors give "capital" ≈ "Paris" signal.
+    let semantic_layer = evidence_dir.as_deref().map(|directory| {
+        let mut layer = tle_axiom_gen::semantic::SemanticLayer::new();
+        let corpus = build_semantic_corpus(directory, &records, limit);
+        layer.ingest_text(&corpus);
+        let mut cb = tle_vsa::Codebook::new(2048, 0xA10A_CAFE_BEAD_0001);
+        layer.build(&mut cb);
+        layer
+    });
+
     for record in records.into_iter().take(limit.unwrap_or(usize::MAX)) {
         let mut engine = new_qa_engine();
+        if let Some(ref layer) = semantic_layer {
+            engine.semantic = layer.clone();
+        }
         let evidence_facts = evidence.get(&record.id).cloned().unwrap_or_default();
         let document_facts = evidence_dir.as_deref()
             .map(|directory| extract_document_facts(directory, &record.evidence_files, &record.question))
@@ -136,6 +151,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  evidence_answer_recall: {:.2}%", percentage(evidence_hits, total));
     println!("  avg_latency: {:?}", if total == 0 { Duration::ZERO } else { total_latency / total as u32 });
     Ok(())
+}
+
+/// Build a shared co-occurrence corpus from the evidence of all records
+/// that will be processed.  Used to train the semantic layer (T3.1).
+fn build_semantic_corpus(directory: &str, records: &[Record], limit: Option<usize>) -> String {
+    let mut corpus = String::new();
+    let mut seen = std::collections::HashSet::new();
+    let max_files = 200; // cap corpus size for reasonable build time
+    for record in records.iter().take(limit.unwrap_or(usize::MAX)) {
+        for filename in &record.evidence_files {
+            if seen.len() >= max_files { return corpus; }
+            if !seen.insert(filename.clone()) { continue; }
+            let path = std::path::Path::new(directory).join(filename);
+            if let Ok(file) = File::open(&path) {
+                let mut text = String::new();
+                if file.take(256 * 1024).read_to_string(&mut text).is_ok() {
+                    corpus.push_str(&clean_wikipedia_text(&text));
+                    corpus.push(' ');
+                }
+            }
+        }
+    }
+    corpus
 }
 
 /// Build an AXIOM-Gen engine tuned for QA: answers are usually 1-3 hops, so a

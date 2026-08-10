@@ -18,6 +18,7 @@ pub mod engine;
 pub mod graph;
 pub mod linearize;
 pub mod search;
+pub mod semantic;
 pub mod templates;
 
 pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy};
