@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for fact in record.facts.iter().chain(evidence_facts.iter()).chain(document_facts.iter()) {
             engine.add_fact(&fact[0], &fact[1], &fact[2]);
         }
+        engine.graph.consolidate_comma_entities();
         let start = Instant::now();
         let result = engine.generate(&record.question);
         total_latency += start.elapsed();

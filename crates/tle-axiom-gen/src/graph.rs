@@ -135,6 +135,34 @@ impl KnowledgeGraph {
             .collect()
     }
 
+    /// Merge comma-suffixed entity variants into their clean pre-comma head.
+    /// "Chicago, Illinois, 17 mi" → redirect triples to "Chicago".
+    pub fn consolidate_comma_entities(&mut self) {
+        let n = self.entities.len();
+        let mut merge_target: Vec<Option<usize>> = vec![None; n];
+        for i in 0..n {
+            if let Some(comma_pos) = self.entities[i].find(',') {
+                let head = self.entities[i][..comma_pos].trim().to_string();
+                if let Some(&target) = self.entity_index.get(&head) {
+                    if target != i { merge_target[i] = Some(target); }
+                }
+            }
+        }
+        if merge_target.iter().filter(|m| m.is_some()).count() == 0 { return; }
+        for t in &mut self.triples {
+            if let Some(dst) = merge_target[t.subject_id] { t.subject_id = dst; }
+            if let Some(dst) = merge_target[t.object_id] { t.object_id = dst; }
+        }
+        self.adjacency = vec![Vec::new(); self.entities.len()];
+        for (idx, t) in self.triples.iter().enumerate() {
+            if t.subject_id < self.entities.len() { self.adjacency[t.subject_id].push(idx); }
+            if t.object_id < self.entities.len() { self.adjacency[t.object_id].push(idx); }
+        }
+        for i in 0..n {
+            if merge_target[i].is_some() { self.entity_index.remove(&self.entities[i]); }
+        }
+    }
+
     /// Get all triples where the given entity is the object.
     pub fn get_triples_to(&self, entity_id: usize) -> Vec<&Triple> {
         self.triples

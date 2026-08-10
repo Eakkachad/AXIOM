@@ -513,6 +513,21 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
             let head = subject[..pos].trim();
             if !head.is_empty() { subject = head.to_string(); }
         }
+        // For long subjects (5+ words), also cut at prepositions.
+        // "the capital of France, Paris" trimmed at comma → "the capital of France"
+        // then trimmed at " of " → "the capital" (exclude "of" for entity names).
+        let subj_words: Vec<&str> = subject.split_whitespace().collect();
+        if subj_words.len() >= 5 {
+            for marker in [" in ", " on ", " at ", " for ", " from ", " by ", " to "] {
+                if let Some(pos) = subject.find(marker) {
+                    let head = subject[..pos].trim();
+                    if head.split_whitespace().count() >= 2 {
+                        subject = head.to_string();
+                        break;
+                    }
+                }
+            }
+        }
 
         // Reject garbage derived subjects: date-prefixed ("2013, Hingis"), or
         // long lowercase descriptive phrases that are not real entities.
