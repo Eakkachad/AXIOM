@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tle_axiom_gen::decompose::{decompose_sentence, extract_sentence_entities};
 use tle_axiom_gen::AxiomGen;
+use tle_vsa::Codebook;
 
 #[derive(Debug, Deserialize)]
 struct Record {
@@ -162,6 +163,9 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
 
 fn extract_document_facts(directory: &str, files: &[String], question: &str) -> Vec<[String; 3]> {
     let mut facts = Vec::new();
+    // Codebook shared with AxiomGen: same seed = deterministic vectors.
+    let mut codebook = Codebook::new(2048, 0xA10A_CAFE_BEAD_0001);
+    let query_vector = compose_text_vector(question, &mut codebook);
     for filename in files {
         let path = std::path::Path::new(directory).join(filename);
         let Ok(file) = File::open(path) else { continue; };
@@ -170,24 +174,22 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
         let subject = filename.trim_end_matches(".txt").replace('_', " ");
         let clean = clean_wikipedia_text(&text);
 
-        // Rank cleaned sentences by a hybrid score: question-word overlap +
-        // capitalization density, so proper-noun-rich sentences (likely to
-        // contain the answer entity) are lifted into the top-N window.
-        let mut ranked: Vec<(usize, String, usize)> = clean
+        let mut sentences: Vec<(f32, String)> = clean
             .split(|character| matches!(character, '.' | '!' | '?'))
             .take(300)
-            .map(|sentence| sentence.split_whitespace().collect::<Vec<_>>().join(" "))
-            .filter(|sentence| is_likely_sentence(sentence))
-            .map(|sentence| {
-                let overlap = question_overlap(question, &sentence);
-                let caps = count_nonfront_capitals(&sentence);
-                (overlap + (caps >= 2) as usize, sentence, caps)
+            .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|s| is_likely_sentence(s))
+            .map(|s| {
+                let sim = tle_vsa::cosine_similarity(&query_vector, &compose_text_vector(&s, &mut codebook));
+                let caps = count_nonfront_capitals(&s);
+                let cap_bonus = if caps >= 2 { 0.04 } else { 0.0 };
+                (sim + cap_bonus, s)
             })
             .collect();
-        ranked.sort_by(|left, right| right.0.cmp(&left.0));
+        sentences.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut seen = std::collections::HashSet::new();
-        for (idx, (_, sentence, _caps)) in ranked.iter().enumerate().take(5) {
+        for (idx, (_, sentence)) in sentences.iter().enumerate().take(5) {
             for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
@@ -264,20 +266,22 @@ fn is_likely_sentence(sentence: &str) -> bool {
         && !sentence.starts_with(';')
 }
 
-fn question_overlap(question: &str, sentence: &str) -> usize {
-    let question_words: Vec<String> = question.to_lowercase().split_whitespace()
-        .map(|word| word.trim_matches(|character: char| !character.is_alphanumeric()).to_string())
-        .filter(|word| word.len() >= 4 && !matches!(word.as_str(), "what" | "which" | "where" | "when" | "does" | "have"))
-        .collect();
-    let lower_sentence = sentence.to_lowercase();
-    question_words.iter().filter(|word| lower_sentence.contains(word.as_str())).count()
-}
-
 fn count_nonfront_capitals(sentence: &str) -> usize {
     sentence.split_whitespace()
         .enumerate()
         .filter(|(i, w)| *i > 0 && w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
         .count()
+}
+
+fn compose_text_vector(text: &str, codebook: &mut Codebook) -> tle_vsa::HyperVector {
+    let dim = codebook.dim();
+    let mut result = tle_vsa::HyperVector::zeros(dim);
+    for word in text.split_whitespace() {
+        let cleaned = word.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+        if cleaned.len() < 2 { continue; }
+        result = result.add(&codebook.get_or_insert(&cleaned));
+    }
+    result.normalize()
 }
 
 fn read_evidence_text(directory: &str, files: &[String]) -> String {

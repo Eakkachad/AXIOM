@@ -221,8 +221,6 @@ impl AxiomGen {
             &self.template_bank,
         );
 
-        // Extract the best single-entity answer: the legacy triple-scan
-        // currently outperforms sense reconstruction on noisy graphs.
         let answer = self.extract_answer(&self.graph, &query_entities, intent, &query_vector, query);
 
         GenerationResult {
@@ -276,10 +274,16 @@ impl AxiomGen {
                 if subj_q {
                     *scores.entry(triple.object_id).or_insert(0.0) += path.energy * conf * 1.5 * path_rank;
                     *scores.entry(triple.subject_id).or_insert(0.0) += path.energy * conf * 0.3 * path_rank;
+                    if matches!(intent, Intent::Who) {
+                        *scores.entry(triple.object_id).or_insert(0.0) += 3.0 * conf * path_rank;
+                    }
                 }
                 if obj_q {
                     *scores.entry(triple.subject_id).or_insert(0.0) += path.energy * conf * 1.5 * path_rank;
                     *scores.entry(triple.object_id).or_insert(0.0) += path.energy * conf * 0.3 * path_rank;
+                    if matches!(intent, Intent::What | Intent::Where) {
+                        *scores.entry(triple.subject_id).or_insert(0.0) += 3.0 * conf * path_rank;
+                    }
                 }
                 if !subj_q && !obj_q {
                     // Mid-path entity: lower boost, proportional to depth.
@@ -308,7 +312,8 @@ impl AxiomGen {
                 let len_penalty = match words { 0|1 => 0.0, 2 => 0.4, 3 => 1.2, 4 => 2.0, _ => 3.0 };
                 let first = lower.split_whitespace().next().unwrap_or("");
                 let det_penalty = if matches!(first, "a"|"an"|"the"|"his"|"her"|"its") { -1.5 } else { 0.0 };
-                Some((score + overlap as f32 + cap_bonus - len_penalty + det_penalty, name.to_string()))
+                let relevance = tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(name));
+                Some((score + overlap as f32 + cap_bonus - len_penalty + det_penalty + relevance * 2.0, name.to_string()))
             })
             .collect();
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
