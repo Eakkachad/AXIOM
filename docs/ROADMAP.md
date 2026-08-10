@@ -126,11 +126,15 @@ Goal: usable conversational knowledge system
 Gate: only start when candidate >30%
 
 ### T3.1 Semantic codebook (co-occurrence layer)
-- [ ] Status: blocked · Priority: P2 · Effort: 2-3 days · Depends: T2.3 (large corpus)
+- [x] Status: done (infra) · Priority: P2 · Effort: 2-3 days · Depends: T2.3 (large corpus)
 - **Goal:** Secondary VSA layer from corpus co-occurrence so `C(France)`
   ≈ `C(Paris)`. Do NOT replace random codebook (breaks determinism) — add a
   distributional layer on top. Corpus must be large (100+ pages) to be useful.
-- **Status:** — | **Result:** —
+- **Status:** SemanticLayer built (semantic.rs), wired into AxiomGen.
+  Test cos(paris, france)>0 ✓. No metric change on TriviaQA (200-file corpus
+  too small) — needs large Wikipedia corpus via vsalm-wiki batch. Weight in
+  extract_answer VSA relevance can be raised once corpus is large.
+  **Result:** infrastructure only; needs T3.1b (large corpus test)
 
 ### T3.2 Full VaCoAl rescue circuit + CR2 verification
 - [ ] Status: blocked · Priority: P2 · Effort: 3-5 days · Depends: candidate >30%

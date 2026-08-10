@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-08-10 — v14 (T3.1 semantic layer)
+
+**Commits:** `726be9b`
+
+### What changed
+- **SemanticLayer** (semantic.rs): window co-occurrence → distributional
+  semantic vectors. cos(paris, france) > 0 verified (was ~0 with random
+  codebook).
+- Wired into AxiomGen semantic_vector() + bench shared corpus.
+
+### Measured results
+- No metric change on TriviaQA (candidate 19.50-19.81%, within noise).
+- Root cause: 200-file TriviaQA corpus too small for cross-record
+  co-occurrence. Needs large Wikipedia corpus (vsalm-wiki batch).
+
+---
+
 ## 2026-08-10 — v14 (2-hop connectivity + workspace cleanup)
 
 **Commits:** `e5e69e4`
