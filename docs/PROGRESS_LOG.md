@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-08-10 — v14 (T3.1b semantic scoring attempt — reverted)
+
+**Commits:** `81271f8`
+
+### What changed
+- Semantic layer verified: cos(capital,paris)=0.56 vs cos(capital,macron)=0.27
+  on 4-page Wikipedia corpus. Proof the co-occurrence concept works.
+- Wired into extract_answer scoring → candidate HURT. Root cause: query
+  vector bundles ALL words incl stopwords → semantic noise from co-occurring
+  words inflated vsa for wrong entities.
+- Freq-bonus log-scale experiment also regressed (17.30%).
+- Reverted all scoring changes; baseline restored 19.81%.
+
+### Key findings
+- Co-occurrence semantic layer is real but needs 3 fixes before scoring:
+  1. Larger corpus (100+ pages), 2. content-word-only query vector,
+  3. calibrated vsa weight. Rushing it was premature.
+
+---
+
 ## 2026-08-10 — v14 (T3.1 semantic layer)
 
 **Commits:** `726be9b`
