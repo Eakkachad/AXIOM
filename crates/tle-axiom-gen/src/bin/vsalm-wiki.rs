@@ -40,6 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     engine.search_config.max_hops = 3;
     engine.search_config.beam_width = 16;
     let mut total_facts = 0usize;
+    // T3.1b: accumulate corpus text to build the co-occurrence semantic layer.
+    let mut corpus_text = String::new();
 
     // Load persisted facts first, if requested.
     if let Some(path) = &load_path {
@@ -62,6 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (title, text) = extract_wikipedia_text(&html);
         let subject = title.trim_end_matches(" - Wikipedia").to_string().replace(' ', "_");
         println!("{} ({:.1} KB, {:.2?})", title, text.len() / 1024, t0.elapsed());
+        corpus_text.push_str(&text);
+        corpus_text.push(' ');
 
         // Decompose into facts using the advanced clause-based engine.
         let sentences: Vec<String> = text
@@ -105,6 +109,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     print!("Building TBA cache... "); io::stdout().flush()?;
     let t0 = Instant::now(); lm.build_tba_cache();
     println!("done ({:.2?})", t0.elapsed());
+
+    // T3.1b: build the co-occurrence semantic layer from the ingested corpus
+    // so extract_answer gets 'capital' ≈ 'Paris' VSA signal.
+    print!("Building semantic layer from {} KB corpus... ", corpus_text.len() / 1024);
+    io::stdout().flush()?;
+    let t0 = Instant::now();
+    engine.semantic.ingest_text(&corpus_text);
+    engine.semantic.build(&mut engine.codebook);
+    println!("done ({:.2?}, {} semantic words)", t0.elapsed(), engine.semantic.len());
     println!("Ready. Ask a question (Ctrl-D to quit):\n");
 
     let stdin = BufReader::new(io::stdin());

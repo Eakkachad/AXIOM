@@ -540,9 +540,12 @@ impl AxiomGen {
             // connected entities (the actual answers) can surface.
             let is_query_named = query_entities.contains(&id);
             let query_penalty = if is_query_named { 0.2 } else { 1.0 };
+            // VSA relevance weight: keep modest — semantic layer noise can
+            // otherwise overwhelm correct connectivity signals.
+            let rel_weight = 2.0;
             // Connectivity-first: overlap is a weak tiebreaker, not primary.
-            let score = (conn_avg + role_avg * 0.8 + hop2_avg * 0.5 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
-            ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * 2.0, heur));
+            let score = (conn_avg + role_avg * 0.8 + hop2_avg * 0.5 + ov * 0.15 + rel * rel_weight + heur) * query_penalty;
+            ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
         }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
@@ -643,16 +646,13 @@ impl AxiomGen {
             .split(|c: char| c == ' ' || c == '_' || c == '-')
             .filter(|w| !w.is_empty())
             .collect();
-        let dim = self.codebook.dim();
-        let mut result = HyperVector::zeros(dim);
+        let mut result = HyperVector::zeros(self.codebook.dim());
         let mut found = 0usize;
         for word in words.iter() {
-            // Prefer the co-occurrence semantic vector when available —
-            // gives "capital" ≈ "Paris" signal that random codebook lacks.
-            if let Some(svec) = self.semantic.vector(word) {
-                result = result.add(svec);
-                found += 1;
-            } else if let Some(vec) = self.codebook.get(word) {
+            if let Some(vec) = self.codebook.get(word) {
+                // Bundle word vectors without permutation so that words shared
+                // between query and entity contribute positive cosine signal,
+                // matching how build_query_vector bundles query words.
                 result = result.add(vec);
                 found += 1;
             }

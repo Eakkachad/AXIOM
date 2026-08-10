@@ -141,4 +141,26 @@ mod tests {
         layer.ingest_text("the cat sat on the mat the dog ran");
         assert!(layer.cooccur_pairs() > 0);
     }
+
+    #[test]
+    fn capital_similar_to_paris_in_corpus() {
+        let mut cb = Codebook::new(2048, 0xA10A_CAFE_BEAD_0001);
+        let mut layer = SemanticLayer::new();
+        // Build a corpus where "capital" and "Paris" co-occur but "capital"
+        // does not co-occur with random words.
+        let corpus = "Paris is the capital of France. The capital city of France is Paris. France capital Paris.";
+        layer.ingest_text(corpus);
+        layer.build(&mut cb);
+        let capital = layer.vector("capital").expect("capital");
+        let paris = layer.vector("paris").expect("paris");
+        let macron = layer.vector("macron");
+        let cos_paris = tle_vsa::cosine_similarity(capital, paris);
+        let cos_macron = macron.map(|m| tle_vsa::cosine_similarity(capital, m)).unwrap_or(-1.0);
+        assert!(cos_paris > 0.0, "capital≈paris should be >0, got {}", cos_paris);
+        assert!(
+            cos_paris > cos_macron + 0.01,
+            "capital should be closer to paris ({}) than macron ({})",
+            cos_paris, cos_macron
+        );
+    }
 }
