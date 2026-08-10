@@ -51,6 +51,10 @@ fn main() {
         lm.learn(s);
     }
     println!("  {} words in {:.2?}", lm.vocab.len(), t0.elapsed());
+    print!("  Building TBA TopK cache... ");
+    let t0 = Instant::now();
+    lm.build_tba_cache();
+    println!("done in {:.2?}", t0.elapsed());
 
     println!("\nStep 2: Next-token accuracy (sampled)");
     let t0 = Instant::now();
