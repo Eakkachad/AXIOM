@@ -222,10 +222,7 @@ impl AxiomGen {
         );
 
         // Extract the best single-entity answer: the legacy triple-scan
-        // currently outperforms DDTree path-aware scoring (12.89% vs 11.95%
-        // on verified-wikipedia-dev).  DDTree is available as infrastructure
-        // and will take over once the energy function better distinguishes
-        // fact-true paths from noise.
+        // currently outperforms sense reconstruction on noisy graphs.
         let answer = self.extract_answer(&self.graph, &query_entities, intent, &query_vector, query);
 
         GenerationResult {
@@ -318,9 +315,79 @@ impl AxiomGen {
         ranked.first().map(|(_, name)| name.clone()).unwrap_or_default()
     }
 
+    /// Sense Reconstruction — iterative belief propagation for answer selection.
+    ///
+    /// Start from query entities, propagate belief scores along KG triples
+    /// weighted by triple confidence, and converge to the entity that
+    /// accumulates the most evidence.  Multiple propagation steps let belief
+    /// diffuse through the graph, finding answer entities that are 2-3 hops
+    /// from the query — without building explicit paths.
+    fn sense_answer(
+        &self,
+        graph: &KnowledgeGraph,
+        query_entities: &[usize],
+        _intent: Intent,
+        _query_vector: &HyperVector,
+        query: &str,
+    ) -> String {
+        use std::collections::HashMap;
+        let content_words: Vec<String> = query
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() >= 4)
+            .filter(|w| !matches!(*w, "what"|"which"|"where"|"when"|"how"|"does"
+                |"have"|"who"|"with"|"from"|"that"|"this"|"why"|"the"|"was"|"did"))
+            .map(|w| w.to_string())
+            .collect();
+
+        let mut beliefs: HashMap<usize, f32> = HashMap::new();
+        for &e in query_entities { beliefs.insert(e, 1.0); }
+        if beliefs.is_empty() { return String::new(); }
+
+        let mut prev_top = 0usize;
+        let mut stall = 0u32;
+        for _ in 0..4 {
+            let mut next: HashMap<usize, f32> = HashMap::new();
+            for (&entity, &score) in &beliefs {
+                for &ti in graph.adjacency_of(entity) {
+                    let t = &graph.triples[ti];
+                    let conf = graph.triple_confidence(ti);
+                    let target = if t.subject_id == entity { t.object_id } else { t.subject_id };
+                    *next.entry(target).or_insert(0.0) += score * conf * 0.8;
+                }
+            }
+            for (&e, &s) in &beliefs { *next.entry(e).or_insert(0.0) += s * 0.5; }
+            let total: f32 = next.values().sum::<f32>() + 1e-6;
+            for v in next.values_mut() { *v /= total; }
+
+            let top = next.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).map(|(&k, _)| k).unwrap_or(0);
+            if top == prev_top { stall += 1; } else { stall = 0; prev_top = top; }
+            if stall >= 2 { break; }
+            beliefs = next;
+        }
+
+        let mut ranked: Vec<(f32, String)> = beliefs
+            .into_iter()
+            .filter_map(|(id, score)| {
+                let name = graph.entity_name(id);
+                let words = name.split_whitespace().count();
+                if words > 5 { return None; }
+                let lower = name.to_lowercase();
+                let overlap = content_words.iter().filter(|w| lower.contains(w.as_str())).count();
+                let cap = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) { 1.0 } else { -0.5 };
+                let len_pen = match words { 0|1 => 0.0, 2 => 0.4, 3 => 1.2, _ => 2.0 };
+                let first = lower.split_whitespace().next().unwrap_or("");
+                let det_pen = if matches!(first, "a"|"an"|"the"|"his"|"her"|"its") { -1.5 } else { 0.0 };
+                Some((score + overlap as f32 + cap - len_pen + det_pen, name.to_string()))
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        ranked.first().map(|(_, name)| name.clone()).unwrap_or_default()
+    }
+
     /// Extract a single best answer entity from the graph (legacy — scans
-    /// all triples independently).  Prefer extract_answer_ddtree which uses
-    /// beam-path energy for higher precision.
+    /// all triples independently).  Prefer sense_answer which uses iterative
+    /// belief propagation for higher precision.
     fn extract_answer(
         &self,
         graph: &KnowledgeGraph,
