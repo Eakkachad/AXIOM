@@ -47,6 +47,17 @@ pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
             return false;
         }
     }
+    // "mentions" / "is_related_to" link page subjects to proper nouns.
+    // Only admit when the object is a genuine proper noun: 2+ words,
+    // every non-article word capitalised.  Filters "Swiss tennis" (lowercase
+    // "tennis") while keeping "Baby Buggy", "Martina Hingis".
+    if matches!(rel, "mentions" | "is_related_to") {
+        if obj_words < 2 { return false; }
+        let has_cap = fact.object.split_whitespace()
+            .filter(|w| !matches!(w.to_lowercase().as_str(), "a" | "an" | "the"))
+            .any(|w| w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
+        if !has_cap { return false; }
+    }
     true
 }
 
@@ -412,6 +423,20 @@ fn truncate_object(object: &str) -> (String, Option<String>) {
             let tail = object[position..].trim();
             if !head.is_empty() {
                 return (normalize(head), Some(tail.to_string()));
+            }
+        }
+    }
+    // For very long objects (5+ words), also cut at prepositions to keep
+    // the entity head clean.  Short objects ("United States of America")
+    // are left intact to preserve real entity names.
+    let words: Vec<&str> = object.split_whitespace().collect();
+    if words.len() >= 5 {
+        for marker in [" in ", " on ", " at ", " for ", " from ", " by ", " to "] {
+            if let Some(position) = object.find(marker) {
+                let head = object[..position].trim();
+                if head.split_whitespace().count() >= 3 {
+                    return (normalize(head), Some(object[position..].trim().to_string()));
+                }
             }
         }
     }
