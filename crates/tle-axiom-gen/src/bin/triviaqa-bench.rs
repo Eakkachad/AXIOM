@@ -183,19 +183,19 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
         sentences.sort_by(|left, right| right.0.cmp(&left.0));
 
         let mut seen = std::collections::HashSet::new();
-        for (_, sentence) in sentences.into_iter().take(12) {
+        for (idx, (_, sentence)) in sentences.into_iter().take(5).enumerate() {
             for fact in decompose_sentence(&sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
                     facts.push([fact.subject, fact.relation, fact.object]);
                 }
             }
-            // Safety net: proper-noun entities from the full sentence enter
-            // the graph even when decomposition misses the relation.
-            for fact in extract_sentence_entities(&sentence, &subject) {
-                let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
-                if seen.insert(key.clone()) {
-                    facts.push([fact.subject, fact.relation, fact.object]);
+            if idx < 3 {
+                for fact in extract_sentence_entities(&sentence, &subject) {
+                    let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
+                    if seen.insert(key.clone()) {
+                        facts.push([fact.subject, fact.relation, fact.object]);
+                    }
                 }
             }
         }

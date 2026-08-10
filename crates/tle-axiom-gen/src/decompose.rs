@@ -24,7 +24,7 @@ pub struct DecomposedFact {
 pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
     let subj_words = fact.subject.split_whitespace().count();
     let obj_words = fact.object.split_whitespace().count();
-    if subj_words > 6 || obj_words > 6 { return false; }
+    if subj_words > 8 || obj_words > 8 { return false; }
     if subj_words == 0 || obj_words == 0 { return false; }
     // Reject subjects that are only bare verbs used as subjects.
     let subj_lower = fact.subject.to_lowercase();
@@ -34,11 +34,20 @@ pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
     {
         return false;
     }
-    // "mentions" / "is_related_to" only for proper-noun phrases.
     let rel = fact.relation.as_str();
-    if rel == "mentions" || rel == "is_related_to" {
+    // Bare copula facts (is, was, are, were) junk the graph with long
+    // descriptive objects.  Only reject when the object is clearly a
+    // descriptive phrase: starts with an article AND has no capital AND
+    // is 5+ words.  This preserves short copula facts like (Paris, is,
+    // the capital of France) while filtering (Hingis, is, a Swiss
+    // professional tennis player who won many tournaments).
+    if matches!(rel, "is" | "was" | "are" | "were") {
+        let obj_first = fact.object.split_whitespace().next().unwrap_or("");
+        let starts_article = matches!(obj_first.to_lowercase().as_str(), "a" | "an" | "the");
         let has_cap = fact.object.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
-        if !has_cap { return false; }
+        if starts_article && !has_cap && obj_words >= 5 {
+            return false;
+        }
     }
     true
 }

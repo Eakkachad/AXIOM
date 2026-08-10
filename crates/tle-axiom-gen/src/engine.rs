@@ -427,8 +427,8 @@ impl AxiomGen {
                 let connected_bonus = if connected_id == Some(entity_id) { 2.5 * triple_conf } else { 0.0 };
                 let role_bonus = if connected_id == Some(entity_id) {
                     let rb = match intent {
-                        Intent::Who => if subject_in_query { 1.5 } else { 0.0 },
-                        Intent::What | Intent::Where => if !subject_in_query { 1.5 } else { 0.0 },
+                        Intent::Who => if subject_in_query { 3.0 } else { 0.0 },
+                        Intent::What | Intent::Where => if !subject_in_query { 3.0 } else { 0.0 },
                         _ => 0.5,
                     };
                     rb * triple_conf
@@ -437,7 +437,7 @@ impl AxiomGen {
                     tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(graph.entity_name(entity_id)))
                 });
                 let entry = scores.entry(entity_id).or_insert((0.0, 0));
-                entry.0 += connected_bonus + role_bonus + overlap as f32 + relevance * 0.5;
+                entry.0 += connected_bonus + role_bonus + overlap as f32 + relevance * 2.0;
                 entry.1 += 1;
             }
         }
