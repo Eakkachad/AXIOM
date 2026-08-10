@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-08-10 — v14 Track 2 (T2.1-T2.2)
+
+**Commits:** `e42442b`, `cf6b295`
+
+### What changed
+- **T2.1 Answer-first generation** — vsalm-wiki wired AxiomGen; answers
+  entities directly via extract_answer, VSA-LM as fluency fallback.
+  "who is the president of france" → Emmanuel_Macron ✓, "where is paris
+  located" → France ✓.
+- **T2.2 Average connectivity** — extract_answer normalizes conn/role by
+  link count. Fixes hub problem (Macron 197 facts vs Paris 1 strong link).
+
+### Measured results (full 318 bench)
+| Metric | v14 Track1 | v14 Track2 |
+|--------|:---:|:---:|
+| candidate_answer_accuracy | 18.87-19.18% | **19.81%** (+0.6) |
+| answer_entity_recall | 71.38% | 71.38% |
+| avg_latency | 102ms | 100ms |
+
+### Key findings
+- Average-connectivity normalization is correct direction (candidate +0.6pt).
+- Extreme hubs (Macron 197 facts) still dominate on Wikipedia QA — link-count
+  normalization not enough; needs degree-relative or IEF weighting per fact.
+- Answer-first generation produces clean entity answers (not noisy blends).
+
+---
+
 ## 2026-08-10 — v14 Track 1 (T1.1-T1.4)
 
 **Commits:** `a66c92f`, `22a800e`, `b489d17`, `155cb09`, `e8a870a`

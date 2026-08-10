@@ -99,13 +99,15 @@ Goal: usable conversational knowledge system
 - **Status:** — | **Result:** —
 
 ### T2.2 Fact specificity ranking (IEF)
-- [ ] Status: pending · Priority: P1 · Effort: 1 day · Depends: T2.1
+- [x] Status: done · Priority: P1 · Effort: 1 day · Depends: T2.1
 - **Goal:** KnowledgePrior ranks facts by object-word rarity — rare words
   ("paris") outrank common ("the", "of"). Suppress stopwords after first
   answer token.
-- **File:** `crates/tle-vsa-lm/src/knowledge.rs`
+- **File:** `crates/tle-axiom-gen/src/engine.rs`
 - **Verify:** generation answers are specific, not "the of by"
-- **Status:** — | **Result:** —
+- **Status:** DONE as average-connectivity normalization in extract_answer
+  (conn/count + role/count). candidate 19.81% (+0.6pt record). Extreme hub
+  (Macron 197 facts) still wins on Wikipedia QA — further tuning needed.
 
 ### T2.3 Wikipedia batch ingestion
 - [ ] Status: pending · Priority: P1 · Effort: 1-2 days · Depends: T2.1/T2.2
