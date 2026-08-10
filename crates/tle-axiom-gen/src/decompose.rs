@@ -52,11 +52,19 @@ pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
     // every non-article word capitalised.  Filters "Swiss tennis" (lowercase
     // "tennis") while keeping "Baby Buggy", "Martina Hingis".
     if matches!(rel, "mentions" | "is_related_to") {
-        if obj_words < 2 { return false; }
         let has_cap = fact.object.split_whitespace()
             .filter(|w| !matches!(w.to_lowercase().as_str(), "a" | "an" | "the"))
             .any(|w| w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
-        if !has_cap { return false; }
+        if has_cap { return true; }
+        // Lowercase fallback: 3+ word all-lowercase noun phrases from the
+        // tail pass (specific answers like "collapsible support assembly").
+        // 1-2 word lowercase phrases are too noisy to admit.
+        if obj_words >= 3 {
+            let all_lower = fact.object.split_whitespace()
+                .all(|w| w.chars().all(|c| !c.is_uppercase()));
+            if all_lower { return true; }
+        }
+        return false;
     }
     true
 }
@@ -625,6 +633,16 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
                         if is_fact_worthy(&f) { facts.push(f); }
                     }
                 }
+                // Tight lowercase noun-phrase extraction: 3+ word all-lowercase
+                // phrases that are specific enough to be answers ("collapsible
+                // support assembly").  Only from the tail (post-preposition),
+                // gated by a dedicated lowercase pass.
+                for phrase in extract_lowercase_noun_phrases(tail_text) {
+                    if !facts.iter().any(|f| f.subject == subject && f.object == phrase) {
+                        let f = DecomposedFact { subject: subject.clone(), relation: "is_related_to".to_string(), object: phrase };
+                        if is_fact_worthy(&f) { facts.push(f); }
+                    }
+                }
             }
         }
     }
@@ -698,6 +716,47 @@ fn extract_proper_nouns(text: &str) -> Vec<String> {
         } else {
             i += 1;
         }
+    }
+    out
+}
+
+/// Extract tight lowercase noun phrases (3-4 words) that are specific enough
+/// to be answers.  Only from tail text (post-preposition), skips stopwords
+/// and articles so "collapsible support assembly" survives but "the sky is"
+/// does not.
+fn extract_lowercase_noun_phrases(text: &str) -> Vec<String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        let first = words[i].to_lowercase();
+        if matches!(first.as_str(), "a" | "an" | "the" | "and" | "or" | "but" | "of"
+            | "with" | "from" | "that" | "this" | "which" | "who" | "to" | "in" | "on"
+            | "at" | "for" | "by" | "as" | "is" | "are" | "was" | "were" | "has" | "have"
+            | "it" | "its" | "there" | "such" | "including" | "also" | "most" | "more")
+            || first.chars().any(|c| c.is_uppercase())
+        {
+            i += 1;
+            continue;
+        }
+        // Try the longest window (4 words) first, require all-lowercase.
+        for len in (3..=4).rev() {
+            if i + len > words.len() { continue; }
+            let window = &words[i..i + len];
+            let all_lower = window.iter().all(|w| w.chars().all(|c| !c.is_uppercase()));
+            if !all_lower { continue; }
+            let joined = window.join(" ");
+            let has_stop = window.iter().any(|w| matches!(w.to_lowercase().as_str(),
+                "and" | "or" | "but" | "with" | "from" | "that" | "which" | "who" | "to"
+                | "in" | "on" | "at" | "for" | "by" | "as" | "is" | "are" | "was" | "were"
+                | "has" | "have" | "it" | "its" | "there" | "such" | "including" | "also"));
+            if !has_stop {
+                out.push(joined);
+                i += len;
+                break;
+            }
+        }
+        i += 1;
     }
     out
 }
