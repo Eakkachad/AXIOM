@@ -9,6 +9,7 @@ description = "VSA Language Model: non-neural text generation via VSA binding, T
 tle-vsa = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
+rayon = { workspace = true }
 
 [[bin]]
 name = "vsalm-bench"

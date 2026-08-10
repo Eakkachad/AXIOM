@@ -27,7 +27,7 @@ use std::collections::HashSet;
 
 use tle_vsa::HyperVector;
 
-use decode::DecodedToken;
+use decode::{decode_topk_par, DecodedToken};
 use engram::Engram;
 use reservoir::Reservoir;
 use tba::{TransitionMemory, TrigramMemory};
