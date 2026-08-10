@@ -18,6 +18,7 @@
 //! This is the "algebraic softmax": the decoder is a similarity lookup over
 //! the codebook, not a learned projection matrix.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use tle_vsa::{cosine_similarity, HyperVector};
@@ -30,13 +31,14 @@ use tle_vsa::{cosine_similarity, HyperVector};
 #[derive(Debug, Clone)]
 pub struct TransitionMemory {
     per_word: HashMap<usize, HyperVector>,
+    bipolar: RefCell<HashMap<usize, HyperVector>>,
     dim: usize,
     pub transitions: u64,
 }
 
 impl TransitionMemory {
     pub fn new(dim: usize) -> Self {
-        Self { per_word: HashMap::new(), dim, transitions: 0 }
+        Self { per_word: HashMap::new(), bipolar: RefCell::new(HashMap::new()), dim, transitions: 0 }
     }
 
     /// Add a transition: current → next.
@@ -46,6 +48,7 @@ impl TransitionMemory {
             .entry(current_id)
             .or_insert_with(|| HyperVector::zeros(self.dim));
         *entry = entry.add(next);
+        self.bipolar.borrow_mut().remove(&current_id);
         self.transitions += 1;
     }
 
@@ -58,10 +61,20 @@ impl TransitionMemory {
         }
     }
 
-    /// Predict the next-token bundle after `current_id`.
-    /// Returns None if the word was never seen as a transition source.
+    /// Predict the next-token bipolar vector after `current_id`.
     pub fn predict(&self, current_id: usize) -> Option<HyperVector> {
-        self.per_word.get(&current_id).cloned()
+        // Check bipolar cache first.
+        {
+            let cache = self.bipolar.borrow();
+            if let Some(bp) = cache.get(&current_id) {
+                return Some(bp.clone());
+            }
+        }
+        // Compute, sign, cache.
+        let bundle = self.per_word.get(&current_id)?;
+        let signed = bundle.sign();
+        self.bipolar.borrow_mut().insert(current_id, signed.clone());
+        Some(signed)
     }
 
     /// Score a candidate as the next token after `current_id`.

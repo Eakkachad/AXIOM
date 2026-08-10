@@ -167,19 +167,18 @@ impl VsaLm {
         }
     }
 
-    /// Raw TBA prediction vector for the last token in `context`.
-    /// The result is signed to bipolar ±1 so the packed cosine fast path
-    /// (XOR+popcount) fires against the codebook (also bipolar).
+    /// Raw TBA prediction vector.  Predict() already signs to bipolar — no
+    /// extra sign() needed here.
     pub fn tba_prediction(&self, context: &[String]) -> Option<HyperVector> {
         if self.tba.transitions == 0 {
             return None;
         }
         let last = context.last()?;
         let id = self.vocab.id(last)?;
-        self.tba.predict(id).map(|v| v.sign())
+        self.tba.predict(id)
     }
 
-    /// Raw trigram TBA prediction for the last two tokens in context.
+    /// Raw trigram TBA prediction.
     pub fn trigram_prediction(&self, context: &[String]) -> Option<HyperVector> {
         if self.trigram.transitions == 0 || context.len() < 2 {
             return None;
