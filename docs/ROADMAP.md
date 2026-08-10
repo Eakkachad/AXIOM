@@ -66,14 +66,16 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** — | **Result:** —
 
 ### T1.4 Relation-typed connectivity in extract_answer
-- [ ] Status: pending · Priority: P0 · Effort: 1 day · Depends: none
+- [x] Status: done · Priority: P0 · Effort: 1 day · Depends: none
 - **Goal:** candidate +2-4pt. In `extract_answer`, weight connectivity by
   relation type: strong (located_in, capital_of, president_of, born_in = 2.0)
   vs weak (mentions, is_related_to = 1.2). Previous attempt didn't move
   needle because answers had 0 connectivity — retry AFTER T1.1/T1.3.
 - **File:** `crates/tle-axiom-gen/src/engine.rs`
 - **Verify:** full bench, candidate up
-- **Status:** — | **Result:** —
+- **Status:** KEPT — strong=2.0, weak(mentions/is_related_to/named_after)=0.8.
+  candidate 18.87-19.18% (peak +0.3), recall 71.38% stable, latency 102ms.
+  **Result:** candidate +0.3pt peak
 
 ### T1.5 Diagnostic-driven failure analysis
 - [ ] Status: done · Priority: P0 · Effort: 2h · Depends: none

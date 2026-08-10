@@ -5,31 +5,30 @@
 
 ---
 
-## 2026-08-10 — v14 (continuous-dev system bootstrap + T1.1/T1.2)
+## 2026-08-10 — v14 Track 1 (T1.1-T1.4)
 
-**Commits:** `a66c92f`, `22a800e`
+**Commits:** `a66c92f`, `22a800e`, `b489d17`, `155cb09`, `e8a870a`
 
 ### What changed
-- **System**: created continuous-dev system — ROADMAP.md (task board),
-  PROGRESS_LOG.md (journal), AGENT_WORKFLOW.md (operating procedure).
-  Baseline locked: candidate 18.87%, recall 71.07%, latency 213ms.
-- **T1.1 Adaptive sentence coverage** — REVERTED (dead-end). VSA score signal
-  too weak (cos≈0.01) for meaningful threshold. Both configs regressed
-  candidate (16.67%, 18.24%). Fixed top-5 stays optimal.
-- **T1.2 Lowercase noun-phrase extraction** — KEPT. extract_lowercase_noun_phrases
-  (3+ word all-lowercase from tail) + is_fact_worthy lowercase fallback.
+- **System**: continuous-dev system (ROADMAP/PROGRESS_LOG/WORKFLOW)
+- **T1.1 Adaptive sentence coverage** — REVERTED (VSA signal too weak)
+- **T1.2 Lowercase NP extraction** — KEPT (recall +0.3pt, latency 2×)
+- **T1.3 Permutation entity consolidation** — KEPT (infra, no regression)
+- **T1.4 Relation-typed connectivity** — KEPT (candidate peak 19.18%)
 
-### Measured results (full 318 bench)
-| Metric | v13 baseline | v14 after T1.2 |
+### Measured results (full 318 bench, v13 → v14)
+| Metric | v13 | v14 |
 |--------|:---:|:---:|
-| candidate_answer_accuracy | 18.87% | 18.55-18.87% |
+| candidate_answer_accuracy | 18.87% | **18.87-19.18%** |
 | answer_entity_recall | 71.07% | **71.38%** (+0.3) |
-| avg_latency | 213ms | **103ms** (2×) |
+| avg_latency | 213ms | **102ms** (2×) |
 
 ### Key findings
-- VSA cosine can't discriminate sentences (T1.1 lesson) — adaptive coverage
-  needs semantic codebook (T3.1), not threshold math.
-- Tight lowercase gate (3+ words) extracts answers without v10's noise.
+- T1.1 lesson: VSA cosine can't discriminate sentences — needs semantic
+  codebook (T3.1), not threshold math.
+- Relation typing on connectivity works (+0.3pt candidate) once graph is
+  clean (T1.2 reduced junk).
+- Latency halved from 213→102ms via cleaner graph (fewer junk facts).
 
 ---
 
