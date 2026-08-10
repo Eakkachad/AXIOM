@@ -67,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             engine.add_fact(&fact[0], &fact[1], &fact[2]);
         }
         engine.graph.consolidate_comma_entities();
+        engine.graph.consolidate_permutation_entities();
         let start = Instant::now();
         let result = engine.generate(&record.question);
         total_latency += start.elapsed();

@@ -138,11 +138,73 @@ impl KnowledgeGraph {
     /// Merge comma-suffixed entity variants into their clean pre-comma head.
     /// "Chicago, Illinois, 17 mi" → redirect triples to "Chicago".
     pub fn consolidate_comma_entities(&mut self) {
+        self.consolidate_with(|name| {
+            name.find(',').map(|p| name[..p].trim().to_string())
+        });
+    }
+
+    /// Merge word-order permutations: "Hingis, Martina" → "Martina Hingis".
+    /// Only merges when the reversed word set matches exactly (no false
+    /// positives).  Applied after comma consolidation.
+    pub fn consolidate_permutation_entities(&mut self) {
+        // First, canonicalize names that are "Last, First" → "First Last".
+        let n = self.entities.len();
+        let mut rename: Vec<Option<String>> = vec![None; n];
+        for i in 0..n {
+            let name = &self.entities[i];
+            if name.contains(',') {
+                let parts: Vec<&str> = name.split(',').map(|s| s.trim()).collect();
+                if parts.len() == 2 {
+                    let both_caps = parts.iter().all(|p| {
+                        p.split_whitespace().next().map(|w| w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)).unwrap_or(false)
+                    });
+                    if both_caps && !parts[0].is_empty() && !parts[1].is_empty() {
+                        let canonical = format!("{} {}", parts[1], parts[0]);
+                        // Only rename if canonical already exists OR looks like a person name.
+                        if self.entity_index.contains_key(&canonical) {
+                            rename[i] = Some(canonical);
+                        }
+                    }
+                }
+            }
+        }
+        // Apply renames: update entity strings + index.
+        for i in 0..n {
+            if let Some(new_name) = rename[i].clone() {
+                let old = self.entities[i].clone();
+                if let Some(&target) = self.entity_index.get(&new_name) {
+                    if target != i {
+                        // Redirect triples from old id to target.
+                        for t in &mut self.triples {
+                            if t.subject_id == i { t.subject_id = target; }
+                            if t.object_id == i { t.object_id = target; }
+                        }
+                        self.entity_index.remove(&old);
+                    }
+                } else {
+                    // Rename in place (no existing canonical entity).
+                    self.entity_index.remove(&old);
+                    self.entities[i] = new_name;
+                    self.entity_index.insert(self.entities[i].clone(), i);
+                }
+            }
+        }
+        self.rebuild_adjacency();
+    }
+
+    fn rebuild_adjacency(&mut self) {
+        self.adjacency = vec![Vec::new(); self.entities.len()];
+        for (idx, t) in self.triples.iter().enumerate() {
+            if t.subject_id < self.entities.len() { self.adjacency[t.subject_id].push(idx); }
+            if t.object_id < self.entities.len() { self.adjacency[t.object_id].push(idx); }
+        }
+    }
+
+    fn consolidate_with(&mut self, extract_head: impl Fn(&str) -> Option<String>) {
         let n = self.entities.len();
         let mut merge_target: Vec<Option<usize>> = vec![None; n];
         for i in 0..n {
-            if let Some(comma_pos) = self.entities[i].find(',') {
-                let head = self.entities[i][..comma_pos].trim().to_string();
+            if let Some(head) = extract_head(&self.entities[i]) {
                 if let Some(&target) = self.entity_index.get(&head) {
                     if target != i { merge_target[i] = Some(target); }
                 }
@@ -153,11 +215,7 @@ impl KnowledgeGraph {
             if let Some(dst) = merge_target[t.subject_id] { t.subject_id = dst; }
             if let Some(dst) = merge_target[t.object_id] { t.object_id = dst; }
         }
-        self.adjacency = vec![Vec::new(); self.entities.len()];
-        for (idx, t) in self.triples.iter().enumerate() {
-            if t.subject_id < self.entities.len() { self.adjacency[t.subject_id].push(idx); }
-            if t.object_id < self.entities.len() { self.adjacency[t.object_id].push(idx); }
-        }
+        self.rebuild_adjacency();
         for i in 0..n {
             if merge_target[i].is_some() { self.entity_index.remove(&self.entities[i]); }
         }
