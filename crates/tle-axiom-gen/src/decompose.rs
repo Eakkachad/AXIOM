@@ -35,21 +35,25 @@ pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
         return false;
     }
     let rel = fact.relation.as_str();
-    // Bare copula facts (is, was, are, were) junk the graph with long
-    // descriptive objects.  Only reject when the object is clearly a
-    // descriptive phrase: starts with an article AND has no capital AND
-    // is 5+ words.  This preserves short copula facts like (Paris, is,
-    // the capital of France) while filtering (Hingis, is, a Swiss
-    // professional tennis player who won many tournaments).
+    // Copula (SVC) clauses: "X is/was Y".  If Y starts with an article
+    // and has no mid-sentence capitalised word, it is a descriptive
+    // complement ("a tennis player"), not an answer entity — reject it.
+    // Shorter complements may still hold genuine entities ("the sky",
+    // "the capital of France") that are useful in the graph.
     if matches!(rel, "is" | "was" | "are" | "were") {
         let obj_first = fact.object.split_whitespace().next().unwrap_or("");
         let starts_article = matches!(obj_first.to_lowercase().as_str(), "a" | "an" | "the");
-        let has_cap = fact.object.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
-        if starts_article && !has_cap && obj_words >= 5 {
+        if starts_article && !has_noninitial_capital(&fact.object) && obj_words >= 3 {
             return false;
         }
     }
     true
+}
+
+fn has_noninitial_capital(text: &str) -> bool {
+    text.split_whitespace()
+        .enumerate()
+        .any(|(i, w)| i > 1 && w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
 }
 
 /// Relational predicates, longest phrase first so `was born in` is matched
@@ -517,7 +521,40 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
             object: object.clone(),
         };
         if is_fact_worthy(&fact) {
-            facts.push(fact);
+            facts.push(fact.clone());
+        }
+
+        // When a birth or parentage fact is extracted, scan the raw
+        // (pre-truncation) object for " to <Name> and <Name>" patterns.
+        // E.g. "born in Košice ... to Melanie Molitorová and Karol Hingis"
+        // yields has_mother / has_father facts that compose multi-hop chains.
+        if matches!(relation, "born_in" | "born_on" | "child_of" | "born_to") {
+            for parent in extract_parent_names(&raw_object) {
+                let p_fact = DecomposedFact {
+                    subject: subject.clone(),
+                    relation: "has_parent".to_string(),
+                    object: parent,
+                };
+                if is_fact_worthy(&p_fact)
+                    && !facts.iter().any(|f| f.subject == p_fact.subject && f.object == p_fact.object)
+                {
+                    facts.push(p_fact);
+                }
+            }
+            // Also scan the full sentence: ellipsis/punctuation may split the
+            // parent clause away from the birth clause across clause boundaries.
+            for parent in extract_parent_names(sentence) {
+                let p_fact = DecomposedFact {
+                    subject: subject.clone(),
+                    relation: "has_parent".to_string(),
+                    object: parent,
+                };
+                if is_fact_worthy(&p_fact)
+                    && !facts.iter().any(|f| f.subject == p_fact.subject && f.object == p_fact.object)
+                {
+                    facts.push(p_fact);
+                }
+            }
         }
 
         // Surface embedded proper-noun phrases from the object as standalone
@@ -613,6 +650,34 @@ fn extract_proper_nouns(text: &str) -> Vec<String> {
     out
 }
 
+/// Scan the raw (pre-truncation) object of a birth/location fact for
+/// parent names: "… to Melanie Molitorová and Karol Hingis" yields two
+/// `has_parent` entities.
+fn extract_parent_names(raw_object: &str) -> Vec<String> {
+    let lower = raw_object.to_lowercase();
+    let to_marker = " to ";
+    let Some(to_pos) = lower.find(to_marker) else { return vec![] };
+    // Ensure "to" is a whole word on the left side.
+    if to_pos > 0 {
+        let before = raw_object.as_bytes()[to_pos - 1];
+        if before.is_ascii_alphanumeric() { return vec![]; }
+    }
+    let after = &raw_object[to_pos + to_marker.len()..];
+    let names: Vec<&str> = after.split(" and ")
+        .map(|s| s.trim().trim_matches(|c: char| c == '.' || c == ','))
+        .filter(|s| !s.is_empty())
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    for name in names {
+        let words: Vec<&str> = name.split_whitespace().collect();
+        if words.is_empty() || words.len() > 3 { continue; }
+        let starts_cap = words[0].chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
+        if !starts_cap { continue; }
+        out.push(name.to_string());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -702,5 +767,56 @@ mod tests {
         // The relative clause "which is in Europe" becomes its own fact, but
         // the capital_of object must NOT contain "Europe".
         assert!(!facts.iter().any(|f| f.relation == "capital_of" && f.object.contains("Europe")));
+    }
+
+    #[test]
+    fn extracts_parents_from_born_to_pattern() {
+        let facts = decompose_sentence(
+            "Hingis was born in Košice ... to Melanie Molitorová and Karol Hingis",
+            "Hingis",
+        );
+        assert!(
+            facts.iter().any(|f| f.relation == "has_parent" && f.object == "Melanie Molitorová"),
+            "expected has_parent for Melanie Molitorová, got {:?}",
+            facts.iter().filter(|f| f.relation == "has_parent").map(|f| f.object.clone()).collect::<Vec<_>>()
+        );
+        assert!(
+            facts.iter().any(|f| f.relation == "has_parent" && f.object == "Karol Hingis"),
+            "expected has_parent for Karol Hingis, got {:?}",
+            facts.iter().filter(|f| f.relation == "has_parent").map(|f| f.object.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn copula_filter_rejects_descriptive_complement() {
+        // "a Swiss tennis player" is a description, not an entity.
+        let f = DecomposedFact {
+            subject: "Hingis".into(),
+            relation: "is".into(),
+            object: "a Swiss tennis player".into(),
+        };
+        assert!(!is_fact_worthy(&f));
+    }
+
+    #[test]
+    fn copula_filter_keeps_entity_complement() {
+        // "the capital of France" contains "France" (proper noun) — keep it.
+        let f = DecomposedFact {
+            subject: "Paris".into(),
+            relation: "is".into(),
+            object: "the capital of France".into(),
+        };
+        assert!(is_fact_worthy(&f));
+    }
+
+    #[test]
+    fn copula_filter_rejects_long_article_phrase_without_proper_noun() {
+        // No capitalised mid-word → descriptive junk.
+        let f = DecomposedFact {
+            subject: "Hingis".into(),
+            relation: "is".into(),
+            object: "a former world number one tennis player".into(),
+        };
+        assert!(!is_fact_worthy(&f));
     }
 }
