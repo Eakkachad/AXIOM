@@ -507,6 +507,13 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
             subject = subject_canonical;
         }
 
+        // Truncate subject at commas for clean entity boundaries.
+        // "Chicago, Illinois, 17 mi northwest" → "Chicago".
+        if let Some(pos) = subject.find(',') {
+            let head = subject[..pos].trim();
+            if !head.is_empty() { subject = head.to_string(); }
+        }
+
         // Reject garbage derived subjects: date-prefixed ("2013, Hingis"), or
         // long lowercase descriptive phrases that are not real entities.
         // Trusted (inherited / page-title) subjects always pass.
