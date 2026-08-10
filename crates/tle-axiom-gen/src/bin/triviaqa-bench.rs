@@ -206,7 +206,7 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
             processed.insert(sentence.clone());
         }
 
-        // Bonus: top-2 overlap sentences (word match) not already processed.
+        // Bonus: top-3 overlap sentences (word match) not already processed.
         // These carry proper-noun entities that VSA might miss.
         let mut overlap_ranked: Vec<(usize, String)> = candidates.iter()
             .filter(|s| !processed.contains(*s))
@@ -216,10 +216,16 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
             })
             .collect();
         overlap_ranked.sort_by(|a, b| b.0.cmp(&a.0));
-        for (_, sentence) in overlap_ranked.iter().take(2) {
+        for (_, sentence) in overlap_ranked.iter().take(3) {
             for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
+            }
+            if count_nonfront_capitals(sentence) >= 2 {
+                for fact in extract_sentence_entities(sentence, &subject) {
+                    let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
+                    if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
+                }
             }
         }
     }
