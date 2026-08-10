@@ -56,3 +56,4 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+target-cpu = "native"
