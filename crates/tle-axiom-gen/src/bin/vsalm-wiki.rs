@@ -19,10 +19,17 @@ use tle_axiom_gen::decompose::decompose_sentence;
 use tle_vsa_lm::{LmConfig, VsaLm};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let urls: Vec<String> = std::env::args().skip(1).collect();
-    if urls.is_empty() {
-        eprintln!("usage: vsalm-wiki <wikipedia_url> [url...]");
-        std::process::exit(1);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut urls: Vec<String> = Vec::new();
+    let mut save_path: Option<String> = None;
+    let mut load_path: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--save" => { save_path = args.get(i + 1).cloned(); i += 2; }
+            "--load" => { load_path = args.get(i + 1).cloned(); i += 2; }
+            other => { urls.push(other.to_string()); i += 1; }
+        }
     }
 
     let config = LmConfig { dim: 4096, max_order: 4, beam_width: 8, max_gen_tokens: 12, w_knowledge: 3.0, w_engram: 0.0, w_tba: 0.0, knowledge_only: true, ..Default::default() };
@@ -33,6 +40,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     engine.search_config.max_hops = 3;
     engine.search_config.beam_width = 16;
     let mut total_facts = 0usize;
+
+    // Load persisted facts first, if requested.
+    if let Some(path) = &load_path {
+        let data = std::fs::read_to_string(path)?;
+        for line in data.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 3 {
+                add_fact(&mut lm, &mut engine, parts[0], parts[1], parts[2]);
+                total_facts += 1;
+            }
+        }
+        println!("Loaded {} facts from {}", total_facts, path);
+    }
 
     for url in &urls {
         print!("Fetching {}... ", url);
@@ -57,17 +77,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
-                    lm.knowledge.add_fact(&fact.subject, &fact.relation, &fact.object);
-                    engine.add_fact(&fact.subject, &fact.relation, &fact.object);
-                    for w in fact.subject.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
-                    for w in fact.relation.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
-                    for w in fact.object.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
+                    add_fact(&mut lm, &mut engine, &fact.subject, &fact.relation, &fact.object);
                     facts += 1;
                 }
             }
         }
         total_facts += facts;
         println!("  {} facts from {} sentences", facts, sentences.len());
+    }
+
+    // Save persisted facts, if requested.
+    if let Some(path) = &save_path {
+        let mut out = String::new();
+        for fact in engine.graph.export_triples() {
+            out.push_str(&fact[0]);
+            out.push('\t');
+            out.push_str(&fact[1]);
+            out.push('\t');
+            out.push_str(&fact[2]);
+            out.push('\n');
+        }
+        std::fs::write(path, out)?;
+        println!("Saved {} facts to {}", engine.graph.triples.len(), path);
     }
 
     println!("\nVocabulary: {} words, {} facts in KnowledgePrior", lm.vocab.len(), total_facts);
@@ -97,6 +128,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  → {}  [{:.2?}]", answer, t0.elapsed());
     }
     Ok(())
+}
+
+fn add_fact(lm: &mut VsaLm, engine: &mut AxiomGen, subject: &str, relation: &str, object: &str) {
+    lm.knowledge.add_fact(subject, relation, object);
+    engine.add_fact(subject, relation, object);
+    for w in subject.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
+    for w in relation.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
+    for w in object.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
 }
 
 fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
