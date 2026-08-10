@@ -1,97 +1,60 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-10 (session close — latency 3.6× faster, substring +4.4pt, entity recall trade-off)
-> Status: TriviaQA substring 28.3% · candidate 14.8% · entity recall 65.1% · latency 223ms
+> Last updated: 2026-08-10 (v14 — continuous-development system bootstrap)
+> Status: TriviaQA candidate 18.87% · entity recall 71.07% · latency 213ms
 
-> ## SESSION HANDOFF SUMMARY v6 (NEXT AGENT START HERE)
+> ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
-> ### What to do when you start:
-> 1. **Read this entire section first.**
-> 2. Run `cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa` — should pass all 102 tests.
-> 3. Run `cargo build --release` to make sure everything compiles.
-> 4. Run the quick smoke test: `AXIOM_TRIVIA_LIMIT=5 timeout 30 ./target/release/triviaqa-bench data/triviaqa/qa/verified-wikipedia-dev.json - data/triviaqa/evidence/wikipedia`
->    Expected: prints 5 records with accuracy numbers.
+> ### The system (3 files — the source of truth):
+> 1. **`docs/ROADMAP.md`** — canonical task board. Pick the highest-priority
+>    `[ ]` task whose dependencies are `[x]`. Mark tasks `[x]`/`[~]`/`[!]` as you work.
+> 2. **`docs/PROGRESS_LOG.md`** — append-only journal. Newest entry at top.
+> 3. **`docs/AGENT_WORKFLOW.md`** — the operating procedure. FOLLOW IT EXACTLY.
 >
-> ### SESSION v6 RESULTS (2026-08-10)
+> ### Working procedure (2-minute rule):
+> 1. Read this handoff, then ROADMAP + PROGRESS_LOG + WORKFLOW.
+> 2. Run `cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa` (must pass).
+> 3. Pick next task from ROADMAP (currently T1.1 Adaptive sentence coverage is top).
+> 4. Implement → test → bench → update ROADMAP/PROGRESS_LOG/this file → commit.
+> 5. NEVER claim improvement without a bench. NEVER re-try documented failures.
+
+> ## CURRENT STATE (v14 baseline)
 >
-> #### Completed:
-> 1. **Latency regression fixed (808ms → 223ms, 3.6× faster).**
->    - Reduced evidence sentences from top-12 → top-5
->    - Limited `extract_sentence_entities` to top-3 overlap sentences per evidence file
->    - Target was <200ms; came close at 223ms (long-tail records with many evidence pages dominate)
+> | Metric | Value | Target |
+> |--------|:---:|:---:|
+> | candidate_answer_accuracy | **18.87%** | 40% |
+> | answer_entity_recall | **71.07%** | 80% |
+> | substring_accuracy | 23.58% | 50% |
+> | avg_latency | 213ms | <200ms |
+> | gen speed | 12K tok/s | 50K tok/s |
+> | codebook memory | 62MB (32×) | <50MB |
 >
-> 2. **is_fact_worthy() tuned (decompose.rs).**
->    - Relaxed word limit 6→8 for both subjects and objects
->    - Replaced blanket `mentions`/`is_related_to` capital-letter filter with targeted copula filter
->    - Bare copula facts (`is`, `was`, `are`, `were`) only rejected when: starts with article + no capital + ≥5 words
->    - This preserves short copulas like `(Paris, is, France)` while filtering `(Hingis, is, a Swiss professional tennis player...)`
+> ### What was built (v11→v13):
+> - **v11**: Diagnostic mode → found OVERLAP DOMINANCE root cause →
+>   connectivity-first scoring → candidate 16.35%→18.55% (+2.2pt)
+> - **v12**: subject truncation, comma entity consolidation, MorphTokenizer wiring,
+>   wider sentence coverage → candidate 18.87%, recall 71.07%
+> - **v13**: vsalm-wiki Wikipedia ingestion pipeline (fetch→clean→decompose→QA)
 >
-> 3. **VSA semantic vector weight increased 0.5 → 2.0** in `extract_answer()` (engine.rs:440).
->    - Composed semantic vectors now contribute meaningfully to answer scoring
->    - Contributed to substring accuracy improvement
+> ### Infrastructure ready:
+> - 32× codebook compression, GF(2) encoding (3× faster)
+> - TBA TopK cache (12K tok/s), KnowledgePrior O(1) hash index
+> - vsalm-wiki (Wikipedia QA), vsalm-axiom (graph→VSA-LM)
+> - CR2 path confidence (in hypervector.rs, unused pending cleaner graphs)
 >
-> 4. **role_bonus increased 1.5 → 3.0** in `extract_answer()` (engine.rs:430-431).
->    - Who→subject preference at 3.0× (was 1.5×)
->    - What/Where→object preference at 3.0× (was 1.5×)
+> ## NEXT STEPS (from ROADMAP Track 1 — accuracy first)
+> - **T1.1 Adaptive sentence coverage** (P0, 1 day) — replace fixed top-5/6 with
+>   relative VSA threshold → recall +3-5pt
+> - **T1.2 Lowercase noun-phrase extraction** (P0, 1 day) → recall +2-3pt
+> - **T1.3 Entity consolidation 2.0** (P0, 1 day) → candidate +2-3pt
+> - **T1.4 Relation-typed connectivity** (P0, 1 day, after T1.1/T1.3) → candidate +2-4pt
 >
-> #### Benchmark (full 318-record verified-wikipedia-dev):
-> | Metric | v5 baseline | v6 | Change |
-> |--------|:---:|:---:|:---:|
-> | substring_accuracy | 23.90% | **28.30%** | +4.4pt |
-> | candidate_answer_accuracy | 15.41% | 14.78% | -0.6pt |
-> | answer_entity_recall | 79.56% | 65.09% | -14.5pt |
-> | evidence_answer_recall | 99.69% | 99.69% | unchanged |
-> | avg_latency | ~808ms | **223ms** | 3.6× faster |
->
-> #### Known trade-off:
-> Entity recall dropped 79.6% → 65.1% because `extract_sentence_entities` now only
-> scans top-3 overlap sentences instead of top-12. The per-object proper noun extraction
-> inside `decompose_sentence` still runs for each decomposed object. To recover recall
-> without sacrificing latency, consider:
-> - Smarter sentence selection (e.g. select sentences containing capitalized words beyond just overlap)
-> - Streaming entity extraction that stops early after finding N entities
-> - Merging full-sentence entity extraction into the decompose_sentence pass (avoid second scan)
->
-> ### URGENT — Next steps
-> 5. **Recover entity recall without latency regression.** The answer-entity recall gap
->    (65.1% → target 80%) is the binding constraint.  Options:
->    - Add a fast pre-check to extract_sentence_entities: only run on sentences
->      that contain at least 2+ capitalized words (skip sentences that are all
->      lowercase descriptions)
->    - Increase `extract_proper_nouns` object-word limit from 20→40 inside
->      `decompose_sentence` to capture more embedded entities in per-object pass
->    - Consider sentence selection by capitalization density instead of question overlap
->
-> ### HIGH PRIORITY — Remaining
-> 6. **ClausIE-style clause typing** (from v5 plan — untouched)
-> 7. **"Born to" / implicit relation extraction** (from v5 plan — untouched)
->
-> ### BUILDS & BENCHMARKS (unchanged from v5)
->
-> ```bash
-> # Quick test
-> cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa
->
-> # Full TriviaQA benchmark (~5-15 min)
-> cargo build --release -p tle-axiom-gen
-> ./target/release/triviaqa-bench data/triviaqa/qa/verified-wikipedia-dev.json \
->   - data/triviaqa/evidence/wikipedia
->
-> # Fast subset for iteration
-> AXIOM_TRIVIA_LIMIT=50 ./target/release/triviaqa-bench ...
-> ```
->
-> ### KNOWN GOTCHAS
-> - **extract_sentence_entities limited to top-3**: in `triviaqa-bench.rs:193`, the
->   sentence-level entity extraction only runs on the 3 highest-overlap sentences
->   per evidence file. Adjust `idx < 3` to change this.
-> - **Per-object proper noun extraction**: `decompose_sentence` extracts proper nouns
->   from objects ≤20 words (decompose.rs:520). This happens regardless of the
->   top-N setting above.
-> - **Slow records dominate the average**: Mickey Mouse (398 sentences), Donald Duck
->   pages add 400-550ms each. The median latency is much lower than the mean.
-> - **VSA weight 2.0**: in `engine.rs:440`, the `relevance * 2.0` term.
-> - **role_bonus 3.0**: in `engine.rs:430`, the Who/What/Where intent multiplier.
+> ## KNOWN GOTCHAS (full list in ROADMAP)
+> - **DDTree dead** (4 attempts regressed) — use legacy extract_answer
+> - **extract_answer weights are optimal** — tune via diagnostics, not guesswork
+> - **VSA signal near-zero** with random codebook — don't rely until T3.1 semantic layer
+> - **Substring consolidation regressed** — only exact-match merge
+> - **Query-weighted KnowledgePrior noisy** — prefer specificity ranking (T2.2)
 
 ---
 
