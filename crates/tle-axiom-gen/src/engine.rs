@@ -493,13 +493,18 @@ impl AxiomGen {
 
         let normalized_query: Vec<String> = words.iter().map(|word| normalize_entity_token(word)).collect();
 
-        // Try exact and normalized matches first.
+        // Exact and normalized matches using morphological decomposition.
+        let morph = tle_afc::MorphTokenizer::new();
+        let normalized_query: Vec<String> = words.iter().map(|w| morph_depluralize(&morph, w)).collect();
+
+        // Exact and morphologically-normalized matches.
         for (name, &id) in &self.graph.entity_index {
             let entity_lower = name.to_lowercase();
             let entity_words: Vec<&str> = entity_lower.split('_').collect();
-
             let matches = words.contains(&entity_lower.as_str()) || entity_words.iter().any(|ew| {
-                words.contains(ew) || normalized_query.iter().any(|word| word == &normalize_entity_token(ew))
+                words.contains(ew) || normalized_query.iter().any(|word| {
+                    word == &normalize_entity_token(ew) || morph_depluralize(&morph, ew) == *word
+                })
             });
             if matches && !found_entities.contains(&id) {
                 found_entities.push(id);
@@ -622,6 +627,17 @@ fn normalize_entity_token(token: &str) -> String {
     } else {
         token.to_string()
     }
+}
+
+/// Depluralize using morphological tokenizer — returns root form.
+fn morph_depluralize(morph: &tle_afc::MorphTokenizer, word: &str) -> String {
+    let morphemes = morph.decompose(word);
+    for m in &morphemes {
+        if matches!(m.mtype, tle_afc::morph_tokenizer::MorphemeType::Root) {
+            return m.text.clone();
+        }
+    }
+    word.to_lowercase()
 }
 
 /// Precompute inverse entity frequency: rare entities score higher.
