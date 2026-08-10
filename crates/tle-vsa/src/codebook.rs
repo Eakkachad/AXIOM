@@ -53,6 +53,7 @@ impl Codebook {
         if !self.entries.contains_key(symbol) {
             let seed = self.symbol_seed(symbol);
             let hv = HyperVector::random_bipolar(self.dim, seed);
+            // Bipolar vectors are already compressed at creation (data is empty).
             self.entries.insert(symbol.to_string(), hv);
         }
         &self.entries[symbol]

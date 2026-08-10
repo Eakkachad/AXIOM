@@ -65,21 +65,21 @@ pub fn bundle(vectors: &[&HyperVector]) -> HyperVector {
     let mut result = vec![0.0f32; dim];
     for v in vectors {
         debug_assert_eq!(v.dim(), dim, "All vectors must have same dimension");
-        // SIMD-friendly accumulation
+        let d = v.as_slice();
         let chunks = dim / 8;
         for i in 0..chunks {
             let base = i * 8;
-            result[base] += v.data[base];
-            result[base + 1] += v.data[base + 1];
-            result[base + 2] += v.data[base + 2];
-            result[base + 3] += v.data[base + 3];
-            result[base + 4] += v.data[base + 4];
-            result[base + 5] += v.data[base + 5];
-            result[base + 6] += v.data[base + 6];
-            result[base + 7] += v.data[base + 7];
+            result[base] += d[base];
+            result[base + 1] += d[base + 1];
+            result[base + 2] += d[base + 2];
+            result[base + 3] += d[base + 3];
+            result[base + 4] += d[base + 4];
+            result[base + 5] += d[base + 5];
+            result[base + 6] += d[base + 6];
+            result[base + 7] += d[base + 7];
         }
         for i in (chunks * 8)..dim {
-            result[i] += v.data[i];
+            result[i] += d[i];
         }
     }
 
@@ -95,8 +95,9 @@ pub fn weighted_bundle(vectors: &[(&HyperVector, f32)]) -> HyperVector {
     let mut result = vec![0.0f32; dim];
     for (v, weight) in vectors {
         debug_assert_eq!(v.dim(), dim);
+        let d = v.as_slice();
         for i in 0..dim {
-            result[i] += v.data[i] * weight;
+            result[i] += d[i] * weight;
         }
     }
 

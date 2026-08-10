@@ -158,7 +158,7 @@ impl VsaLm {
                 let Some(vec) = self.vocab.vector_by_id(ids[i]) else { continue };
                 let mut input = vec![0.0f32; dim];
                 for j in 0..vec.dim().min(dim) {
-                    input[j] = vec.data[j];
+                    input[j] = vec.as_slice()[j];
                 }
                 let state = reservoir.step(&input).to_vec();
                 mem.record(state, ids[i + 1]);
@@ -208,7 +208,7 @@ impl VsaLm {
                 if let Some(vec) = self.vocab.vector(word) {
                     let mut input = vec![0.0f32; reservoir.dim];
                     for j in 0..vec.dim().min(reservoir.dim) {
-                        input[j] = vec.data[j];
+                        input[j] = vec.as_slice()[j];
                     }
                     res.step(&input);
                 }

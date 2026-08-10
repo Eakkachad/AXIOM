@@ -23,12 +23,11 @@ pub fn cosine_similarity(a: &HyperVector, b: &HyperVector) -> f32 {
     // Fast path: bit-packed bipolar vectors.
     if let (Some(ap), Some(bp)) = (&a.packed, &b.packed) {
         let n = ap.len().min(bp.len());
-        let dim = a.data.len();
+        let dim = a.dim();
         let mut matches: u32 = 0;
         for i in 0..n {
             matches += (!(ap[i] ^ bp[i])).count_ones();
         }
-        // For bipolar ±1: dot = 2*matches - D, cos = dot / D
         return 2.0 * matches as f32 / dim as f32 - 1.0;
     }
     let dot = a.dot(b);
@@ -52,11 +51,9 @@ pub fn dot_product(a: &HyperVector, b: &HyperVector) -> f32 {
 /// For bipolar vectors: hamming = (D - dot(a,b)) / 2
 pub fn hamming_distance(a: &HyperVector, b: &HyperVector) -> usize {
     debug_assert_eq!(a.dim(), b.dim());
-    a.data
-        .iter()
-        .zip(b.data.iter())
-        .filter(|(&x, &y)| x.signum() != y.signum())
-        .count()
+    let da = a.as_slice();
+    let db = b.as_slice();
+    da.iter().zip(db.iter()).filter(|(&x, &y)| x.signum() != y.signum()).count()
 }
 
 /// Find the index of the most similar vector in a codebook.
