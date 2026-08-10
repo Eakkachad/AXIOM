@@ -216,6 +216,16 @@ impl VsaLm {
         self.trigram.predict(prev_id, curr_id).map(|v| v.sign())
     }
 
+    /// Knowledge candidates — query-weighted when in knowledge_only mode.
+    fn get_knowledge(&self, knowledge_context: &[String], full_context: &[String]) -> Vec<(String, f32)> {
+        if self.config.knowledge_only {
+            let query_words: Vec<String> = full_context.iter().filter(|w| w.len() >= 3).map(|w| w.to_lowercase()).collect();
+            self.knowledge.candidates_for_query(knowledge_context, &query_words)
+        } else {
+            self.knowledge.candidates(knowledge_context)
+        }
+    }
+
     /// Combined prediction: blend TBA cosine, Engram n-gram probability, and
     /// the reservoir associative-memory signal.
     ///
@@ -263,7 +273,7 @@ impl VsaLm {
             if let Some(cached) = self.tba_cache.get(*last_id) {
                 if !cached.is_empty() {
                     let knowledge_context: Vec<String> = context.iter().rev().take(self.config.repeat_window * 3).cloned().collect();
-                    let knowledge = self.knowledge.candidates(&knowledge_context);
+                    let knowledge = self.get_knowledge(&knowledge_context, context);
                     let trigram_signal = self.trigram_prediction(context);
                     let engram_scores: Vec<(usize, f32)> = cached.iter().take(k.max(32)).map(|&(id, tba_score)| {
                         let ep = engram_probability(self, &context_ids, id);

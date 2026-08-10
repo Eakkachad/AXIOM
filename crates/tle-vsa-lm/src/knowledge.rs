@@ -81,7 +81,44 @@ impl KnowledgePrior {
         ranked
     }
 
-    /// Boost score for a specific candidate word given the context.
+    /// Fact-connected candidates weighted by query relevance.
+    /// Facts whose relation words overlap with the query get higher boost.
+    pub fn candidates_for_query(&self, context: &[String], query_words: &[String]) -> Vec<(String, f32)> {
+        let mut scores: HashMap<String, f32> = HashMap::new();
+        let query_set: std::collections::HashSet<&String> = query_words.iter().collect();
+        let has_query = !query_set.is_empty();
+        for ctx_word in context {
+            if let Some(idxs) = self.forward_index.get(ctx_word) {
+                for &idx in idxs {
+                    let (subj_words, rel, obj_words) = &self.forward[idx];
+                    if !contains_all(context, subj_words) { continue; }
+                    let rel_matches = split_entity(rel).iter().any(|w| query_set.contains(w));
+                    if has_query && !rel_matches { continue; }
+                    for obj in obj_words {
+                        if !context.contains(obj) { *scores.entry(obj.clone()).or_insert(0.0) += 2.0; }
+                    }
+                }
+            }
+            if let Some(idxs) = self.reverse_index.get(ctx_word) {
+                for &idx in idxs {
+                    let (obj_words, rel, subj_words) = &self.reverse[idx];
+                    if !contains_all(context, obj_words) { continue; }
+                    let rel_matches = split_entity(rel).iter().any(|w| query_set.contains(w));
+                    if has_query && !rel_matches { continue; }
+                    for subj in subj_words {
+                        if !context.contains(subj) { *scores.entry(subj.clone()).or_insert(0.0) += 2.0; }
+                    }
+                }
+            }
+        }
+        // If query filter removed everything, fall back to all facts.
+        if scores.is_empty() && has_query {
+            return self.candidates(context);
+        }
+        let mut ranked: Vec<(String, f32)> = scores.into_iter().collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        ranked
+    }
     pub fn score(&self, context: &[String], candidate: &str) -> f32 {
         let candidate_lower = candidate.to_lowercase();
         self.candidates(context)
