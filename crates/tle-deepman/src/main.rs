@@ -1599,14 +1599,14 @@ fn handle_save(store: &tle_afc::IncrementalStore, path: &str) {
 
     // Save transition memory as binary
     let tm_path = format!("{}.tm", path);
-    let tm_data: Vec<u8> = store.transition_memory.data
+    let tm_data: Vec<u8> = store.transition_memory.as_slice()
         .iter()
         .flat_map(|&f| f.to_le_bytes())
         .collect();
 
     // Save KG memory
     let kg_path = format!("{}.kg", path);
-    let kg_data: Vec<u8> = store.kg_memory.data
+    let kg_data: Vec<u8> = store.kg_memory.as_slice()
         .iter()
         .flat_map(|&f| f.to_le_bytes())
         .collect();
@@ -1633,7 +1633,7 @@ fn handle_restore(store: &mut tle_afc::IncrementalStore, path: &str) {
     let tm_path = format!("{}.tm", path);
     match fs::read(&tm_path) {
         Ok(data) => {
-            let dim = store.transition_memory.data.len();
+            let dim = store.transition_memory.as_slice().len();
             if data.len() == dim * 4 {
                 let floats: Vec<f32> = data
                     .chunks_exact(4)
@@ -1654,7 +1654,7 @@ fn handle_restore(store: &mut tle_afc::IncrementalStore, path: &str) {
     let kg_path = format!("{}.kg", path);
     match fs::read(&kg_path) {
         Ok(data) => {
-            let dim = store.kg_memory.data.len();
+            let dim = store.kg_memory.as_slice().len();
             if data.len() == dim * 4 {
                 let floats: Vec<f32> = data
                     .chunks_exact(4)

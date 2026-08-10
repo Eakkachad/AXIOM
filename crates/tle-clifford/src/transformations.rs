@@ -114,7 +114,7 @@ pub fn apply_transformation(hv: &HyperVector, rotor: &Rotor) -> HyperVector {
     // Reconstruct hypervector: distribute transformed components back
     let dim = hv.dim();
     let block_size = dim / 3;
-    let mut data = hv.data.clone();
+    let mut data = hv.as_slice().to_vec();
 
     // Modulate the three blocks based on transformed grade-1 components
     let scale_1 = if transformed.components[1].abs() > 1e-10 {

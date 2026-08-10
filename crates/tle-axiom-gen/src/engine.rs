@@ -419,6 +419,22 @@ impl AxiomGen {
         let mut raw_overlap: HashMap<usize, f32> = HashMap::new();
         let mut raw_count: HashMap<usize, usize> = HashMap::new();
         let mut relevance_cache: HashMap<usize, f32> = HashMap::new();
+        // 2-hop connectivity: entities reachable from a query entity through
+        // exactly one intermediate node.  Catches answers like "LH" that
+        // connect via "Ovulation" but have no direct query link.
+        let mut raw_2hop: HashMap<usize, f32> = HashMap::new();
+        let mut raw_2hop_count: HashMap<usize, usize> = HashMap::new();
+
+        // First pass: collect entities directly connected to query entities.
+        let mut one_hop: Vec<usize> = Vec::new();
+        for triple in &graph.triples {
+            let subj_q = query_entities.contains(&triple.subject_id);
+            let obj_q = query_entities.contains(&triple.object_id);
+            if subj_q != obj_q {
+                let other = if subj_q { triple.object_id } else { triple.subject_id };
+                if !one_hop.contains(&other) { one_hop.push(other); }
+            }
+        }
 
         for (ti, triple) in graph.triples.iter().enumerate() {
             let triple_conf = graph.triple_confidence(ti);
@@ -468,34 +484,59 @@ impl AxiomGen {
             }
         }
 
+        // Second pass: 2-hop connections.  For each 1-hop entity, its other
+        // neighbors are 2 hops from the query.  Weight by relation type too.
+        for &mid in &one_hop {
+            for &ti in graph.adjacency_of(mid) {
+                let t = &graph.triples[ti];
+                let conf = graph.triple_confidence(ti);
+                let other = if t.subject_id == mid { t.object_id } else { t.subject_id };
+                if query_entities.contains(&other) || one_hop.contains(&other) { continue; }
+                let rel_name = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                let rw = if matches!(rel_name, "located_in"|"capital_of"|"born_in"|"part_of"
+                    |"founded_in"|"president_of"|"founder_of"|"leader_of"|"lived_in") { 1.0 }
+                    else if matches!(rel_name, "mentions"|"is_related_to") { 0.4 } else { 0.6 };
+                *raw_2hop.entry(other).or_insert(0.0) += 1.0 * rw * conf;
+                *raw_2hop_count.entry(other).or_insert(0) += 1;
+            }
+        }
+
         let mut ranked: Vec<(f32, String, f32, f32, f32, f32, f32)> = Vec::new();
-        for (id, _) in &raw_conn {
-            let name = graph.entity_name(*id);
+        // Candidate set = entities with direct conn OR 2-hop conn.
+        let mut candidate_ids: std::collections::HashSet<usize> = raw_conn.keys().copied().collect();
+        candidate_ids.extend(raw_2hop.keys().copied());
+        for id in candidate_ids.into_iter() {
+            let name = graph.entity_name(id);
             let words = name.split_whitespace().count();
             if words > 5 || words == 0 { continue; }
             let len_pen = match words { 0|1 => 0.0, 2 => 0.4, 3 => 1.2, 4 => 2.0, _ => 3.0 };
             let cap_bonus = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) { 1.0 } else { -0.5 };
             let first = name.split_whitespace().next().map(|w| w.to_lowercase()).unwrap_or_default();
             let det_pen = if matches!(first.as_str(), "a"|"an"|"the"|"some"|"his"|"her"|"its"|"this"|"that") { -1.5 } else { 0.0 };
-            let heur = 0.2 * *raw_count.get(id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
+            let heur = 0.2 * *raw_count.get(&id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
             // Average connectivity per link — neutralizes the hub problem:
             // an entity with 197 facts (Macron) must not beat an entity with
             // 1 strong link (Paris, capital_of France).
-            let conn = *raw_conn.get(id).unwrap_or(&0.0);
-            let conn_links = *raw_conn_count.get(id).unwrap_or(&1).max(&1);
+            let conn = *raw_conn.get(&id).unwrap_or(&0.0);
+            let conn_links = *raw_conn_count.get(&id).unwrap_or(&1).max(&1);
             let conn_avg = conn / conn_links as f32;
-            let role = *raw_role.get(id).unwrap_or(&0.0);
-            let role_links = *raw_conn_count.get(id).unwrap_or(&1).max(&1);
+            let role = *raw_role.get(&id).unwrap_or(&0.0);
+            let role_links = *raw_conn_count.get(&id).unwrap_or(&1).max(&1);
             let role_avg = role / role_links as f32;
-            let ov = *raw_overlap.get(id).unwrap_or(&0.0);
-            let rel = relevance_cache.get(id).copied().unwrap_or(0.0);
+            // 2-hop bonus: entities reachable via one intermediate node get
+            // a fraction of connectivity, capturing answers like "LH".
+            let hop2 = *raw_2hop.get(&id).unwrap_or(&0.0);
+            let hop2_links = *raw_2hop_count.get(&id).unwrap_or(&1).max(&1);
+            let hop2_avg = hop2 / hop2_links as f32;
+            let ov = *raw_overlap.get(&id).unwrap_or(&0.0);
+            let rel = relevance_cache.get(&id).copied().unwrap_or(0.0);
             // Query-named penalty: entities that appear in the question are
             // what we're asking ABOUT, not the answer.  Suppress them so
             // connected entities (the actual answers) can surface.
-            let is_query_named = query_entities.contains(id);
+            let is_query_named = query_entities.contains(&id);
             let query_penalty = if is_query_named { 0.2 } else { 1.0 };
             // Connectivity-first: overlap is a weak tiebreaker, not primary.
-            let score = (conn_avg + role_avg * 0.8 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
+            let score = (conn_avg + role_avg * 0.8 + hop2_avg * 0.5 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
             ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * 2.0, heur));
         }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));

@@ -221,9 +221,10 @@ impl MultiVector {
         let dim = hv.dim();
         // Project: sum blocks of D/3 dimensions into 3 components
         let block_size = dim / 3;
-        let e1: f32 = hv.data[..block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
-        let e2: f32 = hv.data[block_size..2*block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
-        let e3: f32 = hv.data[2*block_size..3*block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
+        let hv_slice = hv.as_slice();
+        let e1: f32 = hv_slice[..block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
+        let e2: f32 = hv_slice[block_size..2*block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
+        let e3: f32 = hv_slice[2*block_size..3*block_size].iter().sum::<f32>() / (block_size as f32).sqrt();
 
         Self::vector(e1, e2, e3)
     }

@@ -41,7 +41,7 @@ impl CleanupRule {
             CleanupRule::Threshold(tau) => {
                 let tau = *tau;
                 HyperVector::new(
-                    v.data
+                    v.as_slice()
                         .iter()
                         .map(|&x| {
                             if x > tau {
@@ -58,7 +58,7 @@ impl CleanupRule {
 
             CleanupRule::Polynomial(p) => {
                 let p = *p;
-                let powered: Vec<f32> = v.data.iter().map(|&x| x.powi(p as i32)).collect();
+                let powered: Vec<f32> = v.as_slice().iter().map(|&x| x.powi(p as i32)).collect();
                 let norm: f32 = powered.iter().map(|x| x * x).sum::<f32>().sqrt();
                 if norm < 1e-10 {
                     return HyperVector::zeros(v.dim());
@@ -115,7 +115,7 @@ impl CleanupRule {
                 for (w, c) in weights.iter().zip(codebook.iter()) {
                     if *w > 1e-8 {
                         for j in 0..dim {
-                            result[j] += w * c.data[j];
+                            result[j] += w * c.as_slice()[j];
                         }
                     }
                 }
@@ -136,14 +136,14 @@ mod tests {
     fn test_sign_cleanup() {
         let v = HyperVector::new(vec![0.3, -0.7, 0.1, -0.9, 0.5]);
         let cleaned = CleanupRule::Sign.apply(&v);
-        assert_eq!(cleaned.data, vec![1.0, -1.0, 1.0, -1.0, 1.0]);
+        assert_eq!(cleaned.as_slice().to_vec(), vec![1.0, -1.0, 1.0, -1.0, 1.0]);
     }
 
     #[test]
     fn test_threshold_cleanup() {
         let v = HyperVector::new(vec![0.3, -0.7, 0.1, -0.9, 0.05]);
         let cleaned = CleanupRule::Threshold(0.2).apply(&v);
-        assert_eq!(cleaned.data, vec![1.0, -1.0, 0.0, -1.0, 0.0]);
+        assert_eq!(cleaned.as_slice().to_vec(), vec![1.0, -1.0, 0.0, -1.0, 0.0]);
     }
 
     #[test]
@@ -151,8 +151,8 @@ mod tests {
         let v = HyperVector::new(vec![0.5, -0.8, 0.2, -0.9, 0.1]);
         let cleaned = CleanupRule::Polynomial(3).apply(&v);
         // Cubing amplifies large values, suppresses small ones
-        assert!(cleaned.data[1].abs() > cleaned.data[0].abs());
-        assert!(cleaned.data[3].abs() > cleaned.data[2].abs());
+        assert!(cleaned.as_slice()[1].abs() > cleaned.as_slice()[0].abs());
+        assert!(cleaned.as_slice()[3].abs() > cleaned.as_slice()[2].abs());
     }
 
     #[test]

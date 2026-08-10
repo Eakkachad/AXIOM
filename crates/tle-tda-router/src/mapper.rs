@@ -196,7 +196,7 @@ fn compute_centroid_refs(vectors: &[&HyperVector]) -> HyperVector {
     let dim = vectors[0].dim();
     let mut sum = vec![0.0f32; dim];
     for v in vectors {
-        for (i, &x) in v.data.iter().enumerate() {
+        for (i, &x) in v.as_slice().iter().enumerate() {
             sum[i] += x;
         }
     }

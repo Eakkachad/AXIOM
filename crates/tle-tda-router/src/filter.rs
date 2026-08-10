@@ -40,16 +40,16 @@ impl FilterFunction {
 
             FilterFunction::FirstComponent => {
                 let block = hv.dim() / 4;
-                hv.data[..block].iter().sum::<f32>() / (block as f32).sqrt()
+                hv.as_slice()[..block].iter().sum::<f32>() / (block as f32).sqrt()
             }
 
             FilterFunction::SyntacticEnergy => {
                 // Simplified: use norm of bivector-projected components
                 let dim = hv.dim();
                 let third = dim / 3;
-                let e1: f32 = hv.data[..third].iter().sum();
-                let e2: f32 = hv.data[third..2*third].iter().sum();
-                let e3: f32 = hv.data[2*third..3*third].iter().sum();
+                let e1: f32 = hv.as_slice()[..third].iter().sum();
+                let e2: f32 = hv.as_slice()[third..2*third].iter().sum();
+                let e3: f32 = hv.as_slice()[2*third..3*third].iter().sum();
                 // Approximate "oriented area" = cross product magnitude
                 let cross_mag = ((e1*e2 - e2*e1).powi(2)
                     + (e1*e3 - e3*e1).powi(2)
