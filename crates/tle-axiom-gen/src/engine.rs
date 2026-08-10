@@ -414,6 +414,7 @@ impl AxiomGen {
 
         use std::collections::HashMap;
         let mut raw_conn: HashMap<usize, f32> = HashMap::new();
+        let mut raw_conn_count: HashMap<usize, usize> = HashMap::new();
         let mut raw_role: HashMap<usize, f32> = HashMap::new();
         let mut raw_overlap: HashMap<usize, f32> = HashMap::new();
         let mut raw_count: HashMap<usize, usize> = HashMap::new();
@@ -460,6 +461,7 @@ impl AxiomGen {
                     tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(graph.entity_name(entity_id)))
                 });
                 *raw_conn.entry(entity_id).or_insert(0.0) += conn;
+                if conn > 0.0 { *raw_conn_count.entry(entity_id).or_insert(0) += 1; }
                 *raw_role.entry(entity_id).or_insert(0.0) += role;
                 *raw_overlap.entry(entity_id).or_insert(0.0) += ov;
                 *raw_count.entry(entity_id).or_insert(0) += 1;
@@ -476,8 +478,15 @@ impl AxiomGen {
             let first = name.split_whitespace().next().map(|w| w.to_lowercase()).unwrap_or_default();
             let det_pen = if matches!(first.as_str(), "a"|"an"|"the"|"some"|"his"|"her"|"its"|"this"|"that") { -1.5 } else { 0.0 };
             let heur = 0.2 * *raw_count.get(id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
+            // Average connectivity per link — neutralizes the hub problem:
+            // an entity with 197 facts (Macron) must not beat an entity with
+            // 1 strong link (Paris, capital_of France).
             let conn = *raw_conn.get(id).unwrap_or(&0.0);
+            let conn_links = *raw_conn_count.get(id).unwrap_or(&1).max(&1);
+            let conn_avg = conn / conn_links as f32;
             let role = *raw_role.get(id).unwrap_or(&0.0);
+            let role_links = *raw_conn_count.get(id).unwrap_or(&1).max(&1);
+            let role_avg = role / role_links as f32;
             let ov = *raw_overlap.get(id).unwrap_or(&0.0);
             let rel = relevance_cache.get(id).copied().unwrap_or(0.0);
             // Query-named penalty: entities that appear in the question are
@@ -486,8 +495,8 @@ impl AxiomGen {
             let is_query_named = query_entities.contains(id);
             let query_penalty = if is_query_named { 0.2 } else { 1.0 };
             // Connectivity-first: overlap is a weak tiebreaker, not primary.
-            let score = (conn + role * 0.8 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
-            ranked.push((score, name.to_string(), conn, role, ov, rel * 2.0, heur));
+            let score = (conn_avg + role_avg * 0.8 + ov * 0.15 + rel * 2.0 + heur) * query_penalty;
+            ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * 2.0, heur));
         }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
