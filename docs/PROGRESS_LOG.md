@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-08-10 — v14 (2-hop connectivity + workspace cleanup)
+
+**Commits:** `e5e69e4`
+
+### What changed
+- **2-hop connectivity** in extract_answer: entities reachable from a query
+  entity through one intermediate node get a 0.5× bonus (relation-typed).
+  Captures answers like "LH" connecting via "Ovulation" when no direct link.
+- **Workspace cleanup**: Phase 2 refactor made HyperVector.data private, but
+  tle-resonator/tle-clifford/tle-tda-router/tle-deepman still accessed it.
+  All switched to `as_slice()`. Full workspace builds + 135 tests pass.
+
+### Measured results (full 318 bench)
+| Metric | v14 Track2 | v14 2-hop |
+|--------|:---:|:---:|
+| candidate_answer_accuracy | 19.81% | 19.81% |
+| answer_entity_recall | 71.38% | 71.38% |
+| avg_latency | 100ms | 105ms |
+
+### Key findings
+- 2-hop connectivity is correct infrastructure but no metric change on
+  TriviaQA — most answers are 1-hop from query entities already.
+- Workspace was silently broken in non-tested crates (resonator, clifford,
+  tda-router) since Phase 2 — now compiles + tests pass.
+
+---
+
 ## 2026-08-10 — v14 Track 2 (T2.3)
 
 **Commits:** `8b11ad4`

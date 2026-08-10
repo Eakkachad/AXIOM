@@ -4,14 +4,14 @@
 > mark done + record new metrics. Status: `pending` → `in_progress` → `done` / `blocked`.
 > Last updated: 2026-08-10 (v13)
 
-## Current System State (baseline v13)
+## Current System State (baseline v14)
 
 | Metric | Value | Target |
 |--------|:---:|:---:|
-| candidate_answer_accuracy | 18.87% | 40% |
-| answer_entity_recall | 71.07% | 80% |
+| candidate_answer_accuracy | 19.81% | 40% |
+| answer_entity_recall | 71.38% | 80% |
 | substring_accuracy | 23.58% | 50% |
-| avg_latency | 213ms | <200ms |
+| avg_latency | 105ms | <200ms ✓ |
 | gen speed | 12K tok/s | 50K tok/s |
 | codebook memory | 62MB (32×) | <50MB |
 | evidence_answer_recall | 99.69% | 99.7% |
