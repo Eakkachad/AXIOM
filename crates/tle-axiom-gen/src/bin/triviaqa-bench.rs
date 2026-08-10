@@ -90,14 +90,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if answers.iter().any(|answer| lower_entities.iter().any(|entity| entity.contains(answer) || answer.contains(entity))) {
             answer_entity_recall += 1;
         }
-        if debug.is_some() && total < 8 {
-            println!("---");
-            println!("Q: {}", record.question);
-            println!("  gold: {:?}", record.answers);
-            println!("  answer(entity): {:?}", engine_answer);
-            println!("  entities({}): {:?}", engine.graph.entities.len(),
-                engine.graph.entities.iter().take(20).collect::<Vec<_>>());
-            println!("  sentence: {}", output);
+        if debug.is_some() && total < 20 {
+            let gold_in_entities = answers.iter().any(|a| {
+                let al = a.to_lowercase();
+                lower_entities.iter().any(|e| e.contains(&al) || al.contains(e))
+            });
+            let gold_picked = answers.iter().any(|a| engine_answer.to_lowercase().contains(&a.to_lowercase())
+                || a.to_lowercase().contains(&engine_answer.to_lowercase()));
+            if gold_in_entities && !gold_picked {
+                println!("--- FAIL: answer in graph but not picked ---");
+                println!("Q: {}", record.question);
+                println!("  gold: {:?}", record.answers);
+                println!("  picked: {:?}", engine_answer);
+                println!("  top-5 scores (final, conn, role, overlap, VSA, heur):");
+                for (s, n, c, r, o, v, h) in result.diagnostics.iter().take(5) {
+                    let marker = if answers.iter().any(|a| n.to_lowercase().contains(&a.to_lowercase()) || a.to_lowercase().contains(&n.to_lowercase())) { " *** GOLD ***" } else { "" };
+                    println!("    {:5.2} | {:5.2} {:5.2} {:5.2} {:5.2} {:5.2} | {}{}", s, c, r, o, v, h, n, marker);
+                }
+                // Check if gold is elsewhere in the list
+                for (idx, (s, n, _, _, _, _, _)) in result.diagnostics.iter().enumerate().skip(5) {
+                    if answers.iter().any(|a| n.to_lowercase().contains(&a.to_lowercase()) || a.to_lowercase().contains(&n.to_lowercase())) {
+                        println!("    {:5.2} | rank #{} | {} *** GOLD ***", s, idx + 1, n);
+                        break;
+                    }
+                }
+            }
         }
         if total > 0 && total % 50 == 0 {
             println!("  [{} records done, avg so far: {:?}]", total, total_latency / total as u32);

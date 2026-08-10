@@ -30,16 +30,14 @@ use crate::search::{beam_search, ScoredPath, SearchConfig};
 /// The result of a generation query.
 #[derive(Debug, Clone)]
 pub struct GenerationResult {
-    /// The generated natural language sentence.
     pub sentence: String,
-    /// The best single-entity answer extracted from the selected path.
     pub answer: String,
-    /// Reasoning trace: descriptions of each step in the path.
     pub reasoning: Vec<String>,
-    /// Energy score of the best path found.
     pub energy: f32,
-    /// Number of triples in the selected path.
     pub path_length: usize,
+    /// Per-entity score breakdown for top-N candidates.
+    /// (final_score, name, connectivity, role, overlap, vsa, heuristics)
+    pub diagnostics: Vec<(f32, String, f32, f32, f32, f32, f32)>,
 }
 
 /// Policy used when a new fact conflicts with an existing subject/relation.
@@ -152,6 +150,7 @@ impl AxiomGen {
                 reasoning: vec!["No known entities found in query.".to_string()],
                 energy: 0.0,
                 path_length: 0,
+                diagnostics: Vec::new(),
             };
         }
 
@@ -181,6 +180,7 @@ impl AxiomGen {
                 reasoning: vec!["No paths found in knowledge graph.".to_string()],
                 energy: 0.0,
                 path_length: 0,
+                diagnostics: Vec::new(),
             };
         }
 
@@ -221,7 +221,7 @@ impl AxiomGen {
             &self.template_bank,
         );
 
-        let answer = self.extract_answer(&self.graph, &query_entities, intent, &query_vector, query);
+        let (answer, diag) = self.extract_answer(&self.graph, &query_entities, intent, &query_vector, query);
 
         GenerationResult {
             sentence,
@@ -229,6 +229,7 @@ impl AxiomGen {
             reasoning,
             energy: best.energy,
             path_length: path_triples.len(),
+            diagnostics: diag,
         }
     }
 
@@ -296,7 +297,7 @@ impl AxiomGen {
 
         // Fallback: if beam paths produced no answer, use the old extract_answer.
         if scores.is_empty() {
-            return self.extract_answer(graph, query_entities, intent, query_vector, query);
+            return self.extract_answer(graph, query_entities, intent, query_vector, query).0;
         }
 
         // Entity-quality bonus: short, capitalized, high-overlap entities win.
@@ -400,7 +401,8 @@ impl AxiomGen {
         intent: Intent,
         query_vector: &HyperVector,
         query: &str,
-    ) -> String {
+    ) -> (String, Vec<(f32, String, f32, f32, f32, f32, f32)>) {
+        // returned: (answer, diagnostics: [(final_score, name, conn, role, overlap, vsa, heuristics), ...])
         let content_words: Vec<String> = query
             .to_lowercase()
             .split(|c: char| !c.is_alphanumeric())
@@ -411,9 +413,10 @@ impl AxiomGen {
                 .collect();
 
         use std::collections::HashMap;
-        let mut scores: HashMap<usize, (f32, usize)> = HashMap::new();
-        // Entity-vector cache: compute semantic_vector once per unique entity
-        // (it's called redundantly when an entity appears in multiple triples).
+        let mut raw_conn: HashMap<usize, f32> = HashMap::new();
+        let mut raw_role: HashMap<usize, f32> = HashMap::new();
+        let mut raw_overlap: HashMap<usize, f32> = HashMap::new();
+        let mut raw_count: HashMap<usize, usize> = HashMap::new();
         let mut relevance_cache: HashMap<usize, f32> = HashMap::new();
 
         for (ti, triple) in graph.triples.iter().enumerate() {
@@ -428,9 +431,9 @@ impl AxiomGen {
             for entity_id in [triple.subject_id, triple.object_id] {
                 let name = graph.entity_name(entity_id);
                 let lower = name.to_lowercase();
-                let overlap = content_words.iter().filter(|w| lower.contains(w.as_str())).count();
-                let connected_bonus = if connected_id == Some(entity_id) { 2.5 * triple_conf } else { 0.0 };
-                let role_bonus = if connected_id == Some(entity_id) {
+                let ov = content_words.iter().filter(|w| lower.contains(w.as_str())).count() as f32;
+                let conn = if connected_id == Some(entity_id) { 2.5 * triple_conf } else { 0.0 };
+                let role = if connected_id == Some(entity_id) {
                     let rb = match intent {
                         Intent::Who => if subject_in_query { 3.0 } else { 0.0 },
                         Intent::What | Intent::Where => if !subject_in_query { 3.0 } else { 0.0 },
@@ -438,61 +441,36 @@ impl AxiomGen {
                     };
                     rb * triple_conf
                 } else { 0.0 };
-                let relevance = *relevance_cache.entry(entity_id).or_insert_with(|| {
+                let rel = *relevance_cache.entry(entity_id).or_insert_with(|| {
                     tle_vsa::cosine_similarity(query_vector, &self.semantic_vector(graph.entity_name(entity_id)))
                 });
-                let entry = scores.entry(entity_id).or_insert((0.0, 0));
-                entry.0 += connected_bonus + role_bonus + overlap as f32 + relevance * 2.0;
-                entry.1 += 1;
+                *raw_conn.entry(entity_id).or_insert(0.0) += conn;
+                *raw_role.entry(entity_id).or_insert(0.0) += role;
+                *raw_overlap.entry(entity_id).or_insert(0.0) += ov;
+                *raw_count.entry(entity_id).or_insert(0) += 1;
             }
         }
 
-        let mut ranked: Vec<(f32, usize, String)> = scores
-            .into_iter()
-            .filter_map(|(id, (score, count))| {
-                let name = graph.entity_name(id);
-                let words = name.split_whitespace().count();
-                if words > 5 {
-                    return None;
-                }
-                // Strong preference for short, entity-like answers.
-                let length_penalty = match words {
-                    0 | 1 => 0.0,
-                    2 => 0.4,
-                    3 => 1.2,
-                    4 => 2.0,
-                    _ => 3.0,
-                };
-                // Capitalized proper nouns are far more likely to be answers
-                // than lowercase descriptive phrases ("Martina Hingis" vs
-                // "a tennis player").
-                let capitalized_bonus = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
-                    1.0
-                } else {
-                    -0.5
-                };
-                // Penalize entities that begin with articles/determiners
-                // ("a tennis player", "the inventor of ...") — descriptive
-                // phrases, not answer entities.
-                let first = name
-                    .split_whitespace()
-                    .next()
-                    .map(|w| w.to_lowercase())
-                    .unwrap_or_default();
-                let determiner_penalty = if matches!(first.as_str(), "a" | "an" | "the" | "some" | "his" | "her" | "its" | "this" | "that") {
-                    -1.5
-                } else {
-                    0.0
-                };
-                Some((
-                    score + 0.2 * count as f32 - length_penalty + capitalized_bonus + determiner_penalty,
-                    id,
-                    name.to_string(),
-                ))
-            })
-            .collect();
+        let mut ranked: Vec<(f32, String, f32, f32, f32, f32, f32)> = Vec::new();
+        for (id, _) in &raw_conn {
+            let name = graph.entity_name(*id);
+            let words = name.split_whitespace().count();
+            if words > 5 || words == 0 { continue; }
+            let len_pen = match words { 0|1 => 0.0, 2 => 0.4, 3 => 1.2, 4 => 2.0, _ => 3.0 };
+            let cap_bonus = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) { 1.0 } else { -0.5 };
+            let first = name.split_whitespace().next().map(|w| w.to_lowercase()).unwrap_or_default();
+            let det_pen = if matches!(first.as_str(), "a"|"an"|"the"|"some"|"his"|"her"|"its"|"this"|"that") { -1.5 } else { 0.0 };
+            let heur = 0.2 * *raw_count.get(id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
+            let conn = *raw_conn.get(id).unwrap_or(&0.0);
+            let role = *raw_role.get(id).unwrap_or(&0.0);
+            let ov = *raw_overlap.get(id).unwrap_or(&0.0);
+            let rel = relevance_cache.get(id).copied().unwrap_or(0.0);
+            let score = conn + role + ov + rel * 2.0 + heur;
+            ranked.push((score, name.to_string(), conn, role, ov, rel * 2.0, heur));
+        }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        ranked.first().map(|(_, _, name)| name.clone()).unwrap_or_default()
+        let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
+        (answer, ranked)
     }
 
     /// Extract entity IDs mentioned in the query that exist in the knowledge graph.
