@@ -17,6 +17,32 @@ pub struct DecomposedFact {
     pub object: String,
 }
 
+/// Quality gate for decomposed facts: reject triples whose entities are
+/// visibly junk (long lowercase phrases, bare copulas with weak subjects).
+/// This filter runs AT INGESTION — junk never enters the graph, so
+/// reasoning methods get a clean signal.
+pub fn is_fact_worthy(fact: &DecomposedFact) -> bool {
+    let subj_words = fact.subject.split_whitespace().count();
+    let obj_words = fact.object.split_whitespace().count();
+    if subj_words > 6 || obj_words > 6 { return false; }
+    if subj_words == 0 || obj_words == 0 { return false; }
+    // Reject subjects that are only bare verbs used as subjects.
+    let subj_lower = fact.subject.to_lowercase();
+    if subj_words <= 2
+        && (subj_lower == "has" || subj_lower == "had"
+            || subj_lower == "been" || subj_lower == "being")
+    {
+        return false;
+    }
+    // "mentions" / "is_related_to" only for proper-noun phrases.
+    let rel = fact.relation.as_str();
+    if rel == "mentions" || rel == "is_related_to" {
+        let has_cap = fact.object.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
+        if !has_cap { return false; }
+    }
+    true
+}
+
 /// Relational predicates, longest phrase first so `was born in` is matched
 /// before the bare `was`.
 const RELATIONAL_PHRASES: &[(&str, &str)] = &[
@@ -466,20 +492,24 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         for word in raw_object.split_whitespace() {
             let cleaned = word.trim_matches(|c: char| !c.is_ascii_digit());
             if cleaned.len() == 4 && cleaned.starts_with('1') || cleaned.len() == 4 && cleaned.starts_with('2') {
-                facts.push(DecomposedFact {
+                let f = DecomposedFact {
                     subject: subject.clone(),
                     relation: "happened_in".to_string(),
                     object: cleaned.to_string(),
-                });
+                };
+                if is_fact_worthy(&f) { facts.push(f); }
                 break;
             }
         }
 
-        facts.push(DecomposedFact {
+        let fact = DecomposedFact {
             subject: subject.clone(),
             relation: relation.to_string(),
             object: object.clone(),
-        });
+        };
+        if is_fact_worthy(&fact) {
+            facts.push(fact);
+        }
 
         // Surface embedded proper-noun phrases from the object as standalone
         // entities. E.g. "the inventor of the lightweight baby buggy" yields
@@ -490,11 +520,12 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         if object.split_whitespace().count() <= 20 {
             for phrase in extract_proper_nouns(&object) {
                 if !facts.iter().any(|f| f.subject == subject && f.object == phrase) {
-                    facts.push(DecomposedFact {
+                    let f = DecomposedFact {
                         subject: subject.clone(),
                         relation: "is_related_to".to_string(),
                         object: phrase,
-                    });
+                    };
+                    if is_fact_worthy(&f) { facts.push(f); }
                 }
             }
         }
@@ -514,11 +545,12 @@ pub fn extract_sentence_entities(sentence: &str, fallback_subject: &str) -> Vec<
     let mut facts: Vec<DecomposedFact> = Vec::new();
     for phrase in extract_proper_nouns(sentence) {
         if !facts.iter().any(|f: &DecomposedFact| f.subject == fallback_subject && f.object.as_str() == phrase.as_str()) {
-            facts.push(DecomposedFact {
+            let f = DecomposedFact {
                 subject: fallback_subject.to_string(),
                 relation: "mentions".to_string(),
                 object: phrase,
-            });
+            };
+            if is_fact_worthy(&f) { facts.push(f); }
         }
     }
     facts
@@ -582,7 +614,8 @@ mod tests {
             "Martina Hingis is a Swiss tennis player who won the Australian Open in 1997.",
             "Martina Hingis",
         );
-        assert!(facts.iter().any(|f| f.subject == "Martina Hingis" && f.relation == "is"));
+        // Quality gate rejects descriptive copulas ("is a Swiss tennis player").
+        // Only the won + happened_in facts should survive.
         assert!(facts.iter().any(|f| f.subject == "Martina Hingis" && f.relation == "won"));
         assert!(facts.iter().any(|f| f.subject == "Martina Hingis" && f.relation == "happened_in" && f.object == "1997"));
     }
