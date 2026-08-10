@@ -33,6 +33,8 @@ pub struct EnergyConfig {
     pub lambda_length: f32,
     /// Weight for simplicity (Occam's razor).
     pub lambda_simplicity: f32,
+    /// Weight for CR2 path-integral confidence (multiplicative hop reliability).
+    pub lambda_cr2: f32,
     /// Target path length for length penalty.
     pub target_length: usize,
 }
@@ -48,6 +50,7 @@ impl Default for EnergyConfig {
             lambda_confidence: 0.0,
             lambda_length: 0.3,
             lambda_simplicity: 0.2,
+            lambda_cr2: 0.3,
             target_length: 3,
         }
     }
@@ -90,6 +93,7 @@ pub fn compute_energy(
     let coherence = compute_coherence(path_triples, entities, relations, codebook);
     let confidence = compute_confidence(path_triples, entities, relations, triple_confidences);
     let ief = entity_ief.map(|ief| compute_ief_score(path_triples, ief)).unwrap_or(0.0);
+    let cr2 = compute_cr2(path_triples, entities, relations, codebook);
     let length_penalty = compute_length_penalty(path_triples.len(), config.target_length);
     let simplicity = compute_simplicity(path_triples.len());
 
@@ -97,6 +101,7 @@ pub fn compute_energy(
         + config.lambda_consistency * consistency
         + config.lambda_confidence * confidence
         + config.lambda_ief * ief
+        + config.lambda_cr2 * cr2
         + config.lambda_coherence * coherence
         + config.lambda_length * length_penalty
         + config.lambda_simplicity * simplicity
@@ -122,6 +127,25 @@ fn compute_confidence(triples: &[Triple], entities: &[String], relations: &[Stri
         total += len_score * rel_specificity;
     }
     if triples.is_empty() { 0.0 } else { total / triples.len() as f32 }
+}
+
+/// CR2 path-integral confidence: multiplicative reliability across hops.
+/// Each triple is encoded via GF(2) packed XOR, then the product of
+/// consecutive cosine similarities measures path consistency.
+fn compute_cr2(
+    triples: &[Triple],
+    entities: &[String],
+    relations: &[String],
+    codebook: &mut Codebook,
+) -> f32 {
+    if triples.len() < 2 { return 0.0; }
+    let packed_triples: Vec<Vec<u64>> = triples.iter().filter_map(|t| {
+        let hv = encode_triple(t, entities, relations, codebook);
+        hv.packed.clone()
+    }).collect();
+    if packed_triples.len() < 2 { return 0.0; }
+    let refs: Vec<&[u64]> = packed_triples.iter().map(|v| v.as_slice()).collect();
+    HyperVector::cr2_confidence(&refs)
 }
 
 /// VSA internal consistency: for each triple, measure how well the bound
