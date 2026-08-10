@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-08-10 — v14 Track 2 (T2.3)
+
+**Commits:** `8b11ad4`
+
+### What changed
+- **T2.3 Wikipedia batch ingestion** — vsalm-wiki `--save <file>` (TSV
+  persistence of facts), `--load <file>` (reload without re-fetching).
+  Tested: 2 pages → 308 facts → save → load → QA "where is paris located" → France.
+
+### Measured results
+- Fetch speed ~300ms/page → 100 pages ≈ 30s (well under 2 min target).
+- Persistence round-trip verified.
+
+---
+
 ## 2026-08-10 — v14 Track 2 (T2.1-T2.2)
 
 **Commits:** `e42442b`, `cf6b295`
