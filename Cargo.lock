@@ -539,6 +539,7 @@ dependencies = [
  "tle-afc",
  "tle-vsa",
  "tle-vsa-lm",
+ "ureq",
 ]
 
 [[package]]
