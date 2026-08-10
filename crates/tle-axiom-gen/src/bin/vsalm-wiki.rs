@@ -27,6 +27,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = LmConfig { dim: 4096, max_order: 4, beam_width: 8, max_gen_tokens: 12, w_knowledge: 3.0, w_engram: 0.0, w_tba: 0.0, knowledge_only: true, ..Default::default() };
     let mut lm = VsaLm::new(config);
+    // Answer-first engine: AxiomGen extract_answer finds the entity, VSA-LM
+    // is the fluency fallback.  Both share the same ingested facts.
+    let mut engine = AxiomGen::new(2048);
+    engine.search_config.max_hops = 3;
+    engine.search_config.beam_width = 16;
     let mut total_facts = 0usize;
 
     for url in &urls {
@@ -53,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
                 if seen.insert(key.clone()) {
                     lm.knowledge.add_fact(&fact.subject, &fact.relation, &fact.object);
+                    engine.add_fact(&fact.subject, &fact.relation, &fact.object);
                     for w in fact.subject.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
                     for w in fact.relation.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
                     for w in fact.object.split(|c: char| c == '_' || c == ' ') { if !w.is_empty() { lm.vocab.get_or_add(w); } }
@@ -75,7 +81,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let question = line?.trim().to_string();
         if question.is_empty() { continue; }
         let t0 = Instant::now();
-        let answer = lm.generate(&question, Some(8));
+        // Answer-first: extract_answer finds the entity directly from the
+        // knowledge graph.  Fall back to VSA-LM fluency if no entity found.
+        let result = engine.generate(&question);
+        let answer = if !result.answer.is_empty() {
+            let entity = result.answer;
+            if entity.split_whitespace().count() <= 5 && entity.to_lowercase() != question.to_lowercase() {
+                entity
+            } else {
+                lm.generate(&question, Some(8))
+            }
+        } else {
+            lm.generate(&question, Some(8))
+        };
         println!("  → {}  [{:.2?}]", answer, t0.elapsed());
     }
     Ok(())
