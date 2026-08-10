@@ -163,7 +163,6 @@ fn load_records(path: &str) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
 
 fn extract_document_facts(directory: &str, files: &[String], question: &str) -> Vec<[String; 3]> {
     let mut facts = Vec::new();
-    // Codebook shared with AxiomGen: same seed = deterministic vectors.
     let mut codebook = Codebook::new(2048, 0xA10A_CAFE_BEAD_0001);
     let query_vector = compose_text_vector(question, &mut codebook);
     for filename in files {
@@ -174,35 +173,53 @@ fn extract_document_facts(directory: &str, files: &[String], question: &str) -> 
         let subject = filename.trim_end_matches(".txt").replace('_', " ");
         let clean = clean_wikipedia_text(&text);
 
-        let mut sentences: Vec<(f32, String)> = clean
-            .split(|character| matches!(character, '.' | '!' | '?'))
+        let candidates: Vec<String> = clean
+            .split(|c| matches!(c, '.' | '!' | '?'))
             .take(300)
             .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
             .filter(|s| is_likely_sentence(s))
+            .collect();
+
+        let mut vsa_ranked: Vec<(f32, String)> = candidates.iter()
             .map(|s| {
-                let sim = tle_vsa::cosine_similarity(&query_vector, &compose_text_vector(&s, &mut codebook));
-                let caps = count_nonfront_capitals(&s);
-                let cap_bonus = if caps >= 2 { 0.04 } else { 0.0 };
-                (sim + cap_bonus, s)
+                let sim = tle_vsa::cosine_similarity(&query_vector, &compose_text_vector(s, &mut codebook));
+                let caps = count_nonfront_capitals(s);
+                let cap_bonus = if caps >= 2 { 0.12 } else { 0.0 };
+                (sim + cap_bonus, s.clone())
             })
             .collect();
-        sentences.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        vsa_ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut seen = std::collections::HashSet::new();
-        for (idx, (_, sentence)) in sentences.iter().enumerate().take(5) {
+        let mut processed = std::collections::HashSet::new();
+        for (idx, (_, sentence)) in vsa_ranked.iter().take(5).enumerate() {
             for fact in decompose_sentence(sentence, &subject) {
                 let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
-                if seen.insert(key.clone()) {
-                    facts.push([fact.subject, fact.relation, fact.object]);
-                }
+                if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
             }
-            if idx < 4 && count_nonfront_capitals(sentence) >= 2 {
+            if idx < 3 && count_nonfront_capitals(sentence) >= 2 {
                 for fact in extract_sentence_entities(sentence, &subject) {
                     let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
-                    if seen.insert(key.clone()) {
-                        facts.push([fact.subject, fact.relation, fact.object]);
-                    }
+                    if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
                 }
+            }
+            processed.insert(sentence.clone());
+        }
+
+        // Bonus: top-2 overlap sentences (word match) not already processed.
+        // These carry proper-noun entities that VSA might miss.
+        let mut overlap_ranked: Vec<(usize, String)> = candidates.iter()
+            .filter(|s| !processed.contains(*s))
+            .map(|s| {
+                let ov = question_overlap_fast(question, s);
+                (ov, s.clone())
+            })
+            .collect();
+        overlap_ranked.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, sentence) in overlap_ranked.iter().take(2) {
+            for fact in decompose_sentence(sentence, &subject) {
+                let key = (fact.subject.clone(), fact.relation.clone(), fact.object.clone());
+                if seen.insert(key.clone()) { facts.push([fact.subject, fact.relation, fact.object]); }
             }
         }
     }
@@ -282,6 +299,15 @@ fn compose_text_vector(text: &str, codebook: &mut Codebook) -> tle_vsa::HyperVec
         result = result.add(&codebook.get_or_insert(&cleaned));
     }
     result.normalize()
+}
+
+fn question_overlap_fast(question: &str, sentence: &str) -> usize {
+    let lower_q = question.to_lowercase();
+    let lower_s = sentence.to_lowercase();
+    lower_q.split_whitespace()
+        .filter(|w| w.len() >= 4 && !matches!(*w, "what" | "which" | "where" | "when" | "does" | "have" | "who"))
+        .filter(|w| lower_s.contains(w))
+        .count()
 }
 
 fn read_evidence_text(directory: &str, files: &[String]) -> String {
