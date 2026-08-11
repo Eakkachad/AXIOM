@@ -2,15 +2,15 @@
 
 > This is the canonical task board. Agents MUST update it after every task:
 > mark done + record new metrics. Status: `pending` → `in_progress` → `done` / `blocked`.
-> Last updated: 2026-08-10 (v13)
+> Last updated: 2026-08-11 (v15)
 
-## Current System State (baseline v14)
+## Current System State (baseline v15)
 
 | Metric | Value | Target |
 |--------|:---:|:---:|
-| candidate_answer_accuracy | 19.81% | 40% |
-| answer_entity_recall | 71.38% | 80% |
-| substring_accuracy | 23.90% | 50% |
+| candidate_answer_accuracy | 20.44-20.75% | 40% |
+| answer_entity_recall | 76.10% | 80% |
+| substring_accuracy | 22.64% | 50% |
 | avg_latency | ~100ms (idle) | <200ms ✓ |
 | gen speed | 12K tok/s | 50K tok/s |
 | codebook memory | 62MB (32×) | <50MB |
@@ -90,10 +90,25 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result:** candidate +0.3pt peak
 
 ### T1.5 Diagnostic-driven failure analysis
-- [ ] Status: done · Priority: P0 · Effort: 2h · Depends: none
+- [x] Status: done · Priority: P0 · Effort: 2h · Depends: none
 - **Result:** Root cause = OVERLAP DOMINANCE + entity boundary imprecision.
   Diagnostics added (`AXIOM_TRIVIA_DEBUG` prints top-5 scores). See
   PROGRESS_LOG 2026-08-10 #3.
+
+### T1.7 Proper-noun entity boundary precision (decomposition quality)
+- [x] Status: done · Priority: P0 · Effort: 1 day · Depends: none
+- **Goal:** candidate +3-5pt via cleaner entity boundaries. RCA: gold answer
+  often enters the graph ONLY as a polluted entity surface ("Chicago, Illinois,
+  17 mi northwest" instead of "Chicago"), so connectivity never fires for it.
+- **File:** `crates/tle-axiom-gen/src/decompose.rs` (`extract_proper_nouns`)
+- **Verify:** full bench, candidate up, recall NOT down
+- **Status:** KEPT — phrases now stop at commas/numbers/`by`/`alongside`/`or`/
+  `as`/etc; trailing punctuation trimmed; single proper nouns admitted when
+  comma-terminated, preceded by lowercase, or mid-sentence (NOT article-headed
+  or sentence-initial). candidate 19.50→20.44-20.75% (+0.6-0.9pt), recall
+  71.38→76.10% (+4.72pt — record single-jump), substring 23.90→22.64%
+  (-1.26pt, sentence-linearization metric; keep-gate = candidate+recall both up).
+  6 unit tests added. **Result:** recall +4.72pt, candidate +0.6-0.9pt
 
 ---
 

@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-10 (v14 final — RCA + Track 1/2/3 infra complete)
-> Status: TriviaQA candidate 19.81% · entity recall 71.38% · latency ~100ms (idle)
+> Last updated: 2026-08-11 (v15 — T1.7 decomposition boundary precision)
+> Status: TriviaQA candidate 20.44-20.75% · entity recall 76.10% · latency ~100ms (idle)
 
 > ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -20,16 +20,25 @@
 > 4. Implement → test → bench → update ROADMAP/PROGRESS_LOG/this file → commit.
 > 5. NEVER claim improvement without a bench. NEVER re-try documented failures.
 
-> ## CURRENT STATE (v14 baseline — LOCKED)
+> ## CURRENT STATE (v15 baseline — LOCKED)
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **19.81%** | 40% |
-> | answer_entity_recall | **71.38%** | 80% |
-> | substring_accuracy | 23.90% | 50% |
+> | candidate_answer_accuracy | **20.44-20.75%** | 40% |
+> | answer_entity_recall | **76.10%** | 80% |
+> | substring_accuracy | 22.64% | 50% |
 > | avg_latency | ~100ms (idle) | <200ms ✓ |
 > | gen speed | 12K tok/s | 50K tok/s |
 > | codebook memory | 62MB (32×) | <50MB |
+>
+> ### What was built (v15):
+> - **T1.7 proper-noun entity boundary precision**: `extract_proper_nouns` stops
+>   phrases at commas/numbers/connectors (`by`, `alongside`, `or`, `as`, etc),
+>   trims trailing punctuation, admits single proper nouns when comma-terminated
+>   or lowercase-preceded (not article-headed / sentence-initial). Gold answers
+>   ("Chicago", "Switzerland", "LH") now enter the graph as CLEAN entities.
+>   recall 71.38→76.10% (+4.72pt — record jump), candidate +0.6-0.9pt.
+> - 6 new decompose unit tests; full workspace `cargo test` green.
 >
 > ### What was built (v14 full session):
 > - **Track 1 (accuracy)**: T1.2 lowercase NP extraction, T1.3 permutation
@@ -52,16 +61,24 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **Structural gains require decomposition quality** (cleaner entities → better
->   connectivity signal), NOT re-weighting ranking (RCA conclusion).
-> - Candidates: improve entity boundary precision, extract_more entities per
->   sentence, or scale Wikipedia corpus for semantic layer re-enable.
+> - **Decomposition quality is now clean enough to expose the real bottleneck:
+>   ranking aggregation.** Recall jumped +4.72pt (76.10%) while candidate only
+>   +0.6-0.9pt (20.44-20.75%). The remaining gap is extract_answer's
+>   non-normalized linear sum (RCA). Next experiments must tackle rank-normalized
+>   scoring WITH per-signal weight calibration — NOT the blind equal-weight
+>   (T1.6, reverted 12.58%) and NOT blind re-weighting (5+ documented failures).
+> - Further decomposition options if needed: clause typing, more entities per
+>   sentence, scale Wikipedia corpus for semantic layer re-enable.
 > - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)
 > - **DDTree dead** (4 attempts regressed) — use legacy extract_answer
 > - **extract_answer tuned linear-sum is a strong local optimum** (19.81%) —
->   survived 5+ redesign attempts. Do NOT re-weight blindly.
+>   survived 5+ redesign attempts. Do NOT re-weight blindly. With T1.7 the
+>   baseline is candidate 20.44-20.75% / recall 76.10% — ranking is now the
+>   confirmed bottleneck, so calibration work must be weight-search-based.
+> - **Per-record bench diagnostics are NOT stable across runs** (147/318 flip
+>   from HashMap iteration order) — only aggregate metrics are trustworthy.
 > - **Semantic layer regresses when wired into scoring** — needs content-word
 >   query + big corpus + calibration before re-enable.
 > - **VSA signal near-zero** with random codebook — keep as weak tiebreaker.

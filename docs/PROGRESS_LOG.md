@@ -5,6 +5,53 @@
 
 ---
 
+## 2026-08-11 — v15 (T1.7 decomposition quality: proper-noun boundary precision)
+
+**Commits:** T1.7 (this entry)
+
+### What changed
+- **T1.7** `decompose.rs` `extract_proper_nouns`: proper-noun phrases now stop
+  at comma/semicolon and numeric tokens, and at connectors/prepositions that
+  were previously swallowed (`by`, `or`, `as`, `alongside`, `named`, `such`,
+  `like`, `including`, `between`, `after`, `before`, `through`, `under`,
+  `over`, `during`, `within`, `about`, `around`). Trailing `, ; .` trimmed.
+- Single capitalized proper nouns admitted when (a) comma/semicolon-terminated
+  (apposition: "Chicago, Illinois"), (b) preceded by a lowercase token
+  ("present-day Switzerland", "of Alaska"), and NOT article-headed ("the Loop"
+  rejected) or sentence-initial common words ("Located" rejected) or
+  discardable function words.
+- **Root cause targeted (RCA row 5):** gold answers previously entered the
+  graph only as polluted surfaces, e.g. `(O'Hare International Airport,
+  mentions, Chicago, Illinois, 17 mi northwest)` → connectivity never fires.
+  Now `Chicago` and `Illinois` are clean entities. O'Hare evidence verified in
+  debug before benching.
+
+### Measured results (full 318 bench, stable across 6 runs)
+| Metric | v14 baseline | v15 T1.7 | Δ |
+|--------|:---:|:---:|:---:|
+| candidate_answer_accuracy | 19.50-19.81% | **20.44-20.75%** | +0.6-0.9pt |
+| answer_entity_recall | 71.38% | **76.10%** | **+4.72pt** |
+| substring_accuracy | 23.90% | 22.64% | -1.26pt |
+| evidence_answer_recall | 99.69% | 99.69% | 0 |
+| avg_latency | ~100-265ms | ~100-235ms | ≈ |
+
+### Key findings
+- Recall +4.72pt is the largest single-session jump in AXIOM history — the
+  boundary fix surfaces answers (Chicago, Switzerland, LH, Baby Buggy) as
+  clean graph nodes that connectivity can now reach.
+- Candidate rose only +0.6-0.9pt despite the huge recall gain → confirms RCA:
+  once entities are clean, the remaining bottleneck is the ranking
+  aggregation (hub domination), not decomposition. Next step should be
+  rank-normalized scoring WITH weight calibration (not blind equal-weight).
+- substring -1.26pt is a sentence-linearization artifact (beam path → spoken
+  sentence), NOT answer selection. Keep-gate (candidate primary + recall
+  secondary) both improved → KEPT.
+- Per-record diagnostics are NOT stable across identical runs (147/318 flip)
+  due to HashMap iteration order — only aggregate metrics are trustworthy.
+  Use aggregates, not per-record diffs, for A/B decisions.
+
+---
+
 ## 2026-08-10 — v14 (RCA + T1.6 retrieve-then-rank experiments)
 
 **Commits:** RCA doc (`docs/ROOT_CAUSE_ANALYSIS.md`), experiments reverted

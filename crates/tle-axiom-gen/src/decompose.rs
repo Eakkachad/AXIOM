@@ -679,11 +679,15 @@ pub fn extract_sentence_entities(sentence: &str, fallback_subject: &str) -> Vec<
     facts
 }
 
-/// Extract capitalized multi-word proper-noun phrases from a string.
+/// Extract capitalized proper-noun phrases from a string.
 ///
 /// Looks for runs of tokens where at least the first is capitalized and not at
 /// sentence start (heuristically: the token before is lowercase or a
-/// preposition). Returns the longest capitalized phrase per window.
+/// preposition). Returns the longest capitalized phrase per window, stopping
+/// the phrase at clause/preposition/coordinator boundaries so names stay
+/// clean: "present-day Switzerland by Count Radbot" keeps only "Switzerland"
+/// (not "Switzerland by Count Radbot"), and "Chicago, Illinois, 17 mi northwest"
+/// yields "Chicago" and "Illinois" (not a single comma-junk entity).
 fn extract_proper_nouns(text: &str) -> Vec<String> {
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut out = Vec::new();
@@ -695,24 +699,73 @@ fn extract_proper_nouns(text: &str) -> Vec<String> {
         // capitalized/lowercase words until a clause marker or preposition.
         if starts_cap {
             let mut j = i;
-            // Stop the phrase at relative pronouns, prepositions, and
-            // coordinators so "Baby Buggy with a collapsible ..." keeps only
-            // "Baby Buggy".
-            while j < words.len()
-                && !matches!(
-                    words[j].to_lowercase().as_str(),
-                    "who" | "which" | "that" | "where" | "with" | "in" | "on" | "at"
-                        | "of" | "to" | "from" | "and" | "but" | "for" | "the" | "a"
-                        | "an" | "his" | "her" | "its" | "was" | "is" | "are" | "were"
-                )
-            {
+            let mut comma_terminated = false;
+            // Stop the phrase at relative pronouns, prepositions, coordinators,
+            // numbers, and punctuation.  A trailing comma (",", ";") closes the
+            // phrase but keeps the word before it — "Chicago," → "Chicago".
+            while j < words.len() {
+                let token = words[j];
+                let lower = token.to_lowercase();
+                let starts_digit = token.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
+                let ends_comma = token.ends_with(',') || token.ends_with(';');
+                if starts_digit
+                    || matches!(lower.as_str(),
+                        "who" | "which" | "that" | "where" | "with" | "in" | "on" | "at"
+                            | "of" | "to" | "from" | "and" | "but" | "for" | "the" | "a"
+                            | "an" | "his" | "her" | "its" | "was" | "is" | "are" | "were"
+                            | "by" | "or" | "as" | "alongside" | "named" | "such" | "like"
+                            | "including" | "between" | "after" | "before" | "through"
+                            | "under" | "over" | "during" | "within" | "about" | "around")
+                {
+                    break;
+                }
                 j += 1;
+                if ends_comma {
+                    comma_terminated = true;
+                    break;
+                }
             }
-            let phrase_words = &words[i..j];
-            if phrase_words.len() >= 2 && phrase_words.len() <= 5 {
-                let phrase = phrase_words.join(" ");
+            // Trim trailing commas/semicolons/periods from the last word so
+            // "Chicago," becomes "Chicago", "Airport," becomes "Airport", and
+            // "Loop." stays "Loop" (still filtered below as a common noun).
+            let phrase_words: Vec<&str> = words[i..j]
+                .iter()
+                .map(|w| w.trim_end_matches(|c: char| c == ',' || c == ';' || c == '.'))
+                .filter(|w| !w.is_empty())
+                .collect();
+            let phrase_len = phrase_words.len();
+            // Admit single capitalized words only when they are genuine proper
+            // nouns, not sentence-initial or article-headed common nouns:
+            //   1. A comma/semicolon terminated them — apposition/list pattern
+            //      ("Chicago, Illinois").
+            //   2. The preceding token is lowercase — a mid-sentence proper
+            //      noun ("present-day Switzerland", "of Alaska").
+            //   3. Not preceded by an article — "the Loop" is a common-noun
+            //      phrase, "Loop" alone is not a proper noun.
+            //   4. The word is not a discardable function word ("He", "Located").
+            let is_appositive = comma_terminated && phrase_len == 1;
+            let preceded_lower = phrase_len == 1
+                && i > 0
+                && words[i - 1]
+                    .chars()
+                    .next()
+                    .map(|c| c.is_lowercase())
+                    .unwrap_or(false);
+            let preceded_article = phrase_len == 1
+                && i > 0
+                && matches!(
+                    words[i - 1].to_lowercase().as_str(),
+                    "a" | "an" | "the"
+                );
+            let single_ok = phrase_len == 1
+                && !is_discardable(&phrase_words[0].to_lowercase())
+                && phrase_words[0].len() >= 3;
+            if (phrase_len >= 2 && phrase_len <= 5)
+                || (is_appositive || preceded_lower) && !preceded_article && single_ok
+            {
                 let first = phrase_words[0].to_lowercase();
                 if !matches!(first.as_str(), "a" | "an" | "the" | "his" | "her" | "its") {
+                    let phrase = phrase_words.join(" ");
                     out.push(phrase);
                 }
             }
@@ -936,5 +989,98 @@ mod tests {
             object: "a former world number one tennis player".into(),
         };
         assert!(!is_fact_worthy(&f));
+    }
+
+    #[test]
+    fn proper_nouns_stop_at_connectors_and_prepositions() {
+        // "by" terminates the phrase: "present-day Switzerland by Count Radbot"
+        // must yield "Switzerland", not "Switzerland by Count Radbot".
+        let nouns = extract_proper_nouns(
+            "a fortress built in present-day Switzerland by Count Radbot of Klettgau",
+        );
+        assert!(
+            nouns.iter().any(|n| n == "Switzerland"),
+            "expected Switzerland, got {:?}",
+            nouns
+        );
+        assert!(
+            nouns.iter().any(|n| n == "Count Radbot"),
+            "expected Count Radbot, got {:?}",
+            nouns
+        );
+        assert!(
+            !nouns.iter().any(|n| n.contains("by")),
+            "phrase must not swallow the 'by' connector: {:?}",
+            nouns
+        );
+    }
+
+    #[test]
+    fn proper_nouns_split_on_commas_and_numbers() {
+        // "Chicago, Illinois, 17 mi northwest" must yield clean "Chicago" and
+        // "Illinois", never the comma-junk entity "Chicago, Illinois, 17 mi northwest".
+        let nouns = extract_proper_nouns(
+            "located on the Far Northwest Side of Chicago, Illinois, 17 mi northwest of the Loop",
+        );
+        assert!(
+            nouns.iter().any(|n| n == "Chicago"),
+            "expected clean Chicago, got {:?}",
+            nouns
+        );
+        assert!(
+            nouns.iter().any(|n| n == "Illinois"),
+            "expected clean Illinois, got {:?}",
+            nouns
+        );
+        assert!(
+            !nouns.iter().any(|n| n.contains(',')),
+            "no phrase may retain a comma: {:?}",
+            nouns
+        );
+        assert!(
+            !nouns.iter().any(|n| n.contains("northwest")),
+            "number-preposition junk must not survive: {:?}",
+            nouns
+        );
+    }
+
+    #[test]
+    fn proper_nouns_reject_article_headed_common_nouns() {
+        // "the Loop" is a common-noun phrase — "Loop" alone is not an entity.
+        let nouns = extract_proper_nouns("located on the Loop");
+        assert!(
+            !nouns.iter().any(|n| n == "Loop"),
+            "article-headed common noun must not be an entity: {:?}",
+            nouns
+        );
+    }
+
+    #[test]
+    fn proper_nouns_reject_sentence_initial_common_word() {
+        // A bare capitalized function word at sentence start is grammar, not
+        // an entity — unless it forms a 2+ word phrase.
+        let nouns = extract_proper_nouns("Located in the Alps, the valley is deep");
+        assert!(
+            !nouns.iter().any(|n| n == "Located"),
+            "sentence-initial 'Located' is not an entity: {:?}",
+            nouns
+        );
+    }
+
+    #[test]
+    fn proper_nouns_surface_appositive_single_word() {
+        // Comma-terminated single proper nouns (apposition/list) are real
+        // entities: "Paris, France" → Paris and France.
+        let nouns = extract_proper_nouns("the city of Paris, France, is a capital");
+        assert!(
+            nouns.iter().any(|n| n == "Paris"),
+            "expected Paris, got {:?}",
+            nouns
+        );
+        assert!(
+            nouns.iter().any(|n| n == "France"),
+            "expected France, got {:?}",
+            nouns
+        );
     }
 }
