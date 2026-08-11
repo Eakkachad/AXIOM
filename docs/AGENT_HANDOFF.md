@@ -66,12 +66,15 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.8b / T1.8c still open on the ranking task** (T1.8a done):
->   - T1.8b: percentile-normalize each signal within candidate set, THEN
->     calibrate weights (hub-invariance per RCA) — NOT equal weight (T1.6 dead).
->   - T1.8c: distinctness/IEF (-log(freq)) replaces raw count in heur.
-> - Recall 76.10% / candidate 21.07-21.38% — the remaining candidate gap is
->   extract_answer aggregation. Weight-search infra (AXIOM_W_* env) is ready.
+> - **T1.8 ranking CLOSED** (T1.8a kept: ov 0.15→0.05, candidate 21.38%;
+>   T1.8c IEF dead-end reverted; T1.8b not tried — T1.6 + T1.8a sweeps prove
+>   the tuned linear sum is flat except overlap). Weight-search infra
+>   (AXIOM_W_* env, scripts/weight_sweep.sh) kept for future recalibration.
+> - **Next candidate-gain options** (in order): (1) extract more entities per
+>   sentence / clause typing to keep raising recall (76.10% → 80% target);
+>   (2) scale Wikipedia corpus 100+ pages then re-enable semantic layer as
+>   tiebreaker; (3) retrieve-then-rank Stage A (candidate-set reduction) is
+>   untested — T1.6 only tested Stage B weights.
 > - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)

@@ -5,6 +5,39 @@
 
 ---
 
+## 2026-08-11 — v15 (T1.8c IEF/distinctness — dead-end, reverted)
+
+**Commits:** (docs only — code reverted to T1.8a)
+
+### What changed
+- **T1.8c** `engine.rs`: env-gated IEF experiment (AXIOM_W_IEF) replaced the
+  raw-count term in `heur` with distinctness = -log(count/graph_size) per RCA
+  §4.2 step 2 (hub-invariance). Swept scales 0.1-2.5 on the full bench.
+- **REVERTED** — no scale helped; the log-frequency bonus removes the
+  discriminative raw-count signal and the score collapses.
+
+### Measured results (full 318 bench)
+| AXIOM_W_IEF | candidate |
+|:---:|:---:|
+| 0 (legacy) | **21.38%** |
+| 0.1 | 10.38% |
+| 0.3 | 8.81% |
+| 0.6 | 7.23% |
+| 1.0 | 6.29% |
+| 1.5 | 5.35% |
+
+### Key findings
+- Matches the documented failure "freq-bonus log-scale regressed (17.30%)" —
+  raw count (0.2×) is already a useful, weakly-preferential signal; replacing
+  it with a hub-invariant log term destroys ranking.
+- T1.8b (percentile + calibrate) NOT attempted: T1.6 equal-weight percentile
+  already failed (12.58%), and T1.8a single-weight sweeps show the tuned
+  linear sum is flat in every direction except overlap → no calibrated-
+  aggregation headroom. T1.8 ranking work CLOSED with ov 0.15→0.05 as the
+  only win.
+
+---
+
 ## 2026-08-11 — v15 (T1.8a overlap weight calibration — candidate 20.75→21.38%)
 
 **Commits:** T1.8a (this entry)

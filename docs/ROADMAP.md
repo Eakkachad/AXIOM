@@ -135,7 +135,14 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   stable across 8+ runs; recall 76.10% unchanged; substring 22.64% unchanged.
   All other weights flat (no single-weight gain). Overlap dominance (question
   -named entities scoring high) was suppressing correct connected answers.
-  **Result:** candidate +0.63pt (T1.8a), weight search infra kept (env overrides)
+  T1.8c DONE (dead-end, REVERTED) — IEF/distinctness replaced raw count in
+  heur (env-gated AXIOM_W_IEF): candidate collapsed to 5-10% at any scale
+  (log-frequency bonus removes the discriminative raw-count signal, matches
+  documented "freq-bonus log-scale regressed 17.30%"). T1.8b (percentile +
+  calibrate) NOT tried — T1.6 already proved equal-weight percentile fails;
+  single-weight sweeps around the tuned linear sum are flat, so calibrated
+  aggregation offers no headroom. Weight search infra (env overrides) kept.
+  **Result:** candidate +0.63pt (T1.8a only)
 
 ---
 
