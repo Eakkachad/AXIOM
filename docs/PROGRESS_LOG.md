@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-08-10 — v14 (RCA + T1.6 retrieve-then-rank experiments)
+
+**Commits:** RCA doc (`docs/ROOT_CAUSE_ANALYSIS.md`), experiments reverted
+
+### What changed
+- **docs/ROOT_CAUSE_ANALYSIS.md**: cross-layer RCA — root cause = hub
+  domination + non-normalized linear score aggregation (Macron 197 facts beats
+  Paris 1 strong capital_of link). 4-layer analysis + redesign proposal.
+- **T1.6 experiments** (reverted): retrieve-then-rank, percentile-normalized
+  equal-weight signals → candidate 12.58% (worse). +0.5 VSA → 13.84%.
+  Tuned linear-sum baseline (19.81%) still wins.
+
+### Measured results
+| Approach | candidate |
+|---|---|
+| tuned linear sum (baseline) | **19.81%** |
+| percentile equal-weight | 12.58% |
+| percentile +0.5 VSA | 13.84% |
+
+### Key findings
+- RCA theory correct (hub-invariance, signal parity needed) but percentile
+  equal-weight is NOT the right implementation — needs per-signal weight
+  calibration. VSA with random codebook is noise → must stay a weak tiebreaker.
+- Tuned linear sum survived 5+ redesign attempts — strong local optimum.
+  Structural gains require decomposition quality (cleaner entities → better
+  conn signal), not re-weighting ranking.
+
+---
+
 ## 2026-08-10 — v14 (T3.1b semantic scoring attempt — reverted)
 
 **Commits:** `81271f8`

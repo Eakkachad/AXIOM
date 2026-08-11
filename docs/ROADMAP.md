@@ -10,11 +10,26 @@
 |--------|:---:|:---:|
 | candidate_answer_accuracy | 19.81% | 40% |
 | answer_entity_recall | 71.38% | 80% |
-| substring_accuracy | 23.58% | 50% |
-| avg_latency | 105ms | <200ms ✓ |
+| substring_accuracy | 23.90% | 50% |
+| avg_latency | ~100ms (idle) | <200ms ✓ |
 | gen speed | 12K tok/s | 50K tok/s |
 | codebook memory | 62MB (32×) | <50MB |
 | evidence_answer_recall | 99.69% | 99.7% |
+
+## RCA deliverable
+
+See `docs/ROOT_CAUSE_ANALYSIS.md` — cross-layer analysis of the answer-selection
+gap (hub domination + non-normalized linear score aggregation). T1.6 experiments
+below recorded but reverted; the tuned linear-sum baseline remains optimal.
+
+## T1.6 retrieve-then-rank (RCA-driven) — EXPERIMENTS, reverted
+- [x] Status: done (reverted) · Priority: P0 · Effort: 1 day
+- Percentile-normalized + equal-weight signals: candidate **12.58%** (worse)
+- +0.5 VSA weight: candidate **13.84%** (worse)
+- Conclusion: tuned linear sum (19.81%) beats percentile-equal-weight on this
+  dataset. RCA theory correct (hub-invariance, signal parity) but needs
+  per-signal weight calibration, not blind equal weighting. VSA stays 2.0×
+  (noise tiebreaker). Do NOT re-apply without weight tuning.
 
 ## How to read
 
