@@ -239,6 +239,83 @@ impl KnowledgeGraph {
         &self.entities[id]
     }
 
+    /// Personalized PageRank with restart, hub-corrected (T1.9c).
+    ///
+    /// π_q solves π_q = (1-c)·v + c·Pᵀ·π_q via power iteration, where v is a
+    /// teleport distribution over `seeds` and P is the degree-normalized
+    /// transition matrix. The returned score is the "relative PPR" (Milne &
+    /// Witten): log π_q(e) − log π(e), where π is the global (uniform-teleport)
+    /// PageRank. This cancels hub popularity: an entity that is 1-2 hops from
+    /// every query gets a large π_q *and* a large π, so the ratio neutralizes it.
+    ///
+    /// Deterministic: fixed iteration count, no tolerance-based termination.
+    /// Returns one score per entity (index-aligned with `self.entities`).
+    pub fn personalized_pagerank(&self, seeds: &[usize], iterations: usize) -> Vec<f32> {
+        let n = self.entities.len();
+        if n == 0 || seeds.is_empty() {
+            return vec![0.0; n];
+        }
+        let c = 0.85f32;
+        // Degree-normalized out-transition weights. Use a uniform edge weight
+        // (every triple edge counts once in each direction).
+        let mut out_degree = vec![0usize; n];
+        for t in &self.triples {
+            out_degree[t.subject_id] += 1;
+            out_degree[t.object_id] += 1;
+        }
+        // Transition P[u][v] = 1/out_degree(u) for each neighbor v of u.
+        // Precompute neighbor lists once.
+        let mut neighbors: Vec<Vec<usize>> = (0..n).map(|_| Vec::new()).collect();
+        for t in &self.triples {
+            neighbors[t.subject_id].push(t.object_id);
+            neighbors[t.object_id].push(t.subject_id);
+        }
+        let step = |pi: &[f32]| -> Vec<f32> {
+            let mut next = vec![0.0f32; n];
+            for u in 0..n {
+                let deg = out_degree[u].max(1);
+                let share = pi[u] / deg as f32;
+                for &v in &neighbors[u] {
+                    next[v] += share;
+                }
+            }
+            next
+        };
+
+        // Global PageRank (uniform teleport).
+        let mut pi_global = vec![1.0 / n as f32; n];
+        for _ in 0..iterations {
+            let walked = step(&pi_global);
+            for i in 0..n {
+                pi_global[i] = (1.0 - c) / n as f32 + c * walked[i];
+            }
+        }
+
+        // Personalized PageRank (teleport to seeds).
+        let mut pi_q = vec![0.0f32; n];
+        let seed_mass = 1.0 / seeds.len() as f32;
+        for &s in seeds {
+            pi_q[s] = seed_mass;
+        }
+        for _ in 0..iterations {
+            let walked = step(&pi_q);
+            for i in 0..n {
+                let teleport = if seeds.contains(&i) { seed_mass } else { 0.0 };
+                pi_q[i] = (1.0 - c) * teleport + c * walked[i];
+            }
+        }
+
+        // Relative PPR with hub correction. Guard against log(0).
+        let mut scores = vec![0.0f32; n];
+        let min_p = 1e-6f32;
+        for i in 0..n {
+            let a = pi_q[i].max(min_p);
+            let b = pi_global[i].max(min_p);
+            scores[i] = (a / b).ln();
+        }
+        scores
+    }
+
     /// Get the name of a relation by ID.
     pub fn relation_name(&self, id: usize) -> &str {
         &self.relations[id]
@@ -466,5 +543,35 @@ mod tests {
         // With 3 hops, should get all
         let sub3 = kg.bfs_subgraph(&[a_id], 3);
         assert_eq!(sub3.len(), 3);
+    }
+
+    #[test]
+    fn test_personalized_pagerank_hub_corrected() {
+        let mut kg = KnowledgeGraph::new();
+        // Chain: seed -> hub -> leaf. The hub connects to many leaves, so its
+        // global PageRank is high; the relative PPR (π_q/π) must not let the
+        // hub dominate the seed's actual neighbor.
+        kg.add_triple("seed", "links", "hub");
+        kg.add_triple("hub", "links", "leaf1");
+        kg.add_triple("hub", "links", "leaf2");
+        kg.add_triple("hub", "links", "leaf3");
+        kg.add_triple("hub", "links", "leaf4");
+        kg.add_triple("hub", "links", "leaf5");
+
+        let seed = kg.entity_id("seed").unwrap();
+        let hub = kg.entity_id("hub").unwrap();
+        let scores = kg.personalized_pagerank(&[seed], 60);
+
+        assert_eq!(scores.len(), kg.entities.len());
+        // The seed (teleport) must have the highest relative PPR.
+        assert!(
+            scores[seed] > scores[hub],
+            "seed {:.3} should outrank hub {:.3} (hub-corrected)",
+            scores[seed], scores[hub]
+        );
+        // Every score is finite (log of positive ratio).
+        for &s in &scores {
+            assert!(s.is_finite());
+        }
     }
 }

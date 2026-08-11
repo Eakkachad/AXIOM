@@ -525,6 +525,16 @@ impl AxiomGen {
         // so overlap (~50) can no longer dominate conn (~2) by magnitude.
         let rrf_mode = std::env::var("AXIOM_RANK").map(|v| v == "rrf").unwrap_or(false);
         let k_rrf = weight_env("AXIOM_RRF_K", 60.0);
+        // T1.9c: hub-corrected personalized PageRank as a 7th signal.
+        // Weight search found 0.3 optimal (23.58→24.21%, stable 4+ runs):
+        // fixes M4 (structural conn=0: answers reachable at 3+ hops) and
+        // M3 (hub debias via π_q/π ratio) without hurting recall/substring.
+        let w_ppr = weight_env("AXIOM_W_PPR", 0.3);
+        let ppr_scores: Vec<f32> = if w_ppr > 0.0 {
+            graph.personalized_pagerank(query_entities, 60)
+        } else {
+            Vec::new()
+        };
         // Raw per-candidate signals, captured for both scoring modes.
         let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
         for id in candidate_ids.into_iter() {
@@ -581,12 +591,14 @@ impl AxiomGen {
             // T1.8a: weight search (full 318 bench, stable) found 0.05 beats
             // 0.15 — overlap dominance (question-named entities) was drowning
             // correct connected answers. Recall unchanged at 76.10%.
+            let ppr = if w_ppr > 0.0 { ppr_scores.get(id).copied().unwrap_or(0.0) } else { 0.0 };
             let score = (conn_avg * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2
                 + ov * w_ov
                 + rel * rel_weight
-                + heur * w_heur) * query_penalty;
+                + heur * w_heur
+                + ppr * w_ppr) * query_penalty;
             if rrf_mode {
                 // rank position from the LINEAR score is a poor rank source;
                 // RRF ranks by each raw signal separately (handled after loop).

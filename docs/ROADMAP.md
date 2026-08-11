@@ -184,6 +184,18 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   stable 3+ runs), recall 76.10% unchanged, substring 22.64→22.33%.
   RRF kept env-gated (AXIOM_RANK=rrf, off by default) for future filter tests.
   **Result:** candidate +2.2pt (query-penalty fix)
+- **Status:** T1.9b exploration (neutral-or-correct, committed): intent-aware
+  query penalty (What/Who milder — "What is X?" X IS often the answer;
+  removing penalty hurts 22.01%), count-weight split (AXIOM_W_COUNT — 0.2 is
+  plateau, count = evidence mass not pure hub), location relational phrases +
+  tail-relation inheritance in decompose (restores "village in X, Scotland"→
+  located_in). Candidate stays 23.58%. **Result:** infra, no metric change.
+- **Status:** T1.9c DONE — hub-corrected personalized PageRank as 7th signal
+  (AXIOM_W_PPR=0.3 default). `π_q=(1-c)v+cPᵀπ_q` (60 iters) with relative-PPR
+  hub debias `log π_q(e) − log π(e)` (Milne-Witten). Weight search: 0.3-0.35
+  optimum. candidate 23.58→**24.21%** (+0.63pt, stable 4+ runs), recall 76.10%
+  unchanged, substring 22.33% unchanged. Higher weights regress (1.0→22.64,
+  3.0→17.30). 1 new PPR unit test. **Result:** candidate +0.63pt
 
 ---
 

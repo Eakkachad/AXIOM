@@ -5,6 +5,47 @@
 
 ---
 
+## 2026-08-11 — v15 (T1.9b exploration + T1.9c hub-corrected PPR)
+
+**Commits:** T1.9b, T1.9c
+
+### T1.9b (exploration, neutral) what changed
+- **Intent-aware query penalty** (`AXIOM_QP_WHAT`): What/Who/Why query-named
+  entities get milder penalty (0.6) because "What is the Milky Way?" — X IS the
+  answer. Removing penalty entirely → 22.01%; uniform 0.2 vs mild 0.6 is
+  net-neutral but mild fixes What-is-X cases with no regression.
+- **Count-weight split** (`AXIOM_W_COUNT`): 0.2 is the plateau (0.15→23.27,
+  0.1→21.38, 0.05→17.61). The frequency term is EVIDENCE MASS, not pure hub
+  inflation — RCA's "hub domination via count" is not the main driver.
+- **decompose location relations**: "is a village/town/city in"→located_in,
+  "is from"→from; tail proper nouns inherit the head fact's strong location
+  relation ("village in X, Scotland" → located_in Scotland). Restores location
+  hierarchy but no aggregate change on this dataset.
+
+### T1.9c (KEPT) hub-corrected personalized PageRank
+- `graph.personalized_pagerank(seeds, iters)`: π_q=(1-c)v+cPᵀπ_q, c=0.85, 60
+  fixed iterations (deterministic), degree-normalized transition, relative-PPR
+  hub debias score(e) = log π_q(e) − log π(e) (Milne-Witten). Wired as 7th
+  signal in extract_answer, AXIOM_W_PPR=0.3 default.
+
+### Measured results (full 318 bench)
+| Metric | v15 T1.9a | T1.9b | T1.9c | Δ (9a→9c) |
+|--------|:---:|:---:|:---:|:---:|
+| candidate_answer_accuracy | 23.58% | 23.58% | **24.21%** | +0.63pt |
+| answer_entity_recall | 76.10% | 76.10% | 76.10% | 0 |
+| substring_accuracy | 22.33% | 22.33% | 22.33% | 0 |
+
+### Key findings
+- PPR weight search: 0.3-0.35 optimum (24.21%), 0.05-0.2 (23.90%), regresses
+  above 0.5 (0.5→23.58, 1.0→22.64, 3.0→17.30). Small weights act as a
+  structural tiebreak; large weights let graph topology dominate.
+- Failure-mode analysis (165): 23/57 top-5 gold losses won primarily via heur
+  (count+len+cap), 11 via conn, 9 via role; 8/25 near-ties decided purely by
+  VSA cosine noise (identical conn/role/heur); deep-rank golds (rank 6-114) are
+  mostly CLEAN entities connected but outranked.
+
+---
+
 ## 2026-08-11 — v15 (T1.9a query-entity punctuation fix — candidate 21.38→23.58%)
 
 **Commits:** T1.9a (this entry)

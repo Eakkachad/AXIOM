@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-11 (v15 — T1.7, T1.8, T1.9a)
-> Status: TriviaQA candidate 23.58% · entity recall 76.10% · latency ~100ms (idle)
+> Last updated: 2026-08-11 (v15 — T1.7, T1.8, T1.9a/b/c)
+> Status: TriviaQA candidate 24.21% · entity recall 76.10% · latency ~100ms (idle)
 
 > ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -24,7 +24,7 @@
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **23.58%** | 40% |
+> | candidate_answer_accuracy | **24.21%** | 40% |
 > | answer_entity_recall | **76.10%** | 80% |
 > | substring_accuracy | 22.33% | 50% |
 > | avg_latency | ~100ms (idle) | <200ms ✓ |
@@ -34,14 +34,14 @@
 > ### What was built (v15):
 > - **T1.7 proper-noun entity boundary precision**: clean entities in graph →
 >   recall 71.38→76.10% (+4.72pt record).
-> - **T1.8a overlap weight calibration**: weight search found ov 0.15→0.05 →
->   candidate +0.63pt. T1.8c IEF dead-end reverted.
-> - **T1.9a query-entity punctuation fix**: "O'Hare"/"Jaws (film)"/"Milky Way"
->   were not detected as query entities (punctuation split), so the ×0.2 query
->   penalty never fired and question-named entities won via overlap. Fixed with
->   punctuation-stripped whole-token matching → candidate 21.38→**23.58%**
->   (+2.2pt), recall 76.10% unchanged. RRF rank fusion tested, regresses alone
->   (kept env-gated), needs hard-filter veto next (T1.9b).
+> - **T1.8a overlap weight calibration**: ov 0.15→0.05 → candidate +0.63pt.
+> - **T1.9a query-entity punctuation fix**: "O'Hare"/"Jaws (film)" dodged the
+>   ×0.2 query penalty (punctuation split); fixed → candidate 21.38→23.58%.
+> - **T1.9b (neutral)**: intent-aware query penalty, count-weight split, location
+>   relation phrases + tail inheritance.
+> - **T1.9c hub-corrected PPR**: 7th signal `log π_q(e) − log π(e)` (relative
+>   PPR, Milne-Witten) at weight 0.3 → candidate 23.58→**24.21%** (+0.63pt),
+>   recall/substring unchanged. `graph.personalized_pagerank()` + unit test.
 > - Full research synthesis: `docs/RANKING_RESEARCH_SYNTHESIS.md`.
 >
 > ### What was built (v14 full session):
