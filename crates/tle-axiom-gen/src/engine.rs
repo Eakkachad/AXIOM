@@ -535,7 +535,11 @@ impl AxiomGen {
             let cap_bonus = if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) { 1.0 } else { -0.5 };
             let first = name.split_whitespace().next().map(|w| w.to_lowercase()).unwrap_or_default();
             let det_pen = if matches!(first.as_str(), "a"|"an"|"the"|"some"|"his"|"her"|"its"|"this"|"that") { -1.5 } else { 0.0 };
-            let heur = 0.2 * *raw_count.get(&id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
+            // Frequency term is the hub amplifier (23/57 top-5 failures won by
+            // heur). Split its weight from the length/cap/det penalties so we
+            // can reduce ONLY the count contribution (T1.9b). Env AXIOM_W_COUNT.
+            let w_count = weight_env("AXIOM_W_COUNT", 0.2);
+            let heur = w_count * *raw_count.get(&id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
             // Average connectivity per link — neutralizes the hub problem:
             // an entity with 197 facts (Macron) must not beat an entity with
             // 1 strong link (Paris, capital_of France).
@@ -553,7 +557,20 @@ impl AxiomGen {
             let ov = *raw_overlap.get(&id).unwrap_or(&0.0);
             let rel = relevance_cache.get(&id).copied().unwrap_or(0.0);
             let is_query_named = query_entities.contains(&id);
-            let query_penalty = if is_query_named { 0.2 } else { 1.0 };
+            // Query-named penalty, intent-aware (T1.9b): for "What is X?" /
+            // "Who is X?" the query-named entity X IS often the answer (Milky
+            // Way), so the penalty must be milder. For Where/When/How/How-many
+            // the query-named entity is the reference, never the answer — full
+            // penalty. Env override for calibration.
+            let qp_full = weight_env("AXIOM_QP_WHERE", 0.2);
+            let qp_mild = weight_env("AXIOM_QP_WHAT", 0.6);
+            let query_penalty = if is_query_named {
+                match intent {
+                    Intent::What | Intent::Who => qp_mild,
+                    Intent::Why => qp_mild,
+                    _ => qp_full,
+                }
+            } else { 1.0 };
             let rel_weight = weight_env("AXIOM_W_VSA", 2.0);
             let w_conn = weight_env("AXIOM_W_CONN", 1.0);
             let w_role = weight_env("AXIOM_W_ROLE", 0.8);

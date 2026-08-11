@@ -95,6 +95,23 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("is located in", "located_in"),
     ("was located in", "located_in"),
     ("is located at", "located_at"),
+    ("is a village in", "located_in"),
+    ("is a town in", "located_in"),
+    ("is a city in", "located_in"),
+    ("is a municipality in", "located_in"),
+    ("is a commune in", "located_in"),
+    ("is a district in", "located_in"),
+    ("is a province in", "located_in"),
+    ("is a county in", "located_in"),
+    ("is a country in", "located_in"),
+    ("is a state in", "located_in"),
+    ("is an island in", "located_in"),
+    ("is a region in", "located_in"),
+    ("is a village near", "located_near"),
+    ("is a town near", "located_near"),
+    ("is a city near", "located_near"),
+    ("is from", "from"),
+    ("was from", "from"),
     ("was founded in", "founded_in"),
     ("was established in", "founded_in"),
     ("was created in", "created_in"),
@@ -634,9 +651,17 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         // the tail often contains specific noun phrases that are the answer.
         if let Some(ref tail_text) = tail {
             if tail_text.split_whitespace().count() <= 30 {
+                // When the head fact is a location relation ("village in
+                // Dumfries and Galloway, Scotland"), proper nouns in the tail
+                // ("Scotland") inherit the SAME strong relation — they are
+                // appositive continuations of the location, not mere mentions.
+                let tail_rel = if matches!(relation, "located_in" | "located_at"
+                    | "capital_of" | "part_of" | "located_near" | "born_in"
+                    | "lived_in" | "died_in" | "took_place_in" | "occurred_in"
+                    | "from") { relation } else { "is_related_to" };
                 for phrase in extract_proper_nouns(tail_text) {
                     if !facts.iter().any(|f| f.subject == subject && f.object == phrase) {
-                        let f = DecomposedFact { subject: subject.clone(), relation: "is_related_to".to_string(), object: phrase };
+                        let f = DecomposedFact { subject: subject.clone(), relation: tail_rel.to_string(), object: phrase };
                         if is_fact_worthy(&f) { facts.push(f); }
                     }
                 }
