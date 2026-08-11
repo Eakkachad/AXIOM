@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-11 (v15 — T1.7 + T1.8a)
-> Status: TriviaQA candidate 21.07-21.38% · entity recall 76.10% · latency ~100ms (idle)
+> Last updated: 2026-08-11 (v15 — T1.7, T1.8, T1.9a)
+> Status: TriviaQA candidate 23.58% · entity recall 76.10% · latency ~100ms (idle)
 
 > ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -24,26 +24,25 @@
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **21.07-21.38%** | 40% |
+> | candidate_answer_accuracy | **23.58%** | 40% |
 > | answer_entity_recall | **76.10%** | 80% |
-> | substring_accuracy | 22.64% | 50% |
+> | substring_accuracy | 22.33% | 50% |
 > | avg_latency | ~100ms (idle) | <200ms ✓ |
 > | gen speed | 12K tok/s | 50K tok/s |
 > | codebook memory | 62MB (32×) | <50MB |
 >
 > ### What was built (v15):
-> - **T1.7 proper-noun entity boundary precision**: `extract_proper_nouns` stops
->   phrases at commas/numbers/connectors (`by`, `alongside`, `or`, `as`, etc),
->   trims trailing punctuation, admits single proper nouns when comma-terminated
->   or lowercase-preceded (not article-headed / sentence-initial). Gold answers
->   ("Chicago", "Switzerland", "LH") now enter the graph as CLEAN entities.
->   recall 71.38→76.10% (+4.72pt — record jump).
-> - **T1.8a overlap weight calibration**: coordinate-ascent weight search
->   (env-driven AXIOM_W_* overrides, no recompile) over the 6 extract_answer
->   signals. Only OVERLAP moved the needle: 0.15→0.05 → candidate +0.6-0.9pt
->   (20.44-20.75→21.07-21.38%, stable 8+ runs). Recall/substring unchanged.
->   Weight search infra kept for T1.8b/c.
-> - 6 new decompose unit tests + weight-env tests; workspace cargo test green.
+> - **T1.7 proper-noun entity boundary precision**: clean entities in graph →
+>   recall 71.38→76.10% (+4.72pt record).
+> - **T1.8a overlap weight calibration**: weight search found ov 0.15→0.05 →
+>   candidate +0.63pt. T1.8c IEF dead-end reverted.
+> - **T1.9a query-entity punctuation fix**: "O'Hare"/"Jaws (film)"/"Milky Way"
+>   were not detected as query entities (punctuation split), so the ×0.2 query
+>   penalty never fired and question-named entities won via overlap. Fixed with
+>   punctuation-stripped whole-token matching → candidate 21.38→**23.58%**
+>   (+2.2pt), recall 76.10% unchanged. RRF rank fusion tested, regresses alone
+>   (kept env-gated), needs hard-filter veto next (T1.9b).
+> - Full research synthesis: `docs/RANKING_RESEARCH_SYNTHESIS.md`.
 >
 > ### What was built (v14 full session):
 > - **Track 1 (accuracy)**: T1.2 lowercase NP extraction, T1.3 permutation
@@ -66,15 +65,12 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.8 ranking CLOSED** (T1.8a kept: ov 0.15→0.05, candidate 21.38%;
->   T1.8c IEF dead-end reverted; T1.8b not tried — T1.6 + T1.8a sweeps prove
->   the tuned linear sum is flat except overlap). Weight-search infra
->   (AXIOM_W_* env, scripts/weight_sweep.sh) kept for future recalibration.
-> - **Next candidate-gain options** (in order): (1) extract more entities per
->   sentence / clause typing to keep raising recall (76.10% → 80% target);
->   (2) scale Wikipedia corpus 100+ pages then re-enable semantic layer as
->   tiebreaker; (3) retrieve-then-rank Stage A (candidate-set reduction) is
->   untested — T1.6 only tested Stage B weights.
+> - **T1.9b is next: hard structural filter (the research's main veto).** RRF
+>   alone regresses; query-penalty fix gained +2.2pt by making question-named
+>   entities detectable. Next levers per 165-failure analysis: F1 answer-type
+>   filter (Who→PERSON, Where→LOCATION), F2 question-relation reachability,
+>   F3 PPR distance≤3 expansion (M4 structural conn=0). Each env-gated A/B.
+> - **T1.9c: hub-corrected PPR** (`log π_q − log π`) as 7th signal + M4 fix.
 > - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)
@@ -85,6 +81,8 @@
 >   confirmed bottleneck, so calibration work must be weight-search-based.
 > - **Per-record bench diagnostics are NOT stable across runs** (147/318 flip
 >   from HashMap iteration order) — only aggregate metrics are trustworthy.
+> - **Query-entity detection precision gates the query penalty** (T1.9a): fix
+>   was punctuation-stripped matching; keep this in mind for F1/F2 filters.
 > - **Semantic layer regresses when wired into scoring** — needs content-word
 >   query + big corpus + calibration before re-enable.
 > - **VSA signal near-zero** with random codebook — keep as weak tiebreaker.

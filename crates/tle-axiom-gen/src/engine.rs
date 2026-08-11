@@ -520,6 +520,13 @@ impl AxiomGen {
         // Candidate set = entities with direct conn OR 2-hop conn.
         let mut candidate_ids: std::collections::HashSet<usize> = raw_conn.keys().copied().collect();
         candidate_ids.extend(raw_2hop.keys().copied());
+        // T1.9a: RRF rank fusion (rank-position fusion instead of linear sum).
+        // Enabled via AXIOM_RANK=rrf. Rank is invariant under per-signal scale,
+        // so overlap (~50) can no longer dominate conn (~2) by magnitude.
+        let rrf_mode = std::env::var("AXIOM_RANK").map(|v| v == "rrf").unwrap_or(false);
+        let k_rrf = weight_env("AXIOM_RRF_K", 60.0);
+        // Raw per-candidate signals, captured for both scoring modes.
+        let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
         for id in candidate_ids.into_iter() {
             let name = graph.entity_name(id);
             let words = name.split_whitespace().count();
@@ -545,16 +552,9 @@ impl AxiomGen {
             let hop2_avg = hop2 / hop2_links as f32;
             let ov = *raw_overlap.get(&id).unwrap_or(&0.0);
             let rel = relevance_cache.get(&id).copied().unwrap_or(0.0);
-            // Query-named penalty: entities that appear in the question are
-            // what we're asking ABOUT, not the answer.  Suppress them so
-            // connected entities (the actual answers) can surface.
             let is_query_named = query_entities.contains(&id);
             let query_penalty = if is_query_named { 0.2 } else { 1.0 };
-            // VSA relevance weight: keep modest — semantic layer noise can
-            // otherwise overwhelm correct connectivity signals.
             let rel_weight = weight_env("AXIOM_W_VSA", 2.0);
-            // Weight search overrides (T1.8): each signal weight is tunable via
-            // env so coordinate-ascent can sweep without recompiling.
             let w_conn = weight_env("AXIOM_W_CONN", 1.0);
             let w_role = weight_env("AXIOM_W_ROLE", 0.8);
             let w_hop2 = weight_env("AXIOM_W_HOP2", 0.5);
@@ -570,8 +570,64 @@ impl AxiomGen {
                 + ov * w_ov
                 + rel * rel_weight
                 + heur * w_heur) * query_penalty;
-            ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
+            if rrf_mode {
+                // rank position from the LINEAR score is a poor rank source;
+                // RRF ranks by each raw signal separately (handled after loop).
+                // Store the query-named flag so RRF can re-apply the penalty.
+                cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, is_query_named));
+            } else {
+                ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
+            }
         }
+
+        if rrf_mode {
+            // RRF: for each signal list, rank candidates descending; absent
+            // from a list contributes 0. score(e) = Σ w_i/(k+rank_i(e)).
+            let n = cands.len();
+            // signal indices: 0=conn_avg, 1=role_avg, 2=hop2_avg, 3=ov, 4=rel, 5=heur
+            let mut contrib = vec![0.0f64; n];
+            // per-signal weights: default equal except VSA=0 (documented noise
+            // with random codebook — demoted per research synthesis);
+            // env AXIOM_RRF_W_{CONN,ROLE,HOP2,OV,VSA,HEUR}
+            let wr = [
+                weight_env("AXIOM_RRF_W_CONN", 1.0),
+                weight_env("AXIOM_RRF_W_ROLE", 1.0),
+                weight_env("AXIOM_RRF_W_HOP2", 1.0),
+                weight_env("AXIOM_RRF_W_OV", 1.0),
+                weight_env("AXIOM_RRF_W_VSA", 0.0),
+                weight_env("AXIOM_RRF_W_HEUR", 1.0),
+            ];
+            let mut order: Vec<usize> = (0..n).collect();
+            for (si, sig) in [0usize,1,2,3,4,5].iter().enumerate() {
+                if wr[si] <= 0.0 { continue; }
+                let get = |idx: usize| match *sig {
+                    0 => cands[idx].2,
+                    1 => cands[idx].3,
+                    2 => cands[idx].4,
+                    3 => cands[idx].5,
+                    4 => cands[idx].6,
+                    _ => cands[idx].7,
+                };
+                order.sort_by(|&a, &b| {
+                    get(b).partial_cmp(&get(a)).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                let mut rank = 1usize;
+                for &idx in &order {
+                    // skip zero-valued signals (absent from this list)
+                    if get(idx) > 0.0 {
+                        contrib[idx] += (wr[si] as f64) / (k_rrf as f64 + rank as f64);
+                        rank += 1;
+                    }
+                }
+            }
+            for (i, c) in cands.iter().enumerate() {
+                // Re-apply the query-named penalty that linear mode uses
+                // (entities named in the question are what we ask ABOUT).
+                let qp = if c.8 { 0.2f32 } else { 1.0 };
+                ranked.push((contrib[i] as f32 * qp, c.1.clone(), c.2, c.3, c.5, c.6, c.7));
+            }
+        }
+
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
         (answer, ranked)
@@ -605,6 +661,33 @@ impl AxiomGen {
                 })
             });
             if matches && !found_entities.contains(&id) {
+                found_entities.push(id);
+            }
+        }
+
+        // Punctuation-stripped matching (T1.9): "O'Hare" in a query is split by
+        // the cleaner into ["o","hare"], so the entity "O'Hare" never matched —
+        // question-named entities dodged the query penalty and won via overlap.
+        // Strip ALL non-alphanumerics WITHIN each raw whitespace token, so
+        // "O'Hare" → "ohare" can align with the entity "O'Hare" → "ohare".
+        let raw_lower = query.to_lowercase();
+        let query_clean: Vec<String> = raw_lower
+            .split_whitespace()
+            .map(|w| w.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+            .filter(|w| w.len() >= 2)
+            .collect();
+        for (name, &id) in &self.graph.entity_index {
+            let entity_clean: String = name.to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
+            if entity_clean.len() < 3 { continue; }
+            let hit = query_clean.iter().any(|qw| {
+                qw == &entity_clean
+                    || (entity_clean.len() >= qw.len() && entity_clean.starts_with(qw.as_str()))
+                    || (qw.len() >= entity_clean.len() && qw.starts_with(entity_clean.as_str()))
+            });
+            if hit && !found_entities.contains(&id) {
                 found_entities.push(id);
             }
         }
@@ -819,6 +902,30 @@ mod tests {
         assert!(
             entities.contains(&sky_id) || entities.contains(&blue_id),
             "Should find sky or blue in query"
+        );
+    }
+
+    #[test]
+    fn test_extract_query_entities_punctuation_matching() {
+        // T1.9: "O'Hare" in the query must link to the entity "O'Hare"
+        // (and "O'Hare Airport"), so the query penalty fires. Previously the
+        // cleaner split "O'Hare" -> ["o","hare"] and the entity never matched.
+        let mut gen = AxiomGen::new(2048);
+        gen.add_fact("O'Hare", "located_in", "Chicago");
+        gen.add_fact("O'Hare_Airport", "serves", "Chicago");
+        gen.add_fact("Chicago", "capital_of", "Illinois");
+
+        let entities = gen.extract_query_entities("In which city would you find O'Hare International Airport?");
+        let names: Vec<String> = entities.iter().map(|&id| gen.graph.entity_name(id).to_string()).collect();
+        assert!(
+            entities.contains(&gen.graph.entity_id("O'Hare").unwrap()),
+            "query 'O'Hare' should match entity 'O'Hare', got {:?}",
+            names
+        );
+        assert!(
+            entities.contains(&gen.graph.entity_id("O'Hare_Airport").unwrap()),
+            "query 'O'Hare' should match entity 'O'Hare_Airport', got {:?}",
+            names
         );
     }
 

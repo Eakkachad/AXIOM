@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-08-11 — v15 (T1.9a query-entity punctuation fix — candidate 21.38→23.58%)
+
+**Commits:** T1.9a (this entry)
+
+### What changed
+- **T1.9a** `engine.rs`:
+  1. RRF rank fusion added as env-gated experiment (`AXIOM_RANK=rrf`, k via
+     `AXIOM_RRF_K`, per-signal weights via `AXIOM_RRF_W_*`, VSA default 0,
+     query-penalty re-applied). **ALONE it regresses** (equal-weight 11.95%,
+     tuned-weight 15.41%) — confirms the documented "rank/equal-weight fusion
+     fails" (T1.6: 12.58%). Kept gated-off for future hard-filter testing.
+  2. **Query-entity punctuation-stripped matching** (the real win): debug
+     showed "O'Hare" winning with `fin=4.43` — if the ×0.2 query penalty had
+     fired it would be 0.88. Root cause: `extract_query_entities` split the
+     query on non-alphanumerics, so "O'Hare"→["o","hare"] never matched the
+     entity "O'Hare"; question-named entities dodged the penalty and won via
+     overlap (M1). Fix: strip non-alphanumerics WITHIN each raw whitespace
+     token and compare to punctuation-stripped entity tokens ("ohare"≡"ohare").
+
+### Measured results (full 318 bench, stable across 3 runs)
+| Metric | v15 (T1.8a) | T1.9a | Δ |
+|--------|:---:|:---:|:---:|
+| candidate_answer_accuracy | 21.38% | **23.58%** | **+2.2pt** |
+| answer_entity_recall | 76.10% | 76.10% | 0 |
+| substring_accuracy | 22.64% | 22.33% | -0.31pt |
+| evidence_answer_recall | 99.69% | 99.69% | 0 |
+
+### Key findings
+- The linear-sum scorer is NOT the only bottleneck — **query-entity detection
+  precision gates the query penalty** (×0.2). Question-named entities that
+  dodge detection (punctuation: O'Hare, Jaws (film), Milky Way) win via
+  overlap even at weight 0.05. Fixing detection = +2.2pt candidate.
+- RRF alone fails exactly as predicted by prior docs (equal-weight fusion is
+  dead). RRF needs the hard-filter veto (T1.9b) to matter.
+- 165 failures remain (was 171). O'Hare case verified fixed in debug.
+
+---
+
 ## 2026-08-11 — v15 (T1.8c IEF/distinctness — dead-end, reverted)
 
 **Commits:** (docs only — code reverted to T1.8a)

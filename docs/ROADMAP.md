@@ -111,7 +111,7 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   6 unit tests added. **Result:** recall +4.72pt, candidate +0.6-0.9pt
 
 ### T1.8 Rank calibration (RCA-driven, weight-search based)
-- [~] Status: in_progress · Priority: P0 · Effort: 1-2 days · Depends: none
+- [x] Status: done · Priority: P0 · Effort: 1-2 days · Depends: none
 - **Goal:** candidate 20.44-20.75% → 25-30%. RCA conclusion: with clean
   entities (T1.7), the remaining gap is extract_answer's non-normalized linear
   sum (hub domination + signal-scale mismatch). T1.6 equal-weight percentile
@@ -143,6 +143,47 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   single-weight sweeps around the tuned linear sum are flat, so calibrated
   aggregation offers no headroom. Weight search infra (env overrides) kept.
   **Result:** candidate +0.63pt (T1.8a only)
+
+### T1.9 Rank redesign: hard filter + rank fusion (RRF) — research-backed
+- [~] Status: in_progress · Priority: P0 · Effort: 2-3 days · Depends: none
+- **Goal:** candidate 21.38% → 25-30%. Replaces linear-sum+argmax (proven flat
+  local optimum) with the research synthesis in
+  `docs/RANKING_RESEARCH_SYNTHESIS.md` (3 deep-research memos converged):
+  hard structural veto BEFORE ranking + rank-position fusion instead of score
+  fusion.
+- **Empirical anchor (171 failures):** M1 overlap dominance (21+), M2 near-tie
+  noise (18), M3 hub/degree (5), M4 structural conn=0 (6+), M5 junk surfaces.
+  Math: linear sums of differently-scaled signals (overlap ~50 vs conn ~2)
+  cannot express "name-match only counts when connectivity present" — no
+  single weight fixes both regimes.
+- **Sub-steps (each independent, bench after each):**
+  - T1.9a: **RRF rank fusion** — `score(e) = Σᵢ wᵢ/(k+rankᵢ(e))`, k=60, over
+    the 6 existing per-signal lists (conn/role/hop2/overlap/vsa/heur); wᵢ=AUCᵢ
+    data-derived once on the bench. Env-gated A/B vs linear sum first.
+  - T1.9b: **hard structural filter** before ranking — F1 answer-type
+    (intent→τ: Who→PERSON, Where→LOCATION, When→TIME), F2 question-relation
+    reachability, F3 distance≤3 (fall back to widening when empty). Veto
+    cannot be outvoted by magnitude → kills M1/M2/M5.
+  - T1.9c: **hub-corrected PPR** — `π_q=(1-c)v+cPᵀπ_q` (c≈0.85, 60 iters,
+    v=teleport to query entities); `ppq(e)=log π_q(e)−log π(e)` (Milne-Witten
+    hub debias) as 7th RRF list + candidate expansion → fixes M4 (the only
+    thing that does) + M3.
+- **Guardrails:** sigmoid-never-softmax (katgpt rule — no softmax competition);
+  VSA demoted to verification gate only (it's N(0,1/√2048) noise with random
+  codebook); never DDTree; aggregate bench only; quick bench before full.
+- **File:** `crates/tle-axiom-gen/src/engine.rs` (`extract_answer`)
+- **Verify:** full 318 bench, candidate up, recall NOT down
+- **Status:** T1.9a FOUND THE FIRST REAL WIN (unexpected direction): RRF rank
+  fusion ALONE regresses (11.95-15.41%, equal-weight and tuned-weight — matches
+  documented "equal/rank-weight fusion fails", T1.6: 12.58%). BUT the debug
+  analysis revealed a **query-entity matching bug**: "O'Hare"/"Jaws (film)"/
+  "Milky Way" were NOT detected as query entities (punctuation split
+  "O'Hare"→["o","hare"]), so the ×0.2 query penalty never fired and
+  question-named entities won via overlap. Fix: punctuation-stripped whole-token
+  matching in `extract_query_entities`. candidate 21.38→**23.58%** (+2.2pt,
+  stable 3+ runs), recall 76.10% unchanged, substring 22.64→22.33%.
+  RRF kept env-gated (AXIOM_RANK=rrf, off by default) for future filter tests.
+  **Result:** candidate +2.2pt (query-penalty fix)
 
 ---
 
