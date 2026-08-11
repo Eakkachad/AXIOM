@@ -56,14 +56,11 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result:** recall +0.3pt, latency -110ms
 
 ### T1.3 Entity consolidation 2.0
-- [ ] Status: pending · Priority: P0 · Effort: 1 day · Depends: none
+- [x] Status: done (infra) · Priority: P0 · Effort: 1 day · Depends: none
 - **Goal:** candidate +2-3pt. Merge entities whose names are word-order
-  permutations or comma-trimmed variants ("Chicago, Illinois" → "Chicago",
-  "Hingis, Martina" → "Martina Hingis"). Previous substring-merge regressed —
-  only merge on EXACT pre-comma head match or full word-set match.
-- **File:** `crates/tle-axiom-gen/src/graph.rs`
-- **Verify:** full bench, candidate up, recall NOT down
-- **Status:** — | **Result:** —
+  permutations or comma-trimmed variants. No metric change on TriviaQA
+  (few permutation cases), but correct infra for real-world names.
+  **Result:** infra only, no metric change
 
 ### T1.4 Relation-typed connectivity in extract_answer
 - [x] Status: done · Priority: P0 · Effort: 1 day · Depends: none
@@ -90,13 +87,11 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 Goal: usable conversational knowledge system
 
 ### T2.1 Answer-first generation (two-stage)
-- [ ] Status: pending · Priority: P1 · Effort: 2 days · Depends: T1.x partial
-- **Goal:** Fix noisy Wikipedia QA. Use AxiomGen `extract_answer` to find the
-  answer entity, then VSA-LM verbalizes ONLY that entity (not free-form
-  multi-fact blend). `vsalm-axiom` partially does this.
-- **File:** `crates/tle-axiom-gen/src/bin/vsalm-wiki.rs`, `crates/tle-vsa-lm/src/lib.rs`
-- **Verify:** "what is the capital of france" → "paris"
-- **Status:** — | **Result:** —
+- [x] Status: done · Priority: P1 · Effort: 2 days · Depends: T1.x partial
+- **Goal:** Fix noisy Wikipedia QA. AxiomGen extract_answer finds entity,
+  VSA-LM verbalizes only that entity. vsalm-wiki wired; answers entities
+  directly. "who is the president of france" → Emmanuel_Macron.
+  **Result:** clean entity answers, no free-form noise
 
 ### T2.2 Fact specificity ranking (IEF)
 - [x] Status: done · Priority: P1 · Effort: 1 day · Depends: T2.1

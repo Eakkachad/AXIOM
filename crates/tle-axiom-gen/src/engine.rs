@@ -666,13 +666,16 @@ impl AxiomGen {
         result.normalize()
     }
 
-    /// Build a query vector by bundling vectors of all words in the query.
+    /// Build a query vector by bundling vectors of content words only.
+    /// Stopwords/functions words are excluded so they don't inject VSA noise
+    /// into the relevance signal (root cause of T3.1b regression).
     fn build_query_vector(&mut self, query: &str) -> HyperVector {
         let dim = self.codebook.dim();
         let lower = query.to_lowercase();
         let words: Vec<&str> = lower
             .split(|c: char| !c.is_alphanumeric() && c != '_')
             .filter(|w| !w.is_empty())
+            .filter(|w| !crate::decompose::is_question_stop_word(w))
             .collect();
 
         if words.is_empty() {

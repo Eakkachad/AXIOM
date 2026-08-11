@@ -379,9 +379,16 @@ pub struct AnswerCandidate {
     pub score: f32,
 }
 
-fn is_question_stop_word(word: &str) -> bool {
+/// Is this a question stopword / function word that should NOT contribute
+/// to semantic vectors or content matching?  Content words are what carry
+/// the answer signal; filtering these prevents VSA noise.
+pub fn is_question_stop_word(word: &str) -> bool {
     matches!(word, "what" | "which" | "where" | "when" | "how" | "does" | "have"
-        | "who" | "with" | "from" | "that" | "this" | "whose" | "why" | "the" | "was" | "did")
+        | "who" | "with" | "from" | "that" | "this" | "whose" | "why" | "the" | "was" | "did"
+        | "a" | "an" | "is" | "are" | "were" | "been" | "being" | "of" | "in" | "on" | "at"
+        | "to" | "for" | "by" | "as" | "and" | "or" | "but" | "not" | "no" | "it" | "its"
+        | "there" | "here" | "then" | "than" | "more" | "most" | "some" | "such" | "can"
+        | "will" | "would" | "could" | "should" | "may" | "might" | "must" | "shall" | "you")
 }
 
 /// Rank answer candidates for a query from a set of candidate strings.
