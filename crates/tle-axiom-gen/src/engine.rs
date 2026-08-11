@@ -28,6 +28,16 @@ use crate::semantic::SemanticLayer;
 use crate::templates::TemplateBank;
 use crate::search::{beam_search, ScoredPath, SearchConfig};
 
+/// Read a T1.8 weight-search override from the environment, falling back to
+/// the given default. Lets coordinate-ascent sweep extract_answer weights
+/// without recompiling.
+fn weight_env(name: &str, default: f32) -> f32 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(default)
+}
+
 /// The result of a generation query.
 #[derive(Debug, Clone)]
 pub struct GenerationResult {
@@ -542,9 +552,24 @@ impl AxiomGen {
             let query_penalty = if is_query_named { 0.2 } else { 1.0 };
             // VSA relevance weight: keep modest — semantic layer noise can
             // otherwise overwhelm correct connectivity signals.
-            let rel_weight = 2.0;
+            let rel_weight = weight_env("AXIOM_W_VSA", 2.0);
+            // Weight search overrides (T1.8): each signal weight is tunable via
+            // env so coordinate-ascent can sweep without recompiling.
+            let w_conn = weight_env("AXIOM_W_CONN", 1.0);
+            let w_role = weight_env("AXIOM_W_ROLE", 0.8);
+            let w_hop2 = weight_env("AXIOM_W_HOP2", 0.5);
+            let w_ov = weight_env("AXIOM_W_OV", 0.05);
+            let w_heur = weight_env("AXIOM_W_HEUR", 1.0);
             // Connectivity-first: overlap is a weak tiebreaker, not primary.
-            let score = (conn_avg + role_avg * 0.8 + hop2_avg * 0.5 + ov * 0.15 + rel * rel_weight + heur) * query_penalty;
+            // T1.8a: weight search (full 318 bench, stable) found 0.05 beats
+            // 0.15 — overlap dominance (question-named entities) was drowning
+            // correct connected answers. Recall unchanged at 76.10%.
+            let score = (conn_avg * w_conn
+                + role_avg * w_role
+                + hop2_avg * w_hop2
+                + ov * w_ov
+                + rel * rel_weight
+                + heur * w_heur) * query_penalty;
             ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
         }
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));

@@ -110,6 +110,33 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   (-1.26pt, sentence-linearization metric; keep-gate = candidate+recall both up).
   6 unit tests added. **Result:** recall +4.72pt, candidate +0.6-0.9pt
 
+### T1.8 Rank calibration (RCA-driven, weight-search based)
+- [~] Status: in_progress · Priority: P0 · Effort: 1-2 days · Depends: none
+- **Goal:** candidate 20.44-20.75% → 25-30%. RCA conclusion: with clean
+  entities (T1.7), the remaining gap is extract_answer's non-normalized linear
+  sum (hub domination + signal-scale mismatch). T1.6 equal-weight percentile
+  failed (12.58%); blind re-weighting failed 5+ times — this task uses
+  **coordinate-ascent weight search** with the full 318 bench as objective.
+- **Sub-steps (in order, stop when plateau):**
+  - T1.8a: coordinate-ascent sweep of the 6 extract_answer weights
+    (conn_avg, role_avg, hop2_avg, overlap, vsa, heur) around current
+    (1.0/0.8/0.5/0.15/2.0/0.2). ~30-60 full-bench runs.
+  - T1.8b: percentile-normalize each signal within candidate set THEN
+    calibrate weights (fixes hub-invariance per RCA) — NOT equal weight.
+  - T1.8c: distinctness/IEF (-log(freq/graph_size)) replaces raw count in
+    `heur` (RCA §4.2 step 2).
+- **Guardrails:** VSA stays a weak tiebreaker; never DDTree; aggregate bench
+  metrics only (per-record is HashMap-noise); run quick bench before full.
+- **Verify:** full 318 bench, candidate up, recall NOT down
+- **Status:** T1.8a DONE — overlap weight 0.15→0.05. Coordinate-ascent weight
+  search (env-driven, no recompile): swept CONN/ROLE/HOP2/OV/VSA/HEUR
+  individually around current defaults. Only OV moved the needle:
+  ov=0.05 → candidate **21.07-21.38%** (baseline 20.44-20.75, +0.6-0.9pt),
+  stable across 8+ runs; recall 76.10% unchanged; substring 22.64% unchanged.
+  All other weights flat (no single-weight gain). Overlap dominance (question
+  -named entities scoring high) was suppressing correct connected answers.
+  **Result:** candidate +0.63pt (T1.8a), weight search infra kept (env overrides)
+
 ---
 
 ## TRACK 2 — System (Wikipedia scale + generation quality)

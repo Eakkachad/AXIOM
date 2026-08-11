@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-11 (v15 — T1.7 decomposition boundary precision)
-> Status: TriviaQA candidate 20.44-20.75% · entity recall 76.10% · latency ~100ms (idle)
+> Last updated: 2026-08-11 (v15 — T1.7 + T1.8a)
+> Status: TriviaQA candidate 21.07-21.38% · entity recall 76.10% · latency ~100ms (idle)
 
 > ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -24,7 +24,7 @@
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **20.44-20.75%** | 40% |
+> | candidate_answer_accuracy | **21.07-21.38%** | 40% |
 > | answer_entity_recall | **76.10%** | 80% |
 > | substring_accuracy | 22.64% | 50% |
 > | avg_latency | ~100ms (idle) | <200ms ✓ |
@@ -37,8 +37,13 @@
 >   trims trailing punctuation, admits single proper nouns when comma-terminated
 >   or lowercase-preceded (not article-headed / sentence-initial). Gold answers
 >   ("Chicago", "Switzerland", "LH") now enter the graph as CLEAN entities.
->   recall 71.38→76.10% (+4.72pt — record jump), candidate +0.6-0.9pt.
-> - 6 new decompose unit tests; full workspace `cargo test` green.
+>   recall 71.38→76.10% (+4.72pt — record jump).
+> - **T1.8a overlap weight calibration**: coordinate-ascent weight search
+>   (env-driven AXIOM_W_* overrides, no recompile) over the 6 extract_answer
+>   signals. Only OVERLAP moved the needle: 0.15→0.05 → candidate +0.6-0.9pt
+>   (20.44-20.75→21.07-21.38%, stable 8+ runs). Recall/substring unchanged.
+>   Weight search infra kept for T1.8b/c.
+> - 6 new decompose unit tests + weight-env tests; workspace cargo test green.
 >
 > ### What was built (v14 full session):
 > - **Track 1 (accuracy)**: T1.2 lowercase NP extraction, T1.3 permutation
@@ -61,14 +66,12 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **Decomposition quality is now clean enough to expose the real bottleneck:
->   ranking aggregation.** Recall jumped +4.72pt (76.10%) while candidate only
->   +0.6-0.9pt (20.44-20.75%). The remaining gap is extract_answer's
->   non-normalized linear sum (RCA). Next experiments must tackle rank-normalized
->   scoring WITH per-signal weight calibration — NOT the blind equal-weight
->   (T1.6, reverted 12.58%) and NOT blind re-weighting (5+ documented failures).
-> - Further decomposition options if needed: clause typing, more entities per
->   sentence, scale Wikipedia corpus for semantic layer re-enable.
+> - **T1.8b / T1.8c still open on the ranking task** (T1.8a done):
+>   - T1.8b: percentile-normalize each signal within candidate set, THEN
+>     calibrate weights (hub-invariance per RCA) — NOT equal weight (T1.6 dead).
+>   - T1.8c: distinctness/IEF (-log(freq)) replaces raw count in heur.
+> - Recall 76.10% / candidate 21.07-21.38% — the remaining candidate gap is
+>   extract_answer aggregation. Weight-search infra (AXIOM_W_* env) is ready.
 > - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)

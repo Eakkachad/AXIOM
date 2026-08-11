@@ -5,6 +5,39 @@
 
 ---
 
+## 2026-08-11 — v15 (T1.8a overlap weight calibration — candidate 20.75→21.38%)
+
+**Commits:** T1.8a (this entry)
+
+### What changed
+- **T1.8a** `engine.rs` `extract_answer`: overlap weight 0.15→0.05 (default).
+  Coordinate-ascent weight search infrastructure added: `weight_env()` reads
+  AXIOM_W_CONN/ROLE/HOP2/OV/VSA/HEUR env overrides so the search sweeps the
+  full 318 bench without recompiling. 6 new weights, defaults identical to the
+  tuned linear sum.
+- Search procedure (RCA §4.1, avoiding the T1.6 equal-weight trap): sweep each
+  of the 6 signals individually, hold winner, re-sweep others.
+
+### Measured results (full 318 bench)
+| Metric | v15 baseline | ov=0.05 | Δ |
+|--------|:---:|:---:|:---:|
+| candidate_answer_accuracy | 20.44-20.75% | **21.07-21.38%** | +0.6-0.9pt |
+| answer_entity_recall | 76.10% | 76.10% | 0 |
+| substring_accuracy | 22.64% | 22.64% | 0 |
+| avg_latency | ~100-235ms | ~100-235ms | 0 |
+
+### Key findings
+- **Only OVERLAP moved the needle.** CONN/ROLE/HOP2/VSA/HEUR single-weight
+  changes are flat around the tuned baseline (as documented — strong local
+  optimum). Overlap dominance was the actionable signal: question-named
+  entities get many overlap points and were suppressing correct connected
+  answers. Cutting 0.15→0.05 (still nonzero, keeps tie-breaking) is a clean win.
+- Weight search infra (env overrides) is deterministic and cheap (~83s/bench,
+  8-way parallel) — keep for T1.8b/c and future recalibration.
+- Recall 76.10% / substring 22.64% untouched — pure ranking change.
+
+---
+
 ## 2026-08-11 — v15 (T1.7 decomposition quality: proper-noun boundary precision)
 
 **Commits:** T1.7 (this entry)
