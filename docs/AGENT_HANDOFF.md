@@ -1,60 +1,73 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-10 (v14 — continuous-development system bootstrap)
-> Status: TriviaQA candidate 18.87% · entity recall 71.07% · latency 213ms
+> Last updated: 2026-08-10 (v14 final — RCA + Track 1/2/3 infra complete)
+> Status: TriviaQA candidate 19.81% · entity recall 71.38% · latency ~100ms (idle)
 
 > ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
-> ### The system (3 files — the source of truth):
+> ### The system (4 files — the source of truth):
 > 1. **`docs/ROADMAP.md`** — canonical task board. Pick the highest-priority
 >    `[ ]` task whose dependencies are `[x]`. Mark tasks `[x]`/`[~]`/`[!]` as you work.
 > 2. **`docs/PROGRESS_LOG.md`** — append-only journal. Newest entry at top.
 > 3. **`docs/AGENT_WORKFLOW.md`** — the operating procedure. FOLLOW IT EXACTLY.
+> 4. **`docs/ROOT_CAUSE_ANALYSIS.md`** — cross-layer RCA of the answer-selection
+>    gap. READ THIS before touching extract_answer ranking.
 >
 > ### Working procedure (2-minute rule):
-> 1. Read this handoff, then ROADMAP + PROGRESS_LOG + WORKFLOW.
+> 1. Read this handoff, then ROADMAP + PROGRESS_LOG + WORKFLOW (+ RCA).
 > 2. Run `cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa` (must pass).
-> 3. Pick next task from ROADMAP (currently T1.1 Adaptive sentence coverage is top).
+> 3. Pick next task from ROADMAP.
 > 4. Implement → test → bench → update ROADMAP/PROGRESS_LOG/this file → commit.
 > 5. NEVER claim improvement without a bench. NEVER re-try documented failures.
 
-> ## CURRENT STATE (v14 baseline)
+> ## CURRENT STATE (v14 baseline — LOCKED)
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **18.87%** | 40% |
-> | answer_entity_recall | **71.07%** | 80% |
-> | substring_accuracy | 23.58% | 50% |
-> | avg_latency | 213ms | <200ms |
+> | candidate_answer_accuracy | **19.81%** | 40% |
+> | answer_entity_recall | **71.38%** | 80% |
+> | substring_accuracy | 23.90% | 50% |
+> | avg_latency | ~100ms (idle) | <200ms ✓ |
 > | gen speed | 12K tok/s | 50K tok/s |
 > | codebook memory | 62MB (32×) | <50MB |
 >
-> ### What was built (v11→v13):
-> - **v11**: Diagnostic mode → found OVERLAP DOMINANCE root cause →
->   connectivity-first scoring → candidate 16.35%→18.55% (+2.2pt)
-> - **v12**: subject truncation, comma entity consolidation, MorphTokenizer wiring,
->   wider sentence coverage → candidate 18.87%, recall 71.07%
-> - **v13**: vsalm-wiki Wikipedia ingestion pipeline (fetch→clean→decompose→QA)
+> ### What was built (v14 full session):
+> - **Track 1 (accuracy)**: T1.2 lowercase NP extraction, T1.3 permutation
+>   consolidation, T1.4 relation-typed connectivity, stopword-filtered query
+>   vector → candidate 18.87%→19.81%
+> - **Track 2 (system)**: T2.1 answer-first generation (vsalm-wiki answers
+>   entities), T2.2 average-connectivity (hub fix +0.6pt), T2.3 batch
+>   ingestion + `--save`/`--load` TSV persistence
+> - **Track 3 (research)**: T3.1 semantic co-occurrence layer (infra, verified
+>   cos capital-paris 0.56, NOT scoring — regresses)
+> - **RCA**: docs/ROOT_CAUSE_ANALYSIS.md — hub domination + non-normalized
+>   linear aggregation. T1.6 percentile experiments reverted (12.58%, 13.84%).
+> - **Workspace cleanup**: fixed 4 crates broken since Phase 2 (resonator,
+>   clifford, tda-router, deepman) — now 135 tests pass.
 >
 > ### Infrastructure ready:
 > - 32× codebook compression, GF(2) encoding (3× faster)
 > - TBA TopK cache (12K tok/s), KnowledgePrior O(1) hash index
-> - vsalm-wiki (Wikipedia QA), vsalm-axiom (graph→VSA-LM)
-> - CR2 path confidence (in hypervector.rs, unused pending cleaner graphs)
+> - vsalm-wiki (Wikipedia QA, --save/--load), vsalm-axiom (graph→VSA-LM)
+> - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
-> ## NEXT STEPS (from ROADMAP Track 1 — accuracy first)
-> - **T1.1 Adaptive sentence coverage** (P0, 1 day) — replace fixed top-5/6 with
->   relative VSA threshold → recall +3-5pt
-> - **T1.2 Lowercase noun-phrase extraction** (P0, 1 day) → recall +2-3pt
-> - **T1.3 Entity consolidation 2.0** (P0, 1 day) → candidate +2-3pt
-> - **T1.4 Relation-typed connectivity** (P0, 1 day, after T1.1/T1.3) → candidate +2-4pt
+> ## NEXT STEPS (from ROADMAP)
+> - **Structural gains require decomposition quality** (cleaner entities → better
+>   connectivity signal), NOT re-weighting ranking (RCA conclusion).
+> - Candidates: improve entity boundary precision, extract_more entities per
+>   sentence, or scale Wikipedia corpus for semantic layer re-enable.
+> - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)
 > - **DDTree dead** (4 attempts regressed) — use legacy extract_answer
-> - **extract_answer weights are optimal** — tune via diagnostics, not guesswork
-> - **VSA signal near-zero** with random codebook — don't rely until T3.1 semantic layer
-> - **Substring consolidation regressed** — only exact-match merge
-> - **Query-weighted KnowledgePrior noisy** — prefer specificity ranking (T2.2)
+> - **extract_answer tuned linear-sum is a strong local optimum** (19.81%) —
+>   survived 5+ redesign attempts. Do NOT re-weight blindly.
+> - **Semantic layer regresses when wired into scoring** — needs content-word
+>   query + big corpus + calibration before re-enable.
+> - **VSA signal near-zero** with random codebook — keep as weak tiebreaker.
+> - **Percentile equal-weight ranking regressed** (12.58%) — reverted.
+> - **Workspace was broken in non-tested crates** after Phase 2 — now fixed;
+>   run full `cargo test` after touching tle-vsa.
 
 ---
 
