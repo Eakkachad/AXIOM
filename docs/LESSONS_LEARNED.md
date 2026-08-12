@@ -105,8 +105,7 @@ remove entity ที่ถูกต้องด้วยเสมอ (เช่�
 - **M5 ไม่ใช่ lever หลัก** — 15/165 เท่านั้น อย่าลงทุนกับ surface filter
   ไปทำ deep-rank (149) / near-tie (25) แทน
 
-### 2.5 Deep-rank golds ต้องการ subject resolution ไม่ใช่แค่ relation pattern (T1.10d)
-**หลักฐาน:** "Swan Lake, Op. 20, is a ballet **composed by** Pyotr Ilyich
+### 2.5 Deep-rank golds ต้องการ subject resolution ไม่ใช่แค่ relation pattern (T1.10d)**หลักฐาน:** "Swan Lake, Op. 20, is a ballet **composed by** Pyotr Ilyich
 Tchaikovsky" → gold Tchaikovsky ติด deep-rank (#17) เพราะ:
 - การ์ด RELATIONAL_PHRASES ขาด passive `composed by`/`written by`/`directed by`
   (มีแต่ bare `composed`) → หลังเติม pattern: เกิด fact ถูกต้อง
@@ -125,6 +124,24 @@ Tchaikovsky" → gold Tchaikovsky ติด deep-rank (#17) เพราะ:
 - relation additions (`composed by`→created_by, `_by` forms + strong weights)
   เก็บไว้เป็น infra ถูกต้อง (neutral, ไม่ regress) แต่ยัง fire ไม่เต็มที่
   จนกว่า subject resolution จะเสร็จ — นี่คืองาน L1 ที่แท้จริงสำหรับ deep-rank
+
+### 2.6 Near-tie (M2) ไม่มีทางแก้ด้วย scoring หลัง subject resolution (T1.10f)
+**หลักฐาน (หลัง T1.10e, 22 near-ties เหลือ):**
+- 5/22 ตัดสินด้วย VSA noise ล้วน (conn/role/heur เหมือนกันเป๊ะ) — junk ได้
+  +0.05..+0.08, gold ได้ −0.03..+0.01 (random codebook noise)
+- 11/22 ตัดสินด้วย `heur` (junk มี count สูงกว่า)
+- ทุกการ tweak regress: VSA weight 0/0.5/1.0/1.5 (23.58-24.21%), VSA clamp
+  max(0,rel) (24.21%), count 0.1/0.15/0.25/0.3 (21.07-23.58%)
+**กลไก:** VSA noise มี mean 0 แต่ weight 2.0 ทำให้ ±0.08 → ±0.16 pt พลิกเสมอ;
+count เป็น evidence mass ที่มีประโยชน์จริง (ลดแล้วแย่ลง) — 11 heur-ties
+เป็น "junk มีหลักฐานเยอะจริง" ซึ่ง linear sum แยกไม่ออกโดยธรรมชาติ
+**บทเรียน:**
+- VSA weight 2.0 = optimal แล้ว (ทั้งลด/เพิ่ม/clamp ล้วน regress) — ยอมรับ
+  ว่า 5 VSA-ties ตัดสินแบบสุ่ม (≈ ±1 record noise ใน bench)
+- Near-tie ไม่ใช่ target ที่คุ้ม — เหลือแค่ 22 ตัว แก้ไม่ได้ด้วย scoring
+  ต้อง structural filter (entity type) ซึ่งต้อง POS/NER-lite (ยังไม่พร้อม)
+- **สรุป: M2 เหลือเป็น irreducible noise ของ linear sum** — ไปทำ
+  decomposition/subject resolution (ได้ผลจริง) ดีกว่า
 
 ---
 
