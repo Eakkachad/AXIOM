@@ -327,11 +327,18 @@ cargo test -p tle-engram      # 19 tests - N-gram hash
 
 | File | Content |
 |------|---------|
-| `docs/RESEARCH_PAPER_DRAFT.md` | Full paper: TBA + results + honest assessment |
-| `docs/SYNTHESIS_PROPOSAL.md` | Architecture design (3 approaches → unified) |
-| `docs/AXIOM_Gen_Algorithm.md` | AXIOM-Gen: full math spec + pseudocode + proof |
+| `docs/research/RESEARCH_PAPER_DRAFT.md` | Full paper: TBA + results + honest assessment |
+| `docs/research/SYNTHESIS_PROPOSAL.md` | Architecture design (3 approaches → unified) |
+| `docs/research/AXIOM_Gen.md` | AXIOM-Gen: full math spec + pseudocode + proof |
+| `docs/research/KATGPT_ANALYSIS.md` | Prior art analysis from katgpt-rs |
+| `docs/research/EGKC_algorithm.md` | EGKC energy-minimization spec |
+| `docs/research/AXIOM_MATH_FRAMEWORKS_RESEARCH.md` | 7 math frameworks (RRF, resonator, MDL...) |
+| `docs/research/VSA_COMPRESSION_RESEARCH.md` | VSA/TM compression research |
+| `docs/research/attention_decomposition_report.md` | Attention decomposition |
+| `docs/research/AXIOM_RANKING_RESEARCH_MEMO.md` | Ranking/answer-selection research memo |
 | `docs/AXIOM_RESULTS.md` | Benchmarks + demo transcript |
-| `docs/KATGPT_ANALYSIS.md` | Prior art analysis from katgpt-rs |
+| `docs/RANKING_RESEARCH_SYNTHESIS.md` | Session ranking synthesis (3 memos) |
+| `docs/SESSION_RESEARCH_SUMMARY.md` | 6 negative rounds + 4 gains |
 
 ---
 

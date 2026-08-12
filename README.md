@@ -258,7 +258,7 @@ topological-latent-engine/
 - `docs/ROOT_CAUSE_ANALYSIS.md` — cross-layer analysis of the selection gap
 - `docs/SESSION_RESEARCH_SUMMARY.md` — this session's 6 negatives + 4 gains
 - `docs/RANKING_RESEARCH_SYNTHESIS.md` — deep research on ranking math
-- `docs/RESEARCH_PAPER_DRAFT.md` — TBA + AXIOM-Gen paper draft
+- `docs/research/` — research documents (paper draft, algorithm specs, prior-art)
 
 ## License
 

@@ -1,11 +1,25 @@
 # AXIOM — Results
 
-> Last updated: 2026-08-09 (Session 3 — TriviaQA + VSA-LM milestones)
+> Last updated: 2026-08-11 (v15 — current numbers at top; history below)
 
-## TriviaQA Open-Domain QA (verified-wikipedia-dev, 318 records)
+## Current (v15, 2026-08-11)
 
-Evaluated with evidence ingestion from Wikipedia articles. No pretrained models, no
-gradient descent, no probability sampling. Fully deterministic pipeline.
+| Metric | Score | Description |
+|--------|:---:|------|
+| Candidate Answer Accuracy | **24.53%** | AXIOM selects the correct answer entity |
+| Answer Entity Recall | **76.10%** | Gold answer exists as a graph entity |
+| Substring Accuracy | **23.27%** | Answer appears in generated sentence |
+| Evidence Answer Recall | **99.69%** | Answer exists in ingested evidence text |
+| Average Latency | ~100ms | Evidence extraction + VSA beam search |
+
+These are **evidence-ingested pipeline diagnostics**, not open-domain benchmark
+scores (see README "Honest Limitations"). v15 gains (vs v14): recall +4.72pt,
+candidate +4.72pt via decomposition quality, query-penalty bug-fix, hub-corrected
+PPR, and subject resolution.
+
+---
+
+## History (Session 3, 2026-08-09 — prior baseline)
 
 | Metric | Score | Description |
 |--------|:---:|------|
