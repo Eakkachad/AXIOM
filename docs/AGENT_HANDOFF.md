@@ -1,6 +1,6 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-12 (v16 — T1.11)
+> Last updated: 2026-08-12 (v16 — T1.11, T1.12)
 > Status: TriviaQA candidate 24.84% · entity recall 76.10% · latency ~146ms (idle)
 
 > ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
@@ -83,15 +83,14 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.12 F2 random-linear-code deterministic unbinding** — next biggest lever.
->   Build bit-matrix module (rank/elimination over GF(2), ~300-500 LOC) in
->   `tle-vsa`; verified against arXiv 2403.03278 (C = K×V, K∩V={0}, unique
->   factorization). Cleaner decomposition → fewer M2/M5 junk candidates.
-> - **T1.13 Compression/MDL differenced tiebreak** — `[C(q⊕fact)−C(q)] −
->   [C(q⊕name)−C(q)]`, match-length proxy (katgpt MatchLengthScorer), tiebreak
->   only. Breaks M2 near-ties deterministically.
+> - **T1.13 Compression/MDL differenced tiebreak** — next real-signal lever.
+>   `[C(q⊕fact)−C(q)] − [C(q⊕name)−C(q)]`, match-length proxy (katgpt
+>   MatchLengthScorer), tiebreak only. Breaks M2 near-ties deterministically.
 > - **T1.15 PathHD-style calibrated blockwise cosine + Top-K prune** — closest
 >   published architecture to the gap (arXiv:2512.09369).
+> - **T1.12b structured F2 codebook** — blocked/deferred: T1.12 module built +
+>   tested but direct F2 scoring on random-bipolar d=2048 is degenerate
+>   (full-rank). Needs structured codebook; high regression risk.
 > - **T1.14 S7 Allen interval** (when-questions only, needs date extraction),
 >   **T1.16 CLR (mean)^M gate**, **T1.17 katgpt engineering** (SplitMix64,
 >   multi-head engram).

@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-08-12 — v16b (T1.12 F2 random-linear-code infra + honest wiring finding)
+
+**Commits:** code (tle-vsa/src/gf2.rs) + docs
+
+### What changed
+- **`crates/tle-vsa/src/gf2.rs`** (new, exported via lib.rs): deterministic F2
+  linear algebra + random linear codes per arXiv 2403.03278:
+  - `Gf2Mat` — packed u64 bit-matrix; `rref`/`rank`/`solve` (Gaussian
+    elimination over F2), `mul_vec`/`mul_vec_transposed`, `from_columns`.
+  - `LinearCode` — systematic [I_k | A] code; `encode`/`decode`/`factorize`
+    (unique c = key⊕value, K∩V={0})/`syndrome`/`is_codeword`.
+  - `factorize_bundle` — recover the exact subset summing to a bundle by
+    solving the linear system (iteration-free counterpart to resonator).
+  - 8 unit tests + 1 HyperVector-layer integration test (exact deterministic
+    bundle recovery of {apple, cherry}).
+
+### Verification
+- `cargo test -p tle-vsa`: 30 passed (incl. 9 new).
+- Full workspace compiles; all 15 tle-vsa-dependent crates' tests pass
+  (incl. tle-pipeline slow 100-run determinism, 551.72s — pre-existing slow).
+- Full 318 bench: **neutral** — candidate 24.84%, recall 76.10%, substring
+  23.27% (additive module, default scoring untouched).
+
+### Honest finding (banked — saves future hours)
+Direct wiring of F2 codes into the CURRENT random-bipolar d=2048 scoring path
+is degenerate: random vectors are full-rank (rank ≈ min(dim, n)), so Gaussian
+elimination gives no search-space reduction and syndrome/subspace signals
+reduce to the already-rejected S1 overlap family. The F2 machinery needs a
+**structured codebook** (codewords in a low-dim subspace C = K×V) — tracked as
+T1.12b (deferred, high regression risk). Prioritize T1.13 (MDL tiebreak, a real
+new signal) and T1.15 (PathHD) over T1.12b.
+
+---
+
 ## 2026-08-12 — v16 (T1.11 M1 conditional overlap-veto + T1.11+ research-gated roadmap)
 
 **Commits:** code (engine.rs) + docs (ROADMAP/PROGRESS_LOG/AGENT_HANDOFF)

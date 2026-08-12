@@ -309,7 +309,7 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   full bench is the only trusted gate. **Result:** candidate +0.31pt
 
 ### T1.12 F2 random-linear-code deterministic unbinding (decomposition cleanup)
-- [ ] Status: pending · Priority: P1 · Effort: 2-3 days · Depends: T1.11
+- [x] Status: done (infra) · Priority: P1 · Effort: 2-3 days · Depends: T1.11
 - **Goal:** replace iterative/approximate recovery in the decomposition/cleanup
   path with exact Gaussian elimination over GF(2) (verified against arXiv
   2403.03278: C = K×V direct-sum subcode, K∩V={0}, unique factorization, no
@@ -321,6 +321,31 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **File:** `crates/tle-vsa/src/` (new `gf2_linalg.rs` or similar) + wiring in
   `tle-axiom-gen/src/decompose.rs`
 - **Verify:** full bench, candidate up / recall NOT down
+- **Status:** INFRA BUILT — new `crates/tle-vsa/src/gf2.rs` (exported via lib.rs):
+  `Gf2Mat` (packed bit-matrix, deterministic rref/rank/solve/mul_vec[ᵀ]),
+  `LinearCode` (systematic [I_k|A] code, encode/decode/factorize/syndrome —
+  unique c = key⊕value split, K∩V={0}), `factorize_bundle` (bundle→subset via
+  Gaussian elimination, the exact counterpart to resonator iteration). 8 unit
+  tests + 1 HyperVector-layer integration test (bundle recovery exact &
+  deterministic). All tle-vsa dependents pass (`cargo test` on 15 crates,
+  incl. slow tle-pipeline 100-run determinism, 0 failures). Full bench neutral:
+  candidate 24.84%, recall 76.10% (additive module, default scoring untouched).
+  **Honest finding:** direct scoring wiring on the RANDOM-bipolar d=2048
+  codebook is degenerate — random vectors are full-rank (rank ≈ min(dim, n)),
+  so Gaussian elimination offers no search-space reduction and the syndrome/
+  subspace signals reduce to the already-rejected S1 overlap family. The F2
+  benefit requires a **structured codebook** (codewords in a low-dim subspace
+  C = K×V) which breaks the existing codebook contract → T1.12b.
+  **Result:** infra + tests, bench-neutral, no metric change
+
+### T1.12b Structured F2 codebook (unblocks F2 scoring) — DEFERRED
+- [ ] Status: blocked · Priority: P1 · Effort: 3-5 days · Depends: decision on
+  breaking the random-bipolar codebook contract
+- **Goal:** make codewords live in a low-dim subspace C = K×V so the T1.12
+  `factorize_bundle`/syndrome machinery becomes non-degenerate in scoring
+  (query-entity verification, near-tie tiebreak). Requires re-encoding the
+  codebook (deterministic, seeded) — must re-verify 100-run determinism +
+  full bench. High risk of regression; only pursue after T1.13/T1.15.
 - **Status:** — | **Result:** —
 
 ### T1.13 Compression/MDL differenced tiebreak (8th signal)
