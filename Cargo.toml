@@ -19,6 +19,7 @@ members = [
     "crates/tle-axiom-gen",
     "crates/tle-knowledge",
     "crates/tle-vsa-lm",
+    "crates/tle-ghrr",
 ]
 
 [workspace.package]
@@ -40,6 +41,7 @@ tle-pipeline = { path = "crates/tle-pipeline" }
 tle-afc = { path = "crates/tle-afc" }
 tle-engram = { path = "crates/tle-engram" }
 tle-vsa-lm = { path = "crates/tle-vsa-lm" }
+tle-ghrr = { path = "crates/tle-ghrr" }
 
 # External dependencies (pinned versions)
 rand = "0.8.5"

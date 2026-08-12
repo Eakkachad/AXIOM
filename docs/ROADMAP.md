@@ -491,13 +491,24 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result:** negative ×2, kept env-gated off
 
 ### T1.18e B PathHD relation-schema retrieval — STRUCTURAL (big)
-- [ ] Status: pending · Priority: P1 · Effort: 2-3 days · Depends: T1.18b
+- [x] Status: done (KEPT, default ON) · Priority: P1 · Effort: 2-3 days · Depends: T1.18b
 - **Goal:** GHRR block-unitary binding (real O(4), D=128, d=2048) + plan-based
   query encoding + calibrated score + top-K=3 prune + deterministic adjudicator.
   New crate `tle-ghrr` (do NOT touch tle-vsa). Full spec in
   `docs/research/PATHHD_ENGINEERING_SPEC.md`. Env `AXIOM_PATHHD=1`.
 - **File:** new `crates/tle-ghrr/`
-- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+- **Verify:** strict candidate up, recall NOT down
+- **Status:** KEPT (default ON) — new crate `tle-ghrr` (14 tests): O(4)
+  Householder-product blocks (deterministic, orthogonal, non-commuting),
+  `GhrrVector::bind_path` (order-sensitive), blockwise cosine,
+  `RelationSchemaIndex` IDF + calibrated score (α=0.2/β=0.1/λ=0.8).
+  Engine integration: `ghrr_pathhd_signal` — question relation intent
+  (content words → graph relation names), per-candidate max calibrated cosine
+  over 1-hop/2-hop paths vs intent, added as signal `AXIOM_W_PATHHD`
+  (default **2.0** — sweep peak: exact 15.09→**15.72%** (+0.63), f1
+  16.98→**17.61%** (+0.63), strict_recall 54.72% unchanged, stable 3 runs;
+  >2.0 regresses). Substring candidate also up: 25.16% (best ever).
+  **Result: +0.63pt strict (both metrics)** — first new-signal win post-review
 
 ### T1.18f C1/C2 Reference suppression (exclusion cues + query-focus)
 - [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: T1.18b

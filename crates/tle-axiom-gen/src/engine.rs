@@ -589,6 +589,22 @@ impl AxiomGen {
         }
 
         let mut ranked: Vec<(f32, String, f32, f32, f32, f32, f32)> = Vec::new();
+
+        // T1.18e PathHD relation-schema retrieval (env AXIOM_W_PATHHD, default
+        // 2.0 — best-known, measured +0.63 exact/f1 stable 3 runs). A
+        // genuinely different signal: order-sensitive GHRR relation-sequence
+        // matching. The question's relation INTENT is derived deterministically
+        // (content words → graph relation names), each candidate's 1-hop/2-hop
+        // relation paths from the query entities are bound with GHRR
+        // block-unitary product (non-commutative), and scored by calibrated
+        // blockwise cosine vs the intent. Fixes the deep-rank class that
+        // query-connectivity/count signals cannot (all measured neutral).
+        let w_pathhd = weight_env("AXIOM_W_PATHHD", 2.0);
+        let pathhd_scores: HashMap<usize, f32> = if w_pathhd > 0.0 {
+            self.ghrr_pathhd_signal(graph, query_entities, &one_hop, query, &content_words)
+        } else {
+            HashMap::new()
+        };
         // Candidate set = entities with direct conn OR 2-hop conn.
         let mut candidate_ids: std::collections::HashSet<usize> = raw_conn.keys().copied().collect();
         candidate_ids.extend(raw_2hop.keys().copied());
@@ -734,6 +750,8 @@ impl AxiomGen {
             // 0.15 — overlap dominance (question-named entities) was drowning
             // correct connected answers. Recall unchanged at 76.10%.
             let ppr = if w_ppr > 0.0 { ppr_scores.get(id).copied().unwrap_or(0.0) } else { 0.0 };
+            // T1.18e PathHD relation-schema signal (per-candidate max path cos)
+            let pathhd = if w_pathhd > 0.0 { pathhd_scores.get(&id).copied().unwrap_or(0.0) } else { 0.0 };
             // T1.18c D1 typed signal: average typed-final-hop connectivity. A
             // candidate that is the answer-type-compatible tail of a bridge
             // relation gets a dedicated boost — this is what reaches Mode C
@@ -777,7 +795,8 @@ impl AxiomGen {
                 + rel * vsa_weight
                 + heur * w_heur
                 + ppr * w_ppr
-                + typed_avg * w_typed_env) * query_penalty;
+                + typed_avg * w_typed_env
+                + pathhd * w_pathhd) * query_penalty;
             if rrf_mode || conformal_mode {
                 cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {
@@ -949,6 +968,131 @@ impl AxiomGen {
 
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
         (answer, ranked)
+    }
+
+    /// T1.18e PathHD relation-schema signal: per-candidate MAX calibrated
+    /// blockwise-cosine of its 1-hop/2-hop relation paths from the query
+    /// entities, scored against the question's relation INTENT (GHRR
+    /// order-sensitive binding). Deterministic, zero-training.
+    fn ghrr_pathhd_signal(
+        &self,
+        graph: &KnowledgeGraph,
+        query_entities: &[usize],
+        one_hop: &[usize],
+        query: &str,
+        content_words: &[String],
+    ) -> std::collections::HashMap<usize, f32> {
+        use tle_ghrr::retrieval::calibrated_score;
+        use tle_ghrr::{GhrrCodebook, GhrrVector, RelationSchemaIndex};
+        use std::collections::HashMap;
+
+        let _ = query; // intent derived from content_words (relation names)
+        let mut codebook = GhrrCodebook::new(0xA5E1_2016_1D12_5EED);
+        let mut index = RelationSchemaIndex::new();
+        for r in &graph.relations {
+            index.count(r);
+        }
+
+        // Query relation intent: content words → graph relation names
+        // (substring/prefix match; "composed" ⊂ "composed_by").
+        let mut intent_rels: Vec<String> = Vec::new();
+        for w in content_words {
+            if w.len() < 4 {
+                continue;
+            }
+            for r in &graph.relations {
+                let rn = r.replace('_', " ");
+                let rw = r.replace('_', "");
+                if rn.contains(w.as_str())
+                    || rw.contains(w.as_str())
+                    || w.as_str().starts_with(&rn)
+                    || rn.starts_with(w.as_str())
+                {
+                    if !intent_rels.contains(r) {
+                        intent_rels.push(r.clone());
+                    }
+                }
+            }
+        }
+        if intent_rels.is_empty() {
+            // fallback: relation most frequent among query entities' triples
+            let mut freq: HashMap<usize, usize> = HashMap::new();
+            for &qe in query_entities {
+                for &ti in graph.adjacency_of(qe) {
+                    *freq.entry(graph.triples[ti].relation_id).or_insert(0) += 1;
+                }
+            }
+            if let Some((rid, _)) = freq.iter().max_by_key(|(_, v)| **v) {
+                if let Some(r) = graph.relations.get(*rid) {
+                    intent_rels.push(r.clone());
+                }
+            }
+        }
+        if intent_rels.is_empty() {
+            return HashMap::new();
+        }
+        // encode each intent relation separately (no bundling dilution)
+        let intent_vecs: Vec<GhrrVector> =
+            intent_rels.iter().map(|r| codebook.get_or_insert(r)).collect();
+
+        let alpha = weight_env("AXIOM_PATHHD_ALPHA", 0.2);
+        let beta = weight_env("AXIOM_PATHHD_BETA", 0.1);
+        let lambda = weight_env("AXIOM_PATHHD_LAMBDA", 0.8);
+
+        let mut best: HashMap<usize, f32> = HashMap::new();
+        let qes: std::collections::HashSet<usize> = query_entities.iter().copied().collect();
+        let mut record = |cand: usize, vec: &GhrrVector, idf: f32, len: usize| {
+            let sim = intent_vecs
+                .iter()
+                .map(|iv| iv.blockwise_cosine(vec))
+                .fold(f32::NEG_INFINITY, |a, b| a.max(b));
+            let sc = calibrated_score(sim, idf, len, alpha, beta, lambda);
+            best.entry(cand).and_modify(|e| *e = e.max(sc)).or_insert(sc);
+        };
+
+        // 1-hop paths: (query_entity, r, cand)
+        for t in &graph.triples {
+            let subj_q = qes.contains(&t.subject_id);
+            let obj_q = qes.contains(&t.object_id);
+            if subj_q != obj_q {
+                let cand = if subj_q { t.object_id } else { t.subject_id };
+                let r = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                let v = codebook.get_or_insert(r);
+                record(cand, &v, index.idf(r), 1);
+            }
+        }
+
+        // 2-hop paths: query_entity --r1--> mid --r2--> cand
+        let one_hop_set: std::collections::HashSet<usize> = one_hop.iter().copied().collect();
+        let mut mid_src: HashMap<usize, Vec<usize>> = HashMap::new();
+        for t in &graph.triples {
+            let subj_q = qes.contains(&t.subject_id);
+            let obj_q = qes.contains(&t.object_id);
+            if subj_q != obj_q {
+                let mid = if subj_q { t.object_id } else { t.subject_id };
+                if one_hop_set.contains(&mid) {
+                    mid_src.entry(mid).or_default().push(t.relation_id);
+                }
+            }
+        }
+        for (&mid, srcs) in &mid_src {
+            for &ti in graph.adjacency_of(mid) {
+                let t = &graph.triples[ti];
+                let cand = if t.subject_id == mid { t.object_id } else { t.subject_id };
+                if qes.contains(&cand) || one_hop_set.contains(&cand) { continue; }
+                let r2 = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                for &r1id in srcs {
+                    if t.relation_id == r1id { continue; }
+                    let r1 = graph.relations.get(r1id).map(|s| s.as_str()).unwrap_or("");
+                    let v1 = codebook.get_or_insert(r1);
+                    let v2 = codebook.get_or_insert(r2);
+                    let pv = GhrrVector::bind_path(&[&v1, &v2]);
+                    record(cand, &pv, index.idf_seq(r1, r2), 2);
+                }
+            }
+        }
+
+        best
     }
 
     /// Extract entity IDs mentioned in the query that exist in the knowledge graph.

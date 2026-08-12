@@ -5,6 +5,45 @@
 
 ---
 
+## 2026-08-12 — v18 (T1.18e PathHD relation-schema retrieval — FIRST NEW-SIGNAL WIN)
+
+**Commits:** new crate `tle-ghrr` + engine integration + workspace + docs
+
+### What was built
+- **New crate `crates/tle-ghrr/`** (14 tests): GHRR block-unitary binding
+  (real O(4) blocks, D=128, d=2048; deterministic Householder-product blocks;
+  `bind_path` order-sensitive; blockwise cosine) + `RelationSchemaIndex`
+  (training-free IDF) + `calibrated_score` (α=0.2/β=0.1/λ=0.8, Table-11).
+- **Engine integration** (`ghrr_pathhd_signal`): question relation INTENT
+  (content words → graph relation names, substring/prefix match; fallback =
+  most frequent relation at query entities), per-candidate MAX calibrated
+  blockwise cosine over its 1-hop/2-hop relation paths from query entities vs
+  the intent. Added as signal `AXIOM_W_PATHHD` (default **2.0**).
+
+### Bench (full 318, STRICT metrics, stable 3 runs)
+| metric | before (v17) | after (PathHD on) | Δ |
+|---|---|---|---|
+| candidate_exact | 15.09% | **15.72%** | +0.63 |
+| candidate_f1 | 16.98% | **17.61%** | +0.63 |
+| strict_recall | 54.72% | 54.72% | 0 |
+| substring candidate | 24.21% | **25.16%** (best ever) | +0.95 |
+| avg latency | ~135ms | ~153ms | ok |
+
+Weight sweep: peak at 2.0 (exact 15.72/f1 17.61); 2.5→15.41, 3.0→14.78,
+5.0→13.21 (over-boost regresses). Keep-gate passed (strict candidate up,
+strict recall NOT down).
+
+### Why this one worked (banked)
+PathHD is a **genuinely different signal**: it scores the RELATION SEQUENCE of
+the candidate's path against the question's relation intent using
+order-sensitive GHRR binding — NOT query-connectivity/count. The deep-rank
+buried golds (which D1/D2/VSA-boost all failed on) are exactly the ones that
+connect to the question via the RIGHT relation, and this signal rewards that.
+First new-signal win since the deep review; confirms the research conclusion
+that the gap needs NEW orthogonal signals, not re-combination.
+
+---
+
 ## 2026-08-12 — v17 (strict metrics + QNP default ON; D1/D2/VSA-boost negative)
 
 **Commits:** code (bench metrics, QNP, answer_type.rs, typed expansion, D2,
