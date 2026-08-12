@@ -47,7 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut candidate_hits = 0usize;
     let mut candidate_exact_hits = 0usize;
     let mut candidate_token_hits = 0usize;
+    let mut candidate_f1_hits = 0usize;
     let mut answer_entity_recall = 0usize;
+    let mut strict_recall = 0usize;
     let mut evidence_hits = 0usize;
     let mut total_latency = Duration::ZERO;
 
@@ -98,40 +100,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             && answers.iter().any(|answer| engine_answer.contains(answer) || answer.contains(&engine_answer)) {
             candidate_hits += 1;
         }
-        // T1.14-metrics: STRICTER candidate metrics (deep-review finding — the
+        // T1.18a STRICTER candidate metrics (deep-review finding — the
         // bidirectional-substring candidate metric is inflated ~2×: 52% of its
-        // "correct" are substring-only artifacts). These two are the honest
-        // diagnostics: normalized-token containment and exact token match.
+        // "correct" are substring-only artifacts). Three honest diagnostics
+        // over ALL gold aliases:
+        //   exact  : token-set equality (EM)
+        //   token  : token containment (either direction) with significant core
+        //   f1     : EM OR token-F1 >= 0.7 (SQuAD/TriviaQA official protocol)
+        // The F1 metric's precision term is what kills the "roosevelt ⊂ eleanor
+        // roosevelt" hole that containment misses. Keep-gate decisions use f1
+        // (strict) + strict recall; substring metrics are print-only.
         if !engine_answer.is_empty() {
-            let picked_tokens: std::collections::HashSet<&str> = engine_answer
+            let picked_tokens: Vec<String> = engine_answer
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
                 .filter(|w| !w.is_empty())
+                .map(|w| w.to_string())
                 .collect();
+            let mut hit_exact = false;
+            let mut hit_token = false;
+            let mut hit_f1 = false;
             for answer in &answers {
-                let answer_tokens: std::collections::HashSet<&str> = answer
+                let answer_tokens: Vec<String> = answer
                     .split(|c: char| !c.is_alphanumeric() && c != '_')
                     .filter(|w| !w.is_empty())
+                    .map(|w| w.to_string())
                     .collect();
-                if !answer_tokens.is_empty() && !picked_tokens.is_empty() {
-                    let shared = answer_tokens.intersection(&picked_tokens).count();
-                    let significant = shared >= 1
-                        && (shared >= 2
-                            || answer_tokens.iter().chain(picked_tokens.iter())
-                                .any(|w| w.len() >= 5 && shared >= 1 && (answer_tokens.contains(w) || picked_tokens.contains(w))));
-                    // exact: identical token sets
-                    if answer_tokens == picked_tokens {
-                        candidate_exact_hits += 1;
-                        candidate_token_hits += 1;
-                        break;
-                    }
-                    // token containment: one side's tokens all present in the other
-                    if answer_tokens.is_subset(&picked_tokens) || picked_tokens.is_subset(&answer_tokens) {
-                        if significant {
-                            candidate_token_hits += 1;
-                        }
-                        break;
-                    }
+                if answer_tokens.is_empty() || picked_tokens.is_empty() {
+                    continue;
                 }
+                let a_set: std::collections::HashSet<&str> = answer_tokens.iter().map(|s| s.as_str()).collect();
+                let p_set: std::collections::HashSet<&str> = picked_tokens.iter().map(|s| s.as_str()).collect();
+                let shared = a_set.intersection(&p_set).count();
+                if a_set == p_set {
+                    // exact (EM): f1 = 1.0
+                    hit_exact = true;
+                    hit_token = true;
+                    hit_f1 = true;
+                    break;
+                }
+                let significant = shared >= 1
+                    && (shared >= 2
+                        || a_set.iter().chain(p_set.iter()).any(|w| w.len() >= 5));
+                if (a_set.is_subset(&p_set) || p_set.is_subset(&a_set)) && significant {
+                    hit_token = true;
+                }
+                // token F1 (SQuAD-style), EM already handled above
+                let p = shared as f32 / p_set.len().max(1) as f32;
+                let r = shared as f32 / a_set.len().max(1) as f32;
+                let f1 = if p + r > 0.0 { 2.0 * p * r / (p + r) } else { 0.0 };
+                if f1 >= 0.7 {
+                    hit_f1 = true;
+                    break;
+                }
+            }
+            if hit_exact {
+                candidate_exact_hits += 1;
+            }
+            if hit_token {
+                candidate_token_hits += 1;
+            }
+            if hit_f1 {
+                candidate_f1_hits += 1;
             }
         }
 
@@ -141,6 +170,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let lower_entities: Vec<String> = engine.graph.entities.iter().map(|e| e.to_lowercase()).collect();
         if answers.iter().any(|answer| lower_entities.iter().any(|entity| entity.contains(answer) || answer.contains(entity))) {
             answer_entity_recall += 1;
+        }
+        // T1.18a STRICT recall: any gold alias with EM or token-F1 >= 0.7 against
+        // any graph node surface (the honest "selectable" ceiling, ~55% not 76%).
+        {
+            let mut hit = false;
+            'outer: for answer in &answers {
+                let a_tok: Vec<String> = answer
+                    .split(|c: char| !c.is_alphanumeric() && c != '_')
+                    .filter(|w| !w.is_empty())
+                    .map(|w| w.to_string())
+                    .collect();
+                if a_tok.is_empty() {
+                    continue;
+                }
+                let a_set: std::collections::HashSet<&str> = a_tok.iter().map(|s| s.as_str()).collect();
+                for entity in &lower_entities {
+                    let e_tok: Vec<String> = entity
+                        .split(|c: char| !c.is_alphanumeric() && c != '_')
+                        .filter(|w| !w.is_empty())
+                        .map(|w| w.to_string())
+                        .collect();
+                    if e_tok.is_empty() {
+                        continue;
+                    }
+                    let e_set: std::collections::HashSet<&str> = e_tok.iter().map(|s| s.as_str()).collect();
+                    if a_set == e_set {
+                        hit = true;
+                        break 'outer;
+                    }
+                    let shared = a_set.intersection(&e_set).count();
+                    let p = shared as f32 / e_set.len().max(1) as f32;
+                    let r = shared as f32 / a_set.len().max(1) as f32;
+                    let f1 = if p + r > 0.0 { 2.0 * p * r / (p + r) } else { 0.0 };
+                    if f1 >= 0.7 {
+                        hit = true;
+                        break 'outer;
+                    }
+                }
+            }
+            if hit {
+                strict_recall += 1;
+            }
         }
         if let Some(path) = &dump_path {
             let mut line = String::new();
@@ -232,7 +303,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  candidate_answer_accuracy: {:.2}%", percentage(candidate_hits, total));
     println!("  candidate_token_accuracy: {:.2}%", percentage(candidate_token_hits, total));
     println!("  candidate_exact_accuracy: {:.2}%", percentage(candidate_exact_hits, total));
+    println!("  candidate_f1_accuracy: {:.2}%", percentage(candidate_f1_hits, total));
     println!("  answer_entity_recall: {:.2}%", percentage(answer_entity_recall, total));
+    println!("  strict_recall: {:.2}%", percentage(strict_recall, total));
     println!("  evidence_answer_recall: {:.2}%", percentage(evidence_hits, total));
     println!("  avg_latency: {:?}", if total == 0 { Duration::ZERO } else { total_latency / total as u32 });
     Ok(())

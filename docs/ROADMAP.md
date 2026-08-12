@@ -409,6 +409,89 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   hardening, no accuracy expectation.
 - **Status:** — | **Result:** —
 
+### T1.18+ Deep-Review track (2026-08-12) — plan from docs/DEEP_REVIEW_2026-08-12.md
+
+> Source: deep review + 4-track research (docs/research/ANSWER_METRIC_RESEARCH.md,
+> PATHHD_ENGINEERING_SPEC.md, REFERENCE_ENTITY_RESEARCH.md,
+> CONNECTIVITY_COUNT_RESEARCH.md). **Keep-gate moves to the STRICT metric**
+> (candidate_exact / EM-or-F1≥0.7) + strict recall — the bidirectional-substring
+> metric is inflated ~2× (24.84% reported vs 13.84% exact) and rewards picking
+> the reference entity. Legacy substring metrics = print-only diagnostics.
+> Baseline v16c: substring 24.84% · exact 13.84% · recall 76.10% (substring).
+
+### T1.18a Strict metric adoption (EM-or-token-F1≥0.7 over aliases)
+- [x] Status: done · Priority: P0 · Effort: 0.5 day · Depends: none
+- **Goal:** honest evaluation. Add `candidate_f1_accuracy` = any alias with
+  EM (token-set equality) or token-F1 ≥ 0.7 (SQuAD/TriviaQA official protocol).
+  Print always; decisions gate on strict candidate + strict recall.
+- **File:** `crates/tle-axiom-gen/src/bin/triviaqa-bench.rs`
+- **Status:** KEPT — bench now prints candidate_answer (substring), token,
+  exact, **f1 (EM-or-F1≥0.7, primary strict)**, answer_entity_recall
+  (substring), **strict_recall (F1≥0.7 vs graph nodes, primary strict)**.
+  Baselines with QNP default-on: exact 15.09%, f1 16.98%, strict_recall 54.72%
+  (substring recall 76.10% — ~21pt phantom). **Result:** honest metrics live
+
+### T1.18b QNP → default ON (full penalty for conn=0 query-named)
+- [x] Status: done · Priority: P0 · Effort: 0.2 day · Depends: T1.18a
+- **Goal:** suppress the reference/topic entity (20% of failures): a query-named
+  entity with conn=0 AND hop2=0 is the anchor, never the answer → full penalty
+  regardless of intent. Code done (`AXIOM_V1_QNP`); measured exact +0.63pt
+  (13.84→14.47, stable 3 runs) hidden by the substring metric (−0.63).
+- **File:** `crates/tle-axiom-gen/src/engine.rs` (flip default)
+- **Verify:** strict candidate up, strict recall NOT down
+- **Status:** KEPT (default ON) — on STRICT metrics: exact 14.78→**15.09%**
+  (+0.31), f1 16.67→**16.98%** (+0.31), strict_recall 54.72% unchanged, all
+  stable 3 runs. Substring candidate 24.84→24.21% (−0.63) is the metric
+  artifact (suppressing reference entities that the substring metric rewarded).
+  **Result:** +0.31pt strict (both metrics)
+
+### T1.18c D1 Typed final-hop expansion (OPI-style answer-type) — PRIMARY
+- [ ] Status: pending · Priority: P0 · Effort: 1-2 days · Depends: T1.18b
+- **Goal:** fix Mode C (gold conn=0, 20% of failures) + attribute/value answers.
+  `predict_answer_type(intent, query)` (word rules) + `RelationKind{head,tail}`
+  table (~40 relations) + typed final-hop expansion (only candidates whose
+  final-hop relation tail-type matches predicted; Number/Temporal must parse
+  numeric) + new additive signal `w_typed·typed_avg` (env `AXIOM_W_TYPED`).
+  QASA-style monotonicity/visited guards. Recall monotone (adds candidates).
+  Literature: OPI arXiv:2606.28076 (+4.6/+8.9 Hit@1).
+- **File:** new `crates/tle-axiom-gen/src/answer_type.rs` + `engine.rs`
+- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+
+### T1.18d D2 Conditional + saturated count (BM25/RSJ) — after D1
+- [ ] Status: pending · Priority: P1 · Effort: 1 day · Depends: T1.18c
+- **Goal:** fix Mode B (count dominance, 15%): `count_cond` = query-connected
+  triples (raw_conn_count+raw_2hop_count), `count_ratio` = count_cond/count
+  (Milne-Witten, hub-invariant), `heur = w_count·BM25_sat(count_cond) +
+  w_ratio·count_ratio − …` (k1≈2-3). NOT the failed global count cut. MUST ship
+  after D1 (D2 zeroes conn=0 golds; D1 gives them typed connectivity).
+- **File:** `crates/tle-axiom-gen/src/engine.rs`
+- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+
+### T1.18e B PathHD relation-schema retrieval — STRUCTURAL (big)
+- [ ] Status: pending · Priority: P1 · Effort: 2-3 days · Depends: T1.18b
+- **Goal:** GHRR block-unitary binding (real O(4), D=128, d=2048) + plan-based
+  query encoding + calibrated score + top-K=3 prune + deterministic adjudicator.
+  New crate `tle-ghrr` (do NOT touch tle-vsa). Full spec in
+  `docs/research/PATHHD_ENGINEERING_SPEC.md`. Env `AXIOM_PATHHD=1`.
+- **File:** new `crates/tle-ghrr/`
+- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+
+### T1.18f C1/C2 Reference suppression (exclusion cues + query-focus)
+- [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: T1.18b
+- **Goal:** complement QNP: C1 NegEx-style exclusion-cue detection ("the other
+  one", "besides", "apart from", "other than") → full penalty on named anchors;
+  C2 query-focus classifier (Identity default; Anchor on possessive/of-PP/"for
+  X and Y") → winner must have has_struct and not be a named anchor.
+- **File:** `crates/tle-axiom-gen/src/engine.rs` + `decompose.rs`
+- **Status:** — | **Result:** —
+
+### T1.18g D3 QASA-style query-aware PPR gate (tertiary)
+- [ ] Status: pending · Priority: P2 · Effort: 0.5 day · Depends: T1.18c/d
+- **Goal:** gate PPR mass-share by lexical query-overlap of `fact_texts[v]`
+  (NOT VSA cosine), γ≈0.5-0.8 + CatRAG symbolic-anchor teleport ε=0.2.
+- **File:** `crates/tle-axiom-gen/src/graph.rs` (`personalized_pagerank`)
+- **Status:** — | **Result:** —
+
 ---
 
 ## TRACK 2 — System (Wikipedia scale + generation quality)

@@ -641,7 +641,12 @@ impl AxiomGen {
             // unaffected.
             let qp_full = weight_env("AXIOM_QP_WHERE", 0.2);
             let qp_mild = weight_env("AXIOM_QP_WHAT", 0.6);
-            let qp_cond = weight_env("AXIOM_V1_QNP", 0.0);
+            // T1.18b (default ON): conditional full penalty for query-named
+            // entities with zero direct structural connectivity (conn==0 AND
+            // hop2==0). They are the reference/anchor, never the answer; the
+            // answer must be connected to the question's entities. Measured on
+            // the STRICT metric: exact 13.84→14.47% (+0.63, stable 3 runs).
+            let qp_cond = weight_env("AXIOM_V1_QNP", 1.0);
             let query_penalty = if is_query_named {
                 if qp_cond > 0.0 && conn_avg == 0.0 && hop2_avg == 0.0 {
                     qp_full
