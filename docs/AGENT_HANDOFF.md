@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-11 (v15 — T1.7, T1.8, T1.9a/b/c)
-> Status: TriviaQA candidate 24.21% · entity recall 76.10% · latency ~100ms (idle)
+> Last updated: 2026-08-12 (v16 — T1.11)
+> Status: TriviaQA candidate 24.84% · entity recall 76.10% · latency ~146ms (idle)
 
 > ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -23,18 +23,33 @@
 > 4. Implement → test → bench → update ROADMAP/PROGRESS_LOG/this file → commit.
 > 5. NEVER claim improvement without a bench. NEVER re-try documented failures.
 
-> ## CURRENT STATE (v15 baseline — LOCKED)
+> ## CURRENT STATE (v16 baseline — LOCKED)
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **24.21%** | 40% |
+> | candidate_answer_accuracy | **24.84%** | 40% |
 > | answer_entity_recall | **76.10%** | 80% |
-> | substring_accuracy | 22.33% | 50% |
-> | avg_latency | ~100ms (idle) | <200ms ✓ |
+> | substring_accuracy | 23.27% | 50% |
+> | avg_latency | ~146ms (idle) | <200ms ✓ |
 > | gen speed | 12K tok/s | 50K tok/s |
 > | codebook memory | 62MB (32×) | <50MB |
 >
-> ### What was built (v15):
+> ### What was built (v16):
+> - **T1.11 M1 conditional overlap-veto**: overlap signal only counts when the
+>   candidate is structurally connected to the query entities (conn>0 OR hop2>0
+>   OR PPR support>τ). Env `AXIOM_V1_M1` (default on) / `AXIOM_V1_M1_TAU`. This is
+>   the conditional the linear sum provably cannot express ("name-match only
+>   counts when connectivity present"). candidate 24.53→**24.84%** (+0.31pt,
+>   stable 3+ runs), recall/substring unchanged, latency ~167→~146ms.
+> - **T1.11+ research-gated roadmap** added to ROADMAP.md: the 7-signal proposal
+>   (F2 subspace, e^A communicability, sheaf Dirichlet, quantum fidelity, FFT
+>   phase, commutator, Allen interval) was validated by a research session —
+>   **S1-S6 are re-labelings of existing signals (predicted 12.58-19.18% floor),
+>   S6 is dangerous, only S7 (Allen) is orthogonal**; category theory +
+>   projective-measurement fusion are framing only. The v1 that matters: M1 veto
+>   (done) + F2 linear-code unbinding (T1.12) + MDL differenced tiebreak (T1.13)
+>   + PathHD calibrated-cosine+Top-K (T1.15). katgpt-rs patterns banked (CLR
+>   (mean)^M gate, MatchLengthScorer, SplitMix64 seeds).
 > - **T1.7 proper-noun entity boundary precision**: clean entities in graph →
 >   recall 71.38→76.10% (+4.72pt record).
 > - **T1.8a overlap weight calibration**: ov 0.15→0.05 → candidate +0.63pt.
@@ -68,13 +83,20 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.9b is next: hard structural filter (the research's main veto).** RRF
->   alone regresses; query-penalty fix gained +2.2pt by making question-named
->   entities detectable. Next levers per 165-failure analysis: F1 answer-type
->   filter (Who→PERSON, Where→LOCATION), F2 question-relation reachability,
->   F3 PPR distance≤3 expansion (M4 structural conn=0). Each env-gated A/B.
-> - **T1.9c: hub-corrected PPR** (`log π_q − log π`) as 7th signal + M4 fix.
-> - T3.2 (VaCoAl rescue) blocked until candidate >30%; T3.3 (paper) >40%.
+> - **T1.12 F2 random-linear-code deterministic unbinding** — next biggest lever.
+>   Build bit-matrix module (rank/elimination over GF(2), ~300-500 LOC) in
+>   `tle-vsa`; verified against arXiv 2403.03278 (C = K×V, K∩V={0}, unique
+>   factorization). Cleaner decomposition → fewer M2/M5 junk candidates.
+> - **T1.13 Compression/MDL differenced tiebreak** — `[C(q⊕fact)−C(q)] −
+>   [C(q⊕name)−C(q)]`, match-length proxy (katgpt MatchLengthScorer), tiebreak
+>   only. Breaks M2 near-ties deterministically.
+> - **T1.15 PathHD-style calibrated blockwise cosine + Top-K prune** — closest
+>   published architecture to the gap (arXiv:2512.09369).
+> - **T1.14 S7 Allen interval** (when-questions only, needs date extraction),
+>   **T1.16 CLR (mean)^M gate**, **T1.17 katgpt engineering** (SplitMix64,
+>   multi-head engram).
+> - Do NOT re-attempt S1-S6 / category-theory / projective-measurement fusion —
+>   documented as re-labelings (see ROADMAP T1.11+ header).
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)
 > - **DDTree dead** (4 attempts regressed) — use legacy extract_answer

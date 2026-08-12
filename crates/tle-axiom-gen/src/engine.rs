@@ -597,10 +597,28 @@ impl AxiomGen {
             // 0.15 — overlap dominance (question-named entities) was drowning
             // correct connected answers. Recall unchanged at 76.10%.
             let ppr = if w_ppr > 0.0 { ppr_scores.get(id).copied().unwrap_or(0.0) } else { 0.0 };
+            // T1.11 M1 conditional overlap-veto (env AXIOM_V1_M1, default off).
+            // Overlap counts ONLY when the candidate is structurally connected to
+            // the query entities: direct conn, 2-hop, or relative-PPR support
+            // above tau. Kills overlap-dominance (M1, 21/165 failures): entities
+            // that merely share surface words with the question but have no graph
+            // connection to it can no longer win via overlap. The linear sum
+            // provably cannot express "name-match only counts when connectivity
+            // present" — a hard gate can, and it preserves magnitudes (immune to
+            // the percentile/fusion failure class).
+            let w_m1 = weight_env("AXIOM_V1_M1", 1.0);
+            let m1_tau = weight_env("AXIOM_V1_M1_TAU", 0.0);
+            let has_struct = conn_avg > 0.0
+                || hop2_avg > 0.0
+                || (w_ppr > 0.0 && ppr > m1_tau);
+            let mut ov_eff = ov;
+            if w_m1 > 0.0 && ov_eff > 0.0 && !has_struct {
+                ov_eff = 0.0;
+            }
             let score = (conn_avg * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2
-                + ov * w_ov
+                + ov_eff * w_ov
                 + rel * rel_weight
                 + heur * w_heur
                 + ppr * w_ppr) * query_penalty;

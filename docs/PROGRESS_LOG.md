@@ -5,6 +5,58 @@
 
 ---
 
+## 2026-08-12 — v16 (T1.11 M1 conditional overlap-veto + T1.11+ research-gated roadmap)
+
+**Commits:** code (engine.rs) + docs (ROADMAP/PROGRESS_LOG/AGENT_HANDOFF)
+
+### Research session (sub-agents, 2026-08-12)
+- **Codebase audit:** GF(2) primitives exist (`bind_gf2`/`unbind_gf2`/`cr2_confidence`,
+  `hypervector.rs:237-286`) but NO Gaussian elimination/rank over F2 anywhere;
+  no `faer`/`nalgebra`/`rustfft` deps; Ascent (Datalog) declared but never wired;
+  commutator is ~5 lines from existing Cl(3,0) geometric product.
+- **7-signal proposal validated:** S1-S6 are re-labelings of existing signals
+  (overlap/PPR/degree/cosine²/cosine) — fail the Spearman-orthogonality bar,
+  predicted to regress to the 12.58-19.18% fusion floor. S6 (commutator) is
+  mathematically dangerous (zero for identical AND orthogonal). Only **S7
+  (Allen interval)** is genuinely orthogonal but doesn't hit M1-M5. Category
+  theory (B) and projective-measurement fusion (C) = framing only.
+- **katgpt-rs (github.com/katopz/katgpt-rs):** confirmed no VSA code; actionable
+  patterns = CLR `(mean)^M` reliability gate, `MatchLengthScorer` (suffix-match
+  compression proxy), multi-head prime-modulus Engram, SplitMix64 seeds.
+- **Prior art:** PathHD (arXiv:2512.09369) — calibrated blockwise cosine +
+  Top-K prune, closest published architecture to the 52pt gap. VaCoAl
+  (2607.16573) warning: perfect cleanup destroys discrimination signal.
+
+### What changed (T1.11 M1)
+- **`extract_answer` conditional overlap-veto** (`engine.rs`): overlap counts
+  ONLY when candidate is structurally connected to query entities (conn>0 OR
+  hop2>0 OR PPR support>τ). Env `AXIOM_V1_M1` (default **1** now best-known),
+  `AXIOM_V1_M1_TAU` (default 0.0). Kills M1 overlap-dominance — the conditional
+  the linear sum provably cannot express. Magnitude-preserving (immune to the
+  fusion failure class).
+
+### Bench results (full 318-record, verified-wikipedia-dev)
+| Metric | v15 baseline | T1.11 M1 ON | Δ |
+|--------|:---:|:---:|:---:|
+| candidate_answer_accuracy | 24.53% | **24.84%** | +0.31 |
+| answer_entity_recall | 76.10% | 76.10% | 0 |
+| substring_accuracy | 23.27% | 23.27% | 0 |
+| evidence_answer_recall | 99.69% | 99.69% | 0 |
+| avg_latency | ~167ms | ~146ms | faster |
+
+Stable 3+ runs (24.84% / 76.10% ×3). Keep-gate passed (candidate AND recall no
+regress). Quick bench on the 50-record subset regressed (38→36%) — confirmed the
+subset is non-representative; full bench is the only trusted gate.
+
+### Lessons banked
+- Quick-bench subsets can disagree with the full bench in **direction** (M1 was
+  −2pt on n=50, +0.31pt on n=318) — never revert from a 50-record regression.
+- The research session's core finding is now roadmapped: **the fix for the 52pt
+  gap is new signals + hard filters (M1-veto, F2-codes, MDL tiebreak, PathHD),
+  NOT re-fusing the existing 6.** S1-S6 are documented dead-ends to avoid.
+
+---
+
 ## 2026-08-11 — v15 (LESSONS_LEARNED registry — anti-pattern consolidation)
 
 **Commits:** docs only

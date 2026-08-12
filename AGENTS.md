@@ -12,10 +12,10 @@ in Rust (18 crates) built on hyperdimensional vectors (VSA, d=2048 random bipola
 over a knowledge graph. It ingests Wikipedia/evidence → decomposes to triples →
 ranks entities → answers. **Not** an LLM. No gradients, no sampling.
 
-**Current state (v15):** TriviaQA candidate 24.53% · entity recall 76.10% ·
+**Current state (v16):** TriviaQA candidate 24.84% · entity recall 76.10% ·
 substring 23.27% · evidence recall 99.69%. These are **evidence-ingested pipeline
 diagnostics, NOT open-domain benchmark scores.** The active research gap: system
-*finds* the answer 76% of the time but *selects* it only 24.5% (~52pt gap).
+*finds* the answer 76% of the time but *selects* it only 24.8% (~51pt gap).
 
 ## MUST READ — in this order (source of truth)
 
@@ -73,7 +73,8 @@ git status
 **Works (bench-verified):** query-entity punctuation fix (+2.2), hub-corrected
 PPR relative-PageRank signal (+0.63), proper-noun boundary precision
 (+4.72 recall), subject resolution / copula handling (+0.32), overlap weight
-0.05 (+0.63).
+0.05 (+0.63), **M1 conditional overlap-veto** (+0.31, env AXIOM_V1_M1 — overlap
+only counts when the candidate is structurally connected to the query).
 
 **Does NOT work:** any fusion redesign of the 6 signals (all normalize away
 magnitude gaps — 12.58% hit twice). The gap needs **new signals** + **cleaner

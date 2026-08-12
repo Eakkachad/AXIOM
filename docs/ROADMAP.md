@@ -2,16 +2,16 @@
 
 > This is the canonical task board. Agents MUST update it after every task:
 > mark done + record new metrics. Status: `pending` → `in_progress` → `done` / `blocked`.
-> Last updated: 2026-08-11 (v15)
+> Last updated: 2026-08-12 (v16)
 
-## Current System State (baseline v15)
+## Current System State (baseline v16)
 
 | Metric | Value | Target |
 |--------|:---:|:---:|
-| candidate_answer_accuracy | 20.44-20.75% | 40% |
+| candidate_answer_accuracy | **24.84%** | 40% |
 | answer_entity_recall | 76.10% | 80% |
-| substring_accuracy | 22.64% | 50% |
-| avg_latency | ~100ms (idle) | <200ms ✓ |
+| substring_accuracy | 23.27% | 50% |
+| avg_latency | ~146ms (idle) | <200ms ✓ |
 | gen speed | 12K tok/s | 50K tok/s |
 | codebook memory | 62MB (32×) | <50MB |
 | evidence_answer_recall | 99.69% | 99.7% |
@@ -253,7 +253,122 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   `*_by` relation patterns + strong weights. candidate 24.21→**24.53%**
   (+0.32, stable 3+ runs), recall 76.10% unchanged, substring 22.33→23.27
   (+0.94). Recovered odql_15009 (Steve Miller Band). 2 new unit tests.
-  **Result:** candidate +0.32pt (subject resolution)
+   **Result:** candidate +0.32pt (subject resolution)
+
+### T1.11+ Rank redesign v2 — NEW-SIGNAL/HARD-FILTER track (research-gated)
+
+> Source of this track: sub-agent research session (2026-08-12) — codebase audit +
+> katgpt-rs prior-art analysis + arXiv verification of the "7 orthogonal signals"
+> proposal (Linear Codes for HDC 2403.03278, VSA category theory 2501.05368,
+> sheaf laplacian 2309.03773, PathHD 2512.09369, VaCoAl 2607.16573, etc.).
+>
+> **Verdict on the 7-signal proposal:** S1 (F2 subspace) / S2 (e^A communicability)
+> / S3 (sheaf Dirichlet) / S4 (quantum fidelity) / S5 (FFT phase) / S6 (commutator
+> gate) are all **functional re-labelings of existing signals** (overlap, PPR,
+> degree, cosine², cosine) — held to the project's own Spearman-orthogonality bar
+> they fail, and are predicted (from the T1.6/T1.10a evidence base) to regress to
+> the 12.58-19.18% fusion floor. S6 is actively dangerous (rank-1 commutator is
+> zero for BOTH identical and orthogonal). **Do NOT implement S1-S6 as ranking.**
+> Only **S7 (Allen's interval algebra)** is genuinely orthogonal, but it has no
+> metadata precondition today and does not touch M1-M5.
+> **Category-theory framing (B) and projective-measurement fusion (C) are framing
+> only** — C is a re-labeled percentile-style fusion (renormalizes magnitude away).
+>
+> **What IS worth building (each env-gated, bench after each):**
+>
+> - **M1 conditional overlap-veto** (the real lever, 21/165 failures): linear sum
+>   provably cannot express "overlap counts only when connectivity present".
+> - **F2 linear-code deterministic unbinding** (math verified vs 2403.03278):
+>   exact Gaussian elimination over F2 replaces iterative recovery → cleaner
+>   candidate sets (M2/M5). ~300-500 LOC new bit-matrix module in `tle-vsa`.
+> - **Compression/MDL differenced tiebreak** (from synthesis §L3 + katgpt
+>   MatchLengthScorer): `[C(q⊕fact)−C(q)] − [C(q⊕name)−C(q)]` — only genuinely
+>   orthogonal + magnitude-preserving + no-dep signal available. Breaks near-ties.
+> - **PathHD-style calibrated blockwise cosine + Top-K prune** (2512.09369):
+>   best-matching published architecture for the 52pt answer-selection gap.
+> - **CLR `(mean)^M` sigmoid reliability gate** (katgpt): widen near-tie margins
+>   deterministically instead of re-weighting.
+> - **S7** as a when-question hard filter (optional; needs date-interval
+>   extraction precondition first).
+
+### T1.11 M1 conditional overlap-veto (hard filter, not fusion)
+- [x] Status: done · Priority: P0 · Effort: 0.5 day · Depends: none
+- **Goal:** candidate 24.53% → ~28-30%. Kill overlap-dominance (M1, 21/165
+  failures): question-named / query-word entities that have ZERO structural
+  connectivity (conn=0 AND hop2=0 AND PPR support below τ) must not win via
+  overlap. The linear sum cannot express this conditional — a filter can.
+  Magnitude-preserving (does NOT normalize signals), so immune to the
+  percentile/fusion failure class.
+- **File:** `crates/tle-axiom-gen/src/engine.rs` (`extract_answer`)
+- **Verify:** full 318 bench, candidate up, recall NOT down
+- **Status:** KEPT — env `AXIOM_V1_M1` (default 1, best-known), `AXIOM_V1_M1_TAU`
+  (default 0.0). Overlap zeroed for ov>0 candidates with conn=0 AND hop2=0 AND
+  ppr≤τ. Full 318 bench: candidate 24.53→**24.84%** (+0.31pt, stable 3+ runs),
+  recall 76.10% unchanged, substring 23.27% unchanged, latency ~167→~146ms.
+  Note: quick 50-record subset showed −2pt (38→36) — subset is non-representative;
+  full bench is the only trusted gate. **Result:** candidate +0.31pt
+
+### T1.12 F2 random-linear-code deterministic unbinding (decomposition cleanup)
+- [ ] Status: pending · Priority: P1 · Effort: 2-3 days · Depends: T1.11
+- **Goal:** replace iterative/approximate recovery in the decomposition/cleanup
+  path with exact Gaussian elimination over GF(2) (verified against arXiv
+  2403.03278: C = K×V direct-sum subcode, K∩V={0}, unique factorization, no
+  iteration, deterministic by construction). Note: `bind_gf2`/`unbind_gf2`/
+  `cr2_confidence` already exist in `tle-vsa/src/hypervector.rs:237-286` but
+  there is NO rank/elimination over F2 anywhere — build a bit-matrix module
+  (u64-word packed rows, ~300-500 LOC, no deps). Caveat from 2607.16573: do NOT
+  repair every collision (perfect cleanup ⇒ candidates become indistinguishable).
+- **File:** `crates/tle-vsa/src/` (new `gf2_linalg.rs` or similar) + wiring in
+  `tle-axiom-gen/src/decompose.rs`
+- **Verify:** full bench, candidate up / recall NOT down
+- **Status:** — | **Result:** —
+
+### T1.13 Compression/MDL differenced tiebreak (8th signal)
+- [ ] Status: pending · Priority: P1 · Effort: 1 day · Depends: T1.11
+- **Goal:** break M2 near-ties (25/165) deterministically with a genuinely
+  orthogonal, magnitude-preserving signal: `Δ = [C(q⊕fact(e)) − C(q)] −
+  [C(q⊕name(e)) − C(q)]` (match-length proxy per katgpt MatchLengthScorer —
+  inverted byte-index + suffix-match, NOT full LZ). Tiebreak-only by design
+  (katgpt's own CompressionDrafter failed its GOAT gate — never primary).
+- **File:** `crates/tle-axiom-gen/src/engine.rs`
+- **Verify:** full bench, candidate up / recall NOT down
+- **Status:** — | **Result:** —
+
+### T1.14 S7 Allen's interval algebra — when-question hard filter (optional)
+- [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: date/interval
+  extraction in `decompose.rs` (only `happened_in` year triples exist today)
+- **Goal:** only genuinely orthogonal signal of the proposed 7. Veto candidates
+  whose event ordering contradicts the query's temporal constraint (13 Allen
+  relations + composition table + difference logic x−y≤k). Does NOT touch M1-M5.
+- **File:** new `crates/tle-axiom-gen/src/interval.rs`
+- **Status:** — | **Result:** —
+
+### T1.15 PathHD-style calibrated blockwise cosine + Top-K prune
+- [ ] Status: pending · Priority: P1 · Effort: 2 days · Depends: T1.11
+- **Goal:** port the published answer-selection pipeline closest to this gap
+  (arXiv 2512.09369): GHRR-style non-commutative path hypervectors per candidate
+  (order-sensitive, aligns with existing `HDV(π)=Σρⁱ(HDV(τᵢ))`), calibrated
+  blockwise cosine to comparable scale, hard Top-K prune before final argmax.
+  Veto-first (katgpt screening-007 lesson), env-gated.
+- **File:** `crates/tle-axiom-gen/src/engine.rs`
+- **Status:** — | **Result:** —
+
+### T1.16 CLR (mean)^M sigmoid reliability gate for near-ties (M2)
+- [ ] Status: pending · Priority: P2 · Effort: 0.5 day · Depends: T1.11
+- **Goal:** instead of re-weighting (all flat/regress), widen the near-tie margin
+  deterministically: `score_k = (mean_m σ(s_k,m − b))^M` with M≈4 (katgpt CLR
+  reliability gate). Only applies when top candidates are within a noise band;
+  never primary scoring.
+- **File:** `crates/tle-axiom-gen/src/engine.rs`
+- **Status:** — | **Result:** —
+
+### T1.17 katgpt engineering adoption (determinism/robustness, no metric)
+- [ ] Status: pending · Priority: P2 · Effort: 1 day · Depends: none
+- **Goal:** SplitMix64 seed-mixing for bipolar codebook (fixes small-seed
+  degeneration — katgpt Issue 296 bug class); multi-head prime-modulus hashing
+  for `tle-engram` (collision dilution); coll-count confidence stat. Determinism
+  hardening, no accuracy expectation.
+- **Status:** — | **Result:** —
 
 ---
 
