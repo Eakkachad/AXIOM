@@ -245,12 +245,15 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Verify:** full 318 bench, candidate up, recall NOT down
 - **Status:** T1.10a NEGATIVE (conformal fusion 12.58-19.18%, reverted).
   T1.10b INFRA (Datalog rules built, no metric change; type-veto reverted).
-  T1.10c NEGATIVE (surface filter at graph regresses: NP edge-gate 23.90/75.79,
-  residue-only gate 23.58/75.16 — valid entities legitimately contain those
-  chars; M5 junk is mostly already filtered, residual too rare to be a lever).
-  See LESSONS_LEARNED §2.4. T1.10d resonator not attempted (VSA noise).
-  **Result:** 0 net gain from framework layers; keep infra (inference.rs,
-  PPR, query-penalty already in). Default 24.21%.
+  T1.10c NEGATIVE (surface filter at graph regresses — see LESSONS_LEARNED §2.4).
+  T1.10d resonator not attempted (VSA noise).
+  **T1.10e DONE — subject resolution** (deep-rank fix): trailing-copula strip
+  ("Zadok the Priest were" → "Zadok the Priest"), leading-copula inherit with
+  proper-noun guard ("is a ballet composed by" → inherit "Swan Lake"), passive
+  `*_by` relation patterns + strong weights. candidate 24.21→**24.53%**
+  (+0.32, stable 3+ runs), recall 76.10% unchanged, substring 22.33→23.27
+  (+0.94). Recovered odql_15009 (Steve Miller Band). 2 new unit tests.
+  **Result:** candidate +0.32pt (subject resolution)
 
 ---
 

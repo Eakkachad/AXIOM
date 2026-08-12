@@ -233,6 +233,8 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("designed", "designed"),
     ("built", "built"),
     ("wrote", "wrote"),
+    ("written by", "written_by"),
+    ("written in", "written_in"),
     ("composed by", "created_by"),
     ("composed", "composed"),
     ("released", "released"),
@@ -543,7 +545,20 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         // the fallback page title (trusted — always a valid entity).
         let mut trusted_subject = false;
 
-        if subject_canonical.is_empty() {
+        // A clause-subject that is a copula fragment ("is a ballet composed by
+        // X") has no real subject — the leading word is a copula and the rest
+        // is a descriptive complement with no proper noun. Inherit the previous
+        // subject ("Swan Lake") so the strong created_by link anchors correctly.
+        // Only treat as fragment when there is no capitalised proper noun after
+        // the copula — "Was President Kennedy the..." keeps its real subject.
+        let subj_first = subject_canonical.split_whitespace().next().unwrap_or("");
+        let leading_copula = matches!(subj_first.to_lowercase().as_str(),
+            "is" | "was" | "are" | "were" | "has" | "have" | "had" | "been" | "being");
+        let rest_has_proper = subject_canonical.split_whitespace().skip(1)
+            .any(|w| w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
+        let copula_fragment = leading_copula && !rest_has_proper;
+
+        if subject_canonical.is_empty() || copula_fragment {
             // No explicit subject — inherit from the previous clause.
             match inherited_subject.as_ref() {
                 Some(previous) => {
@@ -566,6 +581,22 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
             let head = subject[..pos].trim();
             if !head.is_empty() { subject = head.to_string(); }
         }
+        // Strip a trailing copula verb from the subject (T1.10d subject
+        // resolution): "Zadok the Priest were composed by ..." → subject
+        // "Zadok the Priest were" must become "Zadok the Priest". Without this
+        // the entity "Zadok the Priest" never gets its strong created_by link
+        // and sinks to deep rank.
+        let mut subj_tokens: Vec<&str> = subject.split_whitespace().collect();
+        while let Some(last) = subj_tokens.last() {
+            if matches!(last.to_lowercase().as_str(),
+                "is" | "was" | "are" | "were" | "been" | "being" | "had" | "has" | "have")
+            {
+                subj_tokens.pop();
+            } else {
+                break;
+            }
+        }
+        subject = subj_tokens.join(" ");
         // For long subjects (5+ words), also cut at prepositions.
         // "the capital of France, Paris" trimmed at comma → "the capital of France"
         // then trimmed at " of " → "the capital" (exclude "of" for entity names).
@@ -969,6 +1000,41 @@ mod tests {
             facts.iter().any(|f| f.object == "Baby Buggy"),
             "expected embedded proper noun 'Baby Buggy' surfaced, got {:?}",
             facts.iter().map(|f| f.object.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subject_resolution_recovers_creator_relation() {
+        // "Swan Lake, Op. 20, is a ballet composed by Pyotr Ilyich Tchaikovsky"
+        // must yield (Swan Lake, created_by, Tchaikovsky), not a junk subject
+        // "is a ballet" that leaves the composer as weak mentions (deep rank).
+        let facts = decompose_sentence(
+            "Swan Lake, Op. 20, is a ballet composed by Pyotr Ilyich Tchaikovsky in 1875-76.",
+            "Swan Lake",
+        );
+        assert!(
+            facts.iter().any(|f| f.subject == "Swan Lake"
+                && f.relation == "created_by"
+                && f.object == "Pyotr Ilyich Tchaikovsky"),
+            "expected (Swan Lake, created_by, Tchaikovsky), got {:?}",
+            facts.iter().map(|f| (f.subject.as_str(), f.relation.as_str(), f.object.as_str())).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subject_resolution_strips_trailing_copula() {
+        // "and Zadok the Priest were composed by George Frideric Handel"
+        // must yield subject "Zadok the Priest", not "Zadok the Priest were".
+        let facts = decompose_sentence(
+            "The four anthems The King Shall Rejoice, and Zadok the Priest were composed by George Frideric Handel for the coronation.",
+            "Zadok the Priest",
+        );
+        assert!(
+            facts.iter().any(|f| f.subject == "Zadok the Priest"
+                && f.relation == "created_by"
+                && f.object == "George Frideric Handel"),
+            "expected (Zadok the Priest, created_by, Handel), got {:?}",
+            facts.iter().map(|f| (f.subject.as_str(), f.relation.as_str(), f.object.as_str())).collect::<Vec<_>>()
         );
     }
 
