@@ -105,8 +105,8 @@ flowchart TD
     subgraph RANK["Answer Selection (tle-axiom-gen::extract_answer)"]
         C1[Query entities] --> C2[Scan triples]
         C2 --> C3[Signals per candidate]
-        C3 --> C4[conn_avg · role_avg · hop2_avg<br/>overlap · VSA cosine · heur · PPR]
-        C4 --> C5{linear weighted sum<br/>× query penalty}
+        C3 -->         C4[conn avg, role avg, hop2 avg<br/>overlap, VSA cosine, heur, PPR]
+        C4 --> C5{linear weighted sum<br/>x query penalty}
         C5 --> C6[ranked candidates]
     end
 
@@ -128,16 +128,16 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph S["Candidate Entity e"]
-        S1[conn_avg<br/>avg connectivity to query]
-        S2[role_avg<br/>Who → subject, What → object]
-        S3[hop2_avg<br/>2-hop bonus]
+        S1[conn avg<br/>avg connectivity to query]
+        S2[role avg<br/>Who, What intent bias]
+        S3[hop2 avg<br/>2-hop bonus]
         S4[overlap<br/>question words in name]
         S5[VSA cosine<br/>weak, near-noise signal]
-        S6[heur<br/>0.2 count − len + cap + det]
-        S7[PPR<br/>log πq − log π]
+        S6[heur<br/>0.2 count, len, cap, det]
+        S7[PPR<br/>relative PageRank]
     end
 
-    S1 --> SCORE{score(e) =<br/>Σ wᵢ·signalᵢ<br/>× query_penalty}
+    S1 --> SCORE[score = sum of weighted signals<br/>x query penalty]
     S2 --> SCORE
     S3 --> SCORE
     S4 --> SCORE
@@ -149,7 +149,7 @@ flowchart LR
     QP -->|Where/When| P1[x 0.2]
     QP -->|What/Who| P2[x 0.6]
     QP -->|no| P3[x 1.0]
-    P1 --> ANS[argmax → answer]
+    P1 --> ANS[argmax, pick answer]
     P2 --> ANS
     P3 --> ANS
 ```
@@ -168,12 +168,13 @@ graph TD
 
     subgraph Knowledge["Knowledge & Reasoning"]
         ENG[tle-engram<br/>n-gram hash, O-1 lookup]
-        KNOW[tle-knowledge<br/>compressed VSA bundles]        AFC[tle-afc<br/>incremental store · δ-mem<br/>analogy · attractor · intent]
-        GEN[tle-axiom-gen<br/>KG · decompose · search<br/>extract_answer · inference]
+        KNOW[tle-knowledge<br/>compressed VSA bundles]
+        AFC[tle-afc<br/>incremental store, delta-mem<br/>analogy, attractor, intent]
+        GEN[tle-axiom-gen<br/>KG, decompose, search<br/>extract_answer, inference]
     end
 
     subgraph LM["VSA Language Model (Path C)"]
-        VSALM[tle-vsa-lm<br/>TBA · Engram · Reservoir<br/>KnowledgePrior · cosine decoder]
+        VSALM[tle-vsa-lm<br/>TBA, Engram, Reservoir<br/>KnowledgePrior, cosine decoder]
     end
 
     subgraph App["Applications"]
