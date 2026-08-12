@@ -12,8 +12,8 @@ in Rust (18 crates) built on hyperdimensional vectors (VSA, d=2048 random bipola
 over a knowledge graph. It ingests Wikipedia/evidence → decomposes to triples →
 ranks entities → answers. **Not** an LLM. No gradients, no sampling.
 
-**Current state (v16):** TriviaQA candidate 24.84% · entity recall 76.10% ·
-substring 23.27% · evidence recall 99.69%. These are **evidence-ingested pipeline
+**Current state (v18):** TriviaQA candidate 25.16% (substring) · exact 15.72%
+· f1 17.61% · entity recall 76.10% · evidence recall 99.69%. These are **evidence-ingested pipeline
 diagnostics, NOT open-domain benchmark scores.** The active research gap: system
 *finds* the answer 76% of the time but *selects* it only 24.8% (~51pt gap).
 

@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-12 (v16 — T1.11, T1.12, T1.13)
-> Status: TriviaQA candidate 24.84% · entity recall 76.10% · latency ~146ms (idle)
+> Last updated: 2026-08-12 (v18 — T1.11..T1.18e)
+> Status: TriviaQA candidate 25.16% (substring) · exact 15.72% · f1 17.61% · strict_recall 54.72%
 
 > ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
