@@ -69,6 +69,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         engine.graph.consolidate_comma_entities();
         engine.graph.consolidate_permutation_entities();
+        // T1.10b: deductive inference layer (env-gated for A/B).
+        if std::env::var("AXIOM_INFER").map(|v| v != "0").unwrap_or(false) {
+            let inv = std::env::var("AXIOM_INFER_INV").map(|v| v != "0").unwrap_or(true);
+            let trans = std::env::var("AXIOM_INFER_TRANS").map(|v| v != "0").unwrap_or(true);
+            for d in tle_axiom_gen::inference::derive_facts(&engine.graph, inv, trans) {
+                engine.add_fact(&d.subject, &d.relation, &d.object);
+            }
+        }
         let start = Instant::now();
         let result = engine.generate(&record.question);
         total_latency += start.elapsed();

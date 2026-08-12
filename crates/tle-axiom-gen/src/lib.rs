@@ -16,6 +16,7 @@ pub mod decompose;
 pub mod energy;
 pub mod engine;
 pub mod graph;
+pub mod inference;
 pub mod linearize;
 pub mod search;
 pub mod semantic;

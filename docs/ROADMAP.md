@@ -222,6 +222,19 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
     rules over the KG — transitivity, inversion ("mother of"⟺"has mother"),
     class hierarchy, comparator semantics (largest/smallest → sort). Hard
     answer-type filter (F1) before ranking. Fixes M1/M3 + logic questions.
+    **STATUS: INFRA BUILT, no metric change (env-gated).** New
+    `inference.rs`: `derive_facts()` (inversion → *_inv relations, located_in/
+    part_of transitivity closure), `relation_family()`/`entity_families()`,
+    `passes_answer_type()`. Ascent added as dep. 3 unit tests. Bench hook
+    AXIOM_INFER={INV,TRANS}. Results: inv-only 24.21%, trans-only 24.21%,
+    both 24.21% (recall 76.10% — derived facts don't fire on this dataset:
+    family relations + location chains are rare in TriviaQA evidence).
+    Answer-type veto (AXIOM_TYPE_VETO) TESTED, REVERTED: relation-heuristic
+    families misfire ("won"→Person for "which team", capital_of object/subject
+    ambiguity) → 19.81%. Confirms research report caveat: answer-type needs
+    POS/NER-lite (L1), NOT raw relation heuristics. Transitivity needs L1 to
+    recover intermediate steps (decomposition truncates "located_in Dumfries
+    and Galloway" at comma, breaking the →Scotland chain).
   - T1.10c: **L1 deterministic POS/NP-chunking** (DFA + small lexicon):
     clause typing, entity boundary precision → kills M5 junk surfaces,
     feeds answer-type into L2.
