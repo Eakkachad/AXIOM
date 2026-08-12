@@ -349,7 +349,7 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** — | **Result:** —
 
 ### T1.13 Compression/MDL differenced tiebreak (8th signal)
-- [ ] Status: pending · Priority: P1 · Effort: 1 day · Depends: T1.11
+- [x] Status: done (negative → env-gated, off) · Priority: P1 · Effort: 1 day · Depends: T1.11
 - **Goal:** break M2 near-ties (25/165) deterministically with a genuinely
   orthogonal, magnitude-preserving signal: `Δ = [C(q⊕fact(e)) − C(q)] −
   [C(q⊕name(e)) − C(q)]` (match-length proxy per katgpt MatchLengthScorer —
@@ -357,7 +357,21 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   (katgpt's own CompressionDrafter failed its GOAT gate — never primary).
 - **File:** `crates/tle-axiom-gen/src/engine.rs`
 - **Verify:** full bench, candidate up / recall NOT down
-- **Status:** — | **Result:** —
+- **Status:** IMPLEMENTED, tested, REVERTED TO ENV-GATED OFF.
+  `shingle_cover` (greedy length-l substring coverage = LZ proxy, no deps) +
+  Δ = cover(q,name) − cover(q,facts) as a near-tie reorder within
+  `AXIOM_MDL_BAND` (0.02) of the top. Full 318 bench (3+ runs):
+  - naive (all band members): candidate 24.84→**24.53%** (−0.31, mirrors M1)
+  - **query-named-excluded** (AXIOM_V1_MDL=1, current code): candidate
+    **24.84%**, recall 76.10%, substring 23.27% — **exactly neutral**, +90ms
+    latency (146→237ms).
+  Root cause of both: a query-named entity's facts TRIVIALLY match the query
+  (it IS the query), so any "facts explain the query" signal promotes the
+  reference and undoes the query penalty. Excluding query-named removes the
+  harm but leaves zero gain — M2 near-tie is not addressable by this signal
+  class on this dataset (consistent with LESSONS_LEARNED §2.6). Env-gated
+  (default off) for future experiments. 3 unit tests kept.
+  **Result:** neutral, no metric change (kept as tested infra, off)
 
 ### T1.14 S7 Allen's interval algebra — when-question hard filter (optional)
 - [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: date/interval

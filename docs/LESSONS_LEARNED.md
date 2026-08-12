@@ -63,6 +63,23 @@ triple เยอะ *มัก* เป็นคำตอบจริง (T1.9b �
 **บทเรียน:** sigmoid-never-softmax ใช้ได้เมื่อต้องการ *probability output*
 ไม่ใช่เมื่อต้องการ *ordering* สำหรับ argmax ใช้ raw score ตรงๆ
 
+### 1.5 MDL / compression tiebreak = ซ้ำกับ query overlap (T1.13)
+**หลักฐาน (full 318 bench, stable 3+ runs):**
+- naive MDL tiebreak (Δ = cover(q,name) − cover(q,facts), reorder ภายใน
+  band 0.02): candidate 24.84→24.53% (−0.31, mirror ของ M1)
+- query-named-excluded: candidate 24.84% เท่าเดิม (neutral) +90ms latency
+**กลไกที่พัง:** entity ที่ถูกถามถึงในคำถาม (query-named) มี facts ที่
+**ตรงกับคำถามโดยเนื้อผ้า** (เพราะมันคือ reference เอง) → signal
+"facts อธิบาย query ได้ดี" จึง promote ตัว reference ขึ้นไป กลบ query
+penalty ที่ออกแบบมาเบรกมัน เมื่อ exclude query-named → เหลือ 0 gain
+**บทเรียน:**
+- สัญญาณที่วัด "ความทับซ้อนระหว่าง query กับ evidence" โดยอ้อม
+  (MDL, compression, shingle) ตกหลุมเดียวกับ overlap — query-named
+  เป็น confounder หลักเสมอ
+- M2 near-tie ยัง irreducible (LESSONS_LEARNED §2.6) — อย่าเสียเวลา
+  กับ tiebreak ที่ derived จาก query ต่อ; ไปทาง decomposition /
+  new structural signal (T1.15 PathHD) แทน
+
 ---
 
 ## 2. บทเรียนระดับ graph / decomposition

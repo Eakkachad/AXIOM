@@ -38,6 +38,31 @@ fn weight_env(name: &str, default: f32) -> f32 {
         .unwrap_or(default)
 }
 
+/// T1.13 MDL-compression proxy: how many characters of `a` are "explained" by
+/// `b`, measured by greedy shingle (length-`l` substring) coverage. This is a
+/// deterministic, dependency-free stand-in for LZ77 match length (katgpt
+/// `MatchLengthScorer`); longer shared runs mean `b` predicts `a` better, i.e.
+/// a lower marginal compression cost of `a` given `b`.
+fn shingle_cover(a: &str, b: &str, l: usize) -> usize {
+    let ab = a.as_bytes();
+    let bb = b.as_bytes();
+    if ab.len() < l || bb.len() < l {
+        return 0;
+    }
+    let mut set: std::collections::HashSet<&[u8]> = bb.windows(l).collect();
+    let mut covered = 0usize;
+    let mut i = 0;
+    while i + l <= ab.len() {
+        if set.contains(&ab[i..i + l]) {
+            covered += l;
+            i += l;
+        } else {
+            i += 1;
+        }
+    }
+    covered
+}
+
 /// The result of a generation query.
 #[derive(Debug, Clone)]
 pub struct GenerationResult {
@@ -542,6 +567,35 @@ impl AxiomGen {
         // Raw per-candidate signals, captured for both scoring modes.
         // (id, name, conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named)
         let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
+        // T1.13 MDL differenced tiebreak (env AXIOM_V1_MDL, default off).
+        // For each candidate, Δ(e) = shingle_cover(q, name) − shingle_cover(q,
+        // facts(e)): how much MORE the query is explained by the entity's
+        // evidence than by its surface name. Lower Δ = the facts genuinely
+        // discuss the question → the answer-like candidate. Tiebreak-only:
+        // applied to candidates within AXIOM_MDL_BAND of the top score.
+        let mdl_enabled = weight_env("AXIOM_V1_MDL", 0.0) > 0.0;
+        let mdl_l = weight_env("AXIOM_MDL_L", 6.0).max(2.0) as usize;
+        let query_lower = query.to_lowercase();
+        let fact_texts: HashMap<usize, String> = if mdl_enabled {
+            let mut m: HashMap<usize, String> = HashMap::new();
+            for t in &graph.triples {
+                let rel = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                let e = m.entry(t.subject_id).or_default();
+                e.push_str(rel);
+                e.push(' ');
+                e.push_str(&graph.entity_name(t.object_id).to_lowercase());
+                e.push(' ');
+                let e = m.entry(t.object_id).or_default();
+                e.push_str(rel);
+                e.push(' ');
+                e.push_str(&graph.entity_name(t.subject_id).to_lowercase());
+                e.push(' ');
+            }
+            m
+        } else {
+            HashMap::new()
+        };
+        let mut mdls: HashMap<String, (f32, bool)> = HashMap::new();
         for id in candidate_ids.into_iter() {
             let name = graph.entity_name(id);
             let words = name.split_whitespace().count();
@@ -626,6 +680,12 @@ impl AxiomGen {
                 cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {
                 ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
+                if mdl_enabled {
+                    let facts = fact_texts.get(&id).map(|s| s.as_str()).unwrap_or("");
+                    let cov_name = shingle_cover(&query_lower, &name.to_lowercase(), mdl_l);
+                    let cov_facts = shingle_cover(&query_lower, facts, mdl_l);
+                    mdls.insert(name.to_string(), (cov_name as f32 - cov_facts as f32, is_query_named));
+                }
             }
         }
 
@@ -741,6 +801,50 @@ impl AxiomGen {
         }
 
         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // T1.13 MDL tiebreak: only reorder candidates within a tight score band
+        // of the top (near-ties, M2) — by Δ ascending (facts explain the query
+        // better than the name). Never a primary scorer; outside the band the
+        // linear order is untouched. Query-named candidates (the reference, not
+        // the answer) are excluded: their facts trivially match the query, so
+        // Δ would wrongly promote them.
+        if mdl_enabled && !mdls.is_empty() {
+            let band = weight_env("AXIOM_MDL_BAND", 0.02);
+            if let Some(&top) = ranked.first().map(|c| &c.0) {
+                let band_idx: Vec<usize> = ranked
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| (top - c.0).abs() <= band)
+                    .filter(|(i, _)| mdls.get(&ranked[*i].1).map(|(_, qn)| !qn).unwrap_or(false))
+                    .map(|(i, _)| i)
+                    .collect();
+                if band_idx.len() >= 2 {
+                    let mut sorted_band: Vec<usize> = band_idx.clone();
+                    sorted_band.sort_by(|&ia, &ib| {
+                        let da = mdls.get(&ranked[ia].1).map(|(d, _)| *d).unwrap_or(0.0);
+                        let db = mdls.get(&ranked[ib].1).map(|(d, _)| *d).unwrap_or(0.0);
+                        da.partial_cmp(&db)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| {
+                                ranked[ib].0.partial_cmp(&ranked[ia].0)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                    });
+                    let in_band: std::collections::HashSet<usize> = band_idx.iter().copied().collect();
+                    let mut new_ranked = Vec::with_capacity(ranked.len());
+                    for &i in &sorted_band {
+                        new_ranked.push(ranked[i].clone());
+                    }
+                    for (i, c) in ranked.iter().enumerate() {
+                        if !in_band.contains(&i) {
+                            new_ranked.push(c.clone());
+                        }
+                    }
+                    ranked = new_ranked;
+                }
+            }
+        }
+
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
         (answer, ranked)
     }
@@ -958,6 +1062,45 @@ fn compute_entity_ief(graph: &KnowledgeGraph) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_shingle_cover_symmetric_explanation() {
+        // A string fully contained in another is fully explained.
+        let cov = shingle_cover("who won the 1998 world cup", "the 1998 world cup was won by france", 6);
+        assert!(cov > 0, "query words must be found in the fact text");
+        // A disjoint string explains nothing.
+        assert_eq!(shingle_cover("quantum entanglement", "banana cake recipes", 6), 0);
+        // Self-explanatory: greedy length-l coverage covers all but a <l tail
+        // (10 chars at l=4 → 8 covered, the final 2-char tail is too short).
+        let full = shingle_cover("abcdefghij", "abcdefghij", 4);
+        assert_eq!(full, 8);
+    }
+
+    #[test]
+    fn test_shingle_cover_deterministic() {
+        let a = "which hormone helps control ovulation";
+        let b = "luteinizing hormone helps control ovulation in mammals";
+        assert_eq!(shingle_cover(a, b, 6), shingle_cover(a, b, 6));
+    }
+
+    #[test]
+    fn test_mdl_differenced_direction() {
+        // Gold entity: query is explained by its FACTS (evidence discusses the
+        // question) more than by its bare name → Δ negative → ranks first.
+        let q = "who won the 1998 world cup";
+        let gold_name = "france";
+        let gold_facts = "france won the 1998 world cup against brazil at the final";
+        let junk_name = "the 1998 world cup";
+        let junk_facts = "the tournament was held in paris";
+        let gold_delta =
+            shingle_cover(q, gold_name, 6) as f32 - shingle_cover(q, gold_facts, 6) as f32;
+        let junk_delta =
+            shingle_cover(q, junk_name, 6) as f32 - shingle_cover(q, junk_facts, 6) as f32;
+        assert!(
+            gold_delta < junk_delta,
+            "gold Δ {gold_delta} must be lower than junk Δ {junk_delta}"
+        );
+    }
 
     #[test]
     fn test_sync_into_vsa_lm_fills_knowledge_prior() {

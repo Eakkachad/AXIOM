@@ -1,6 +1,6 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-12 (v16 — T1.11, T1.12)
+> Last updated: 2026-08-12 (v16 — T1.11, T1.12, T1.13)
 > Status: TriviaQA candidate 24.84% · entity recall 76.10% · latency ~146ms (idle)
 
 > ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
@@ -83,19 +83,22 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.13 Compression/MDL differenced tiebreak** — next real-signal lever.
->   `[C(q⊕fact)−C(q)] − [C(q⊕name)−C(q)]`, match-length proxy (katgpt
->   MatchLengthScorer), tiebreak only. Breaks M2 near-ties deterministically.
-> - **T1.15 PathHD-style calibrated blockwise cosine + Top-K prune** — closest
->   published architecture to the gap (arXiv:2512.09369).
+> - **T1.15 PathHD-style calibrated blockwise cosine + Top-K prune** — next
+>   real-signal lever. Closest published architecture to the gap
+>   (arXiv:2512.09369); GHRR-style path hypervectors per candidate, calibrated
+>   blockwise cosine, hard Top-K prune before argmax. Veto-first.
+> - **T1.13 done (negative):** MDL/compression tiebreak (env-gated off) —
+>   naive regressed −0.31, query-named-excluded neutral. M2 near-tie remains
+>   irreducible (LESSONS_LEARNED §1.5). Do NOT re-derive query-overlap
+>   tiebreaks.
 > - **T1.12b structured F2 codebook** — blocked/deferred: T1.12 module built +
 >   tested but direct F2 scoring on random-bipolar d=2048 is degenerate
 >   (full-rank). Needs structured codebook; high regression risk.
 > - **T1.14 S7 Allen interval** (when-questions only, needs date extraction),
 >   **T1.16 CLR (mean)^M gate**, **T1.17 katgpt engineering** (SplitMix64,
 >   multi-head engram).
-> - Do NOT re-attempt S1-S6 / category-theory / projective-measurement fusion —
->   documented as re-labelings (see ROADMAP T1.11+ header).
+> - Do NOT re-attempt S1-S6 / category-theory / projective-measurement fusion /
+>   MDL tiebreak — documented as re-labelings or negatives (ROADMAP T1.11+).
 >
 > ## KNOWN GOTCHAS (full list in ROADMAP)
 > - **DDTree dead** (4 attempts regressed) — use legacy extract_answer

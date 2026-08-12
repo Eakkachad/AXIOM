@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-08-12 — v16c (T1.13 MDL tiebreak — negative → env-gated off, documented)
+
+**Commits:** code (engine.rs shingle_cover + tiebreak) + docs
+
+### What changed
+- `engine.rs`: `shingle_cover(a, b, l)` — greedy length-l substring coverage
+  (deterministic LZ77 proxy, no deps, katgpt MatchLengthScorer-style) +
+  MDL differenced tiebreak Δ(e) = cover(q,name) − cover(q,facts), reordering
+  only candidates within `AXIOM_MDL_BAND` (0.02) of the top. Env
+  `AXIOM_V1_MDL` (default **off**). 3 unit tests (coverage, determinism,
+  gold-vs-junk Δ direction).
+
+### Bench (full 318, stable 3+ runs)
+| Config | candidate | recall | substring | latency |
+|--------|:---:|:---:|:---:|:---:|
+| baseline (MDL off) | 24.84% | 76.10% | 23.27% | ~146ms |
+| naive MDL | **24.53%** | 76.10% | 23.27% | ~214ms |
+| MDL query-named-excluded | **24.84%** | 76.10% | 23.27% | ~237ms |
+
+### Honest finding (banked in LESSONS_LEARNED §1.5)
+Query-named entities' facts trivially match the query (they ARE the reference),
+so any "facts explain the query" signal promotes them, undoing the query
+penalty. Excluding query-named removes the harm but leaves zero gain → M2
+near-tie stays irreducible on this dataset. Kept env-gated (off) as tested
+infra. **Result: neutral, no metric change.**
+
+---
+
 ## 2026-08-12 — v16b (T1.12 F2 random-linear-code infra + honest wiring finding)
 
 **Commits:** code (tle-vsa/src/gf2.rs) + docs
