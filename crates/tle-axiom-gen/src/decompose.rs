@@ -120,6 +120,26 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("was developed in", "developed_in"),
     ("was written by", "written_by"),
     ("was designed by", "designed_by"),
+    // T1.10d: passive creator/author/director patterns. Without these, "Swan
+    // Lake ... composed by Pyotr Ilyich Tchaikovsky" decomposes to a bare
+    // "composed" with the WRONG subject ("is a ballet"), and the composer only
+    // enters the graph as weak is_related_to (0.8) instead of strong created_by
+    // (2.0) → gold sinks to deep rank. Same for wrote/directed/played/portrayed.
+    ("was composed by", "created_by"),
+    ("is composed by", "created_by"),
+    ("was written by", "written_by"),
+    ("was directed by", "directed_by"),
+    ("is directed by", "directed_by"),
+    ("was played by", "played_by"),
+    ("is played by", "played_by"),
+    ("was portrayed by", "portrayed_by"),
+    ("is portrayed by", "portrayed_by"),
+    ("was created by", "created_by"),
+    ("was founded by", "founded_by"),
+    ("was invented by", "invented_by"),
+    ("was discovered by", "discovered_by"),
+    ("was painted by", "painted_by"),
+    ("was built by", "built_by"),
     ("was released in", "released_in"),
     ("was released on", "released_on"),
     ("was published in", "published_in"),
@@ -213,6 +233,7 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("designed", "designed"),
     ("built", "built"),
     ("wrote", "wrote"),
+    ("composed by", "created_by"),
     ("composed", "composed"),
     ("released", "released"),
     ("published", "published"),

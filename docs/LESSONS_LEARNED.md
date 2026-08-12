@@ -105,6 +105,27 @@ remove entity ที่ถูกต้องด้วยเสมอ (เช่�
 - **M5 ไม่ใช่ lever หลัก** — 15/165 เท่านั้น อย่าลงทุนกับ surface filter
   ไปทำ deep-rank (149) / near-tie (25) แทน
 
+### 2.5 Deep-rank golds ต้องการ subject resolution ไม่ใช่แค่ relation pattern (T1.10d)
+**หลักฐาน:** "Swan Lake, Op. 20, is a ballet **composed by** Pyotr Ilyich
+Tchaikovsky" → gold Tchaikovsky ติด deep-rank (#17) เพราะ:
+- การ์ด RELATIONAL_PHRASES ขาด passive `composed by`/`written by`/`directed by`
+  (มีแต่ bare `composed`) → หลังเติม pattern: เกิด fact ถูกต้อง
+  `(Swan Lake, created_by, Tchaikovsky)` **เฉพาะเมื่อ subject ถูกต้อง**
+- แต่ subject กลายเป็น "is a ballet" (copula fragment) → fact มี subject ขยะ
+  → Tchaikovsky ยังเข้า graph แค่ `mentions` (0.8) ไม่ใช่ created_by (2.0)
+- **ทดลอง copula-subject fix** (ถ้า subject เริ่มด้วย is/was/are/were → inherit):
+  regress (candidate 24.21→23.90, recall 76.10→75.79, เฉพาะ tb_1826 หายไป)
+  เพราะ "Zadok the Priest **were** composed by..." → subject "Zadok the Priest were"
+  (copula อยู่ท้ายไม่ใช่หน้า) → กลายเป็น junk subject
+**บทเรียน:**
+- การ์ด relation เดียวไม่พอ — **ต้องมี subject resolution ที่ถูกต้องด้วย**
+  (ระบุว่า copula อยู่ท้าย subject, ตัด "X were" → "X")
+- copula fix ต้องดูท้าย subject ("Zadok the Priest were" → "Zadok the Priest")
+  ไม่ใช่แค่หน้า ("is a ballet" → inherit) — ทั้งสองกรณีต้องรองรับ
+- relation additions (`composed by`→created_by, `_by` forms + strong weights)
+  เก็บไว้เป็น infra ถูกต้อง (neutral, ไม่ regress) แต่ยัง fire ไม่เต็มที่
+  จนกว่า subject resolution จะเสร็จ — นี่คืองาน L1 ที่แท้จริงสำหรับ deep-rank
+
 ---
 
 ## 3. บทเรียนระดับ process (วิธีทำงาน)

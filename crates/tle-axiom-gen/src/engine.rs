@@ -475,7 +475,10 @@ impl AxiomGen {
                     | "founded" | "designed" | "built" | "created" | "developed"
                     | "president_of" | "founder_of" | "leader_of" | "author_of"
                     | "child_of" | "has_parent" | "married_to" | "known_for"
-                    | "released" | "published" => 2.0,
+                    | "released" | "published"
+                    | "written_by" | "created_by" | "directed_by" | "played_by"
+                    | "portrayed_by" | "founded_by" | "invented_by" | "discovered_by"
+                    | "painted_by" | "built_by" => 2.0,
                     "mentions" | "is_related_to" | "named_after" => 0.8,
                     _ => 1.0,
                 };
