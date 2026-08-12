@@ -45,12 +45,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut exact = 0usize;
     let mut substring = 0usize;
     let mut candidate_hits = 0usize;
+    let mut candidate_exact_hits = 0usize;
+    let mut candidate_token_hits = 0usize;
     let mut answer_entity_recall = 0usize;
     let mut evidence_hits = 0usize;
     let mut total_latency = Duration::ZERO;
 
     let limit = env::var("AXIOM_TRIVIA_LIMIT").ok().and_then(|value| value.parse().ok());
     let debug = env::var("AXIOM_TRIVIA_DEBUG").ok().map(|_| ());
+    // AXIOM_DUMP=<path>: write a per-record TSV with the failure category and
+    // the gold's rank among ranked diagnostics. (permanent diagnostic tool)
+    let dump_path = env::var("AXIOM_DUMP").ok();
 
     for record in records.into_iter().take(limit.unwrap_or(usize::MAX)) {
         let mut engine = new_qa_engine();
@@ -93,6 +98,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             && answers.iter().any(|answer| engine_answer.contains(answer) || answer.contains(&engine_answer)) {
             candidate_hits += 1;
         }
+        // T1.14-metrics: STRICTER candidate metrics (deep-review finding — the
+        // bidirectional-substring candidate metric is inflated ~2×: 52% of its
+        // "correct" are substring-only artifacts). These two are the honest
+        // diagnostics: normalized-token containment and exact token match.
+        if !engine_answer.is_empty() {
+            let picked_tokens: std::collections::HashSet<&str> = engine_answer
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .filter(|w| !w.is_empty())
+                .collect();
+            for answer in &answers {
+                let answer_tokens: std::collections::HashSet<&str> = answer
+                    .split(|c: char| !c.is_alphanumeric() && c != '_')
+                    .filter(|w| !w.is_empty())
+                    .collect();
+                if !answer_tokens.is_empty() && !picked_tokens.is_empty() {
+                    let shared = answer_tokens.intersection(&picked_tokens).count();
+                    let significant = shared >= 1
+                        && (shared >= 2
+                            || answer_tokens.iter().chain(picked_tokens.iter())
+                                .any(|w| w.len() >= 5 && shared >= 1 && (answer_tokens.contains(w) || picked_tokens.contains(w))));
+                    // exact: identical token sets
+                    if answer_tokens == picked_tokens {
+                        candidate_exact_hits += 1;
+                        candidate_token_hits += 1;
+                        break;
+                    }
+                    // token containment: one side's tokens all present in the other
+                    if answer_tokens.is_subset(&picked_tokens) || picked_tokens.is_subset(&answer_tokens) {
+                        if significant {
+                            candidate_token_hits += 1;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
 
         // Diagnostic: is any gold answer even present as a graph node? This
         // separates "answer not extracted into graph" from "ranking/generation
@@ -100,6 +141,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let lower_entities: Vec<String> = engine.graph.entities.iter().map(|e| e.to_lowercase()).collect();
         if answers.iter().any(|answer| lower_entities.iter().any(|entity| entity.contains(answer) || answer.contains(entity))) {
             answer_entity_recall += 1;
+        }
+        if let Some(path) = &dump_path {
+            let mut line = String::new();
+            line.push_str(&format!("{}\t", record.id));
+            line.push_str(&format!("{}\t", record.question.replace('\t', " ")));
+            line.push_str(&format!("{}\t", answers.first().cloned().unwrap_or_default()));
+            line.push_str(&format!("{}\t", engine_answer.replace('\t', " ")));
+            let gold_in_entities = answers.iter().any(|a| {
+                lower_entities.iter().any(|e| e.contains(a) || a.contains(e))
+            });
+            line.push_str(&format!("{}\t", gold_in_entities));
+            let correct = !engine_answer.is_empty()
+                && answers.iter().any(|a| engine_answer.contains(a) || a.contains(&engine_answer));
+            line.push_str(&format!("{}\t", correct));
+            // gold rank + per-signal detail for the top-1 and the gold.
+            // diagnostics tuple: (final, name, conn, role, overlap, vsa, heur)
+            let fmt_sig = |t: &(f32, String, f32, f32, f32, f32, f32)| {
+                format!("{:.2}|{:.2}|{:.2}|{:.2}|{:.2}", t.2, t.3, t.4, t.5, t.6)
+            };
+            let mut gold_rank = 0usize;
+            let mut gold_gap = 0.0f32;
+            let mut gold_sig = String::new();
+            if let Some((_, name, ..)) = result.diagnostics.first() {
+                let top_score = result.diagnostics[0].0;
+                let mut found = false;
+                for (i, t) in result.diagnostics.iter().enumerate() {
+                    let nl = t.1.to_lowercase();
+                    if answers.iter().any(|a| nl.contains(a) || a.contains(&nl)) {
+                        gold_rank = i + 1;
+                        gold_gap = top_score - t.0;
+                        gold_sig = fmt_sig(t);
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    gold_gap = top_score;
+                }
+            }
+            let top1_sig = result.diagnostics.first().map(fmt_sig).unwrap_or_default();
+            let top1_name = result.diagnostics.first().map(|t| t.1.clone()).unwrap_or_default();
+            line.push_str(&format!("{}\t{:.3}\t{}\t{}\t{}\t{}\n",
+                gold_rank, gold_gap, result.diagnostics.len(),
+                top1_name.replace('\t', " "), top1_sig, gold_sig));
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                use std::io::Write;
+                let _ = f.write_all(line.as_bytes());
+            }
         }
         if debug.is_some() && total < 20 {
             let gold_in_entities = answers.iter().any(|a| {
@@ -141,6 +230,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  exact_accuracy: {:.2}%", percentage(exact, total));
     println!("  substring_accuracy: {:.2}%", percentage(substring, total));
     println!("  candidate_answer_accuracy: {:.2}%", percentage(candidate_hits, total));
+    println!("  candidate_token_accuracy: {:.2}%", percentage(candidate_token_hits, total));
+    println!("  candidate_exact_accuracy: {:.2}%", percentage(candidate_exact_hits, total));
     println!("  answer_entity_recall: {:.2}%", percentage(answer_entity_recall, total));
     println!("  evidence_answer_recall: {:.2}%", percentage(evidence_hits, total));
     println!("  avg_latency: {:?}", if total == 0 { Duration::ZERO } else { total_latency / total as u32 });

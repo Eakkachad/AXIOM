@@ -631,13 +631,26 @@ impl AxiomGen {
             // Way), so the penalty must be milder. For Where/When/How/How-many
             // the query-named entity is the reference, never the answer — full
             // penalty. Env override for calibration.
+            // T1.11b (deep-review, env AXIOM_V1_QNP): a query-named entity with
+            // ZERO direct structural connectivity (conn==0 AND hop2==0) is the
+            // reference/topic, not the answer — the answer must be connected to
+            // the question's entities. It gets the FULL penalty regardless of
+            // intent (deep-rank winners "Buddy Holly", "House of Habsburg" are
+            // exactly this class: conn=0 but overlap+count dominate via the
+            // What/Who mild 0.6 penalty). Direct-conn golds (Milky Way) are
+            // unaffected.
             let qp_full = weight_env("AXIOM_QP_WHERE", 0.2);
             let qp_mild = weight_env("AXIOM_QP_WHAT", 0.6);
+            let qp_cond = weight_env("AXIOM_V1_QNP", 0.0);
             let query_penalty = if is_query_named {
-                match intent {
-                    Intent::What | Intent::Who => qp_mild,
-                    Intent::Why => qp_mild,
-                    _ => qp_full,
+                if qp_cond > 0.0 && conn_avg == 0.0 && hop2_avg == 0.0 {
+                    qp_full
+                } else {
+                    match intent {
+                        Intent::What | Intent::Who => qp_mild,
+                        Intent::Why => qp_mild,
+                        _ => qp_full,
+                    }
                 }
             } else { 1.0 };
             let rel_weight = weight_env("AXIOM_W_VSA", 2.0);
