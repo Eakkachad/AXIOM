@@ -524,6 +524,7 @@ impl AxiomGen {
         // Enabled via AXIOM_RANK=rrf. Rank is invariant under per-signal scale,
         // so overlap (~50) can no longer dominate conn (~2) by magnitude.
         let rrf_mode = std::env::var("AXIOM_RANK").map(|v| v == "rrf").unwrap_or(false);
+        let conformal_mode = std::env::var("AXIOM_RANK").map(|v| v == "conformal").unwrap_or(false);
         let k_rrf = weight_env("AXIOM_RRF_K", 60.0);
         // T1.9c: hub-corrected personalized PageRank as a 7th signal.
         // Weight search found 0.3 optimal (23.58→24.21%, stable 4+ runs):
@@ -536,7 +537,8 @@ impl AxiomGen {
             Vec::new()
         };
         // Raw per-candidate signals, captured for both scoring modes.
-        let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
+        // (id, name, conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named)
+        let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
         for id in candidate_ids.into_iter() {
             let name = graph.entity_name(id);
             let words = name.split_whitespace().count();
@@ -599,11 +601,8 @@ impl AxiomGen {
                 + rel * rel_weight
                 + heur * w_heur
                 + ppr * w_ppr) * query_penalty;
-            if rrf_mode {
-                // rank position from the LINEAR score is a poor rank source;
-                // RRF ranks by each raw signal separately (handled after loop).
-                // Store the query-named flag so RRF can re-apply the penalty.
-                cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, is_query_named));
+            if rrf_mode || conformal_mode {
+                cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {
                 ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
             }
@@ -652,8 +651,71 @@ impl AxiomGen {
             for (i, c) in cands.iter().enumerate() {
                 // Re-apply the query-named penalty that linear mode uses
                 // (entities named in the question are what we ask ABOUT).
-                let qp = if c.8 { 0.2f32 } else { 1.0 };
+                let qp = if c.9 { 0.2f32 } else { 1.0 };
                 ranked.push((contrib[i] as f32 * qp, c.1.clone(), c.2, c.3, c.5, c.6, c.7));
+            }
+        }
+
+        if conformal_mode {
+            // T1.10a L4: conformal + calibrated log-odds fusion.
+            // For each signal, compute the empirical p-value of every candidate
+            // against the per-question candidate distribution:
+            //   p_i(e) = ( #candidates with s_i >= s_i(e) ) / ( #candidates )
+            // (higher raw signal = smaller p = more unusual = more answer-like).
+            // Fusion in log space (product-of-experts) gives conditional
+            // weighting: an entity with extreme overlap but ZERO connectivity
+            // gets a huge negative log-odds from the conn signal that no linear
+            // weight could cancel. sigmoid-never-softmax per candidate.
+            let n = cands.len();
+            // signal extractors: conn, role, hop2, ov, vsa, heur, ppr
+            let sigs: Vec<fn(&(usize, String, f32, f32, f32, f32, f32, f32, f32, bool)) -> f32> = vec![
+                |c| c.2, |c| c.3, |c| c.4, |c| c.5, |c| c.6, |c| c.7, |c| c.8,
+            ];
+            let n_sig = sigs.len();
+            // per-signal weights (env-calibratable), default all 1.0 (calibrated
+            // log-odds means the probability scale does the weighting).
+            let wc: Vec<f32> = (0..n_sig).map(|si| {
+                weight_env(&format!("AXIOM_CP_W{}", si), 1.0)
+            }).collect();
+            let temp = weight_env("AXIOM_CP_TEMP", 1.0);
+            let mut contrib = vec![0.0f64; n];
+            for (si, get) in sigs.iter().enumerate() {
+                if wc[si] <= 0.0 { continue; }
+                // empirical p-value: fraction of candidates with signal >= this one
+                for i in 0..n {
+                    let mut ge = 0usize;
+                    for j in 0..n {
+                        if get(&cands[j]) >= get(&cands[i]) { ge += 1; }
+                    }
+                    let p = ge as f64 / n as f64;
+                    let p = p.clamp(1e-6, 1.0 - 1e-6);
+                    // log-odds: ln(p/(1-p)); LOW p (extreme signal) → negative → 
+                    // we negate so high signal contributes positively.
+                    contrib[i] += (wc[si] as f64) * -(p.ln() - (1.0 - p).ln());
+                }
+            }
+            // sigmoid with temperature, applied per-candidate (never softmax):
+            // σ(x·T) ∈ (0,1), independent per candidate — no mass stealing.
+            // AXIOM_CP_SIG=0 (default) skips the sigmoid: for argmax ranking the
+            // raw log-odds ordering is what matters; sigmoid compresses all
+            // scores near 0/1 and ties break on the query penalty.
+            let use_sigmoid = weight_env("AXIOM_CP_SIG", 0.0) > 0.0;
+            for (i, c) in cands.iter().enumerate() {
+                let raw = contrib[i] as f32;
+                let s = if use_sigmoid {
+                    let x = raw * temp;
+                    1.0 / (1.0 + (-x).exp())
+                } else {
+                    raw
+                };
+                let qp = if c.9 {
+                    match intent {
+                        Intent::What | Intent::Who => 0.6,
+                        Intent::Why => 0.6,
+                        _ => 0.2,
+                    }
+                } else { 1.0 };
+                ranked.push((s * qp, c.1.clone(), c.2, c.3, c.5, c.6, c.7));
             }
         }
 

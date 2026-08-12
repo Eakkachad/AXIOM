@@ -193,9 +193,44 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** T1.9c DONE — hub-corrected personalized PageRank as 7th signal
   (AXIOM_W_PPR=0.3 default). `π_q=(1-c)v+cPᵀπ_q` (60 iters) with relative-PPR
   hub debias `log π_q(e) − log π(e)` (Milne-Witten). Weight search: 0.3-0.35
-  optimum. candidate 23.58→**24.21%** (+0.63pt, stable 4+ runs), recall 76.10%
-  unchanged, substring 22.33% unchanged. Higher weights regress (1.0→22.64,
-  3.0→17.30). 1 new PPR unit test. **Result:** candidate +0.63pt
+   optimum. candidate 23.58→**24.21%** (+0.63pt, stable 4+ runs), recall 76.10%
+   unchanged, substring 22.33% unchanged. Higher weights regress (1.0→22.64,
+   3.0→17.30). 1 new PPR unit test. **Result:** candidate +0.63pt
+
+### T1.10 Great Fusion Framework (research-backed 4-layer architecture)
+- [~] Status: in_progress · Priority: P0 · Effort: 3-5 days · Depends: none
+- **Goal:** candidate 24.21% → 30%+. Replaces the linear weighted sum with the
+  4-layer architecture from `docs/RANKING_RESEARCH_SYNTHESIS.md` + deep
+  research (conformal prediction, Datalog/Ascent, resonator, POS/NP-chunking).
+- **Layers (build in dependency order, bench after each):**
+  - T1.10a: **L4 conformal + calibrated log-odds** (primary ranking fix):
+    per-signal empirical p-value `p_i(e)=(#cand with s_i≥s_i(e))/|cand|`,
+    fuse as log-odds PoE `Σ wᵢ·logit(ĉᵢ)` with per-bin calibration from the
+    bench; sigmoid-never-softmax; temperature sharpening T≈0.3 for near-ties.
+    Fixes M2 (25 near-ties) + scale mismatch (overlap ~50 vs conn ~2).
+    **STATUS: NEGATIVE RESULT (reverted to env-gated).** Conformal p-value
+    fusion regresses at every config: equal-weight log-odds 12.58% (exactly
+    the documented T1.6 percentile failure), tuned-weight 19.18%, all below
+    tuned linear 24.21%. Root cause: converting raw scores to within-candidate
+    p-values flattens real magnitude gaps (conn 2.0 vs 0.5 → just "rank 1 vs 2").
+    The linear sum's raw magnitudes carry information normalization destroys.
+    Lesson: the ~52pt gap is NOT fixable by re-fusing the same 6 signals —
+    it needs NEW signals (PPR worked +0.63) or HARD FILTERS that remove wrong
+    candidates entirely (answer-type veto). Prioritize T1.10b (Datalog hard
+    filter) over T1.10a fusion.
+  - T1.10b: **L2 embedded Datalog** (Ascent/Datafrog): deductive inference
+    rules over the KG — transitivity, inversion ("mother of"⟺"has mother"),
+    class hierarchy, comparator semantics (largest/smallest → sort). Hard
+    answer-type filter (F1) before ranking. Fixes M1/M3 + logic questions.
+  - T1.10c: **L1 deterministic POS/NP-chunking** (DFA + small lexicon):
+    clause typing, entity boundary precision → kills M5 junk surfaces,
+    feeds answer-type into L2.
+  - T1.10d: **L3 resonator networks** as VSA confidence tiebreak (NOT primary
+    — VSA cosine is noise; only useful after graph is clean).
+- **Guardrails:** keep all env-gated A/B; VSA never primary; no softmax
+  (sigmoid-never-softmax, katgpt rule); no DDTree; deterministic.
+- **Verify:** full 318 bench, candidate up, recall NOT down
+- **Status:** — | **Result:** —
 
 ---
 
