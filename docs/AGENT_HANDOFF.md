@@ -3,15 +3,18 @@
 > Last updated: 2026-08-11 (v15 — T1.7, T1.8, T1.9a/b/c)
 > Status: TriviaQA candidate 24.21% · entity recall 76.10% · latency ~100ms (idle)
 
-> ## ⭐ CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
+> ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
-> ### The system (4 files — the source of truth):
+> ### The system (5 files — the source of truth):
 > 1. **`docs/ROADMAP.md`** — canonical task board. Pick the highest-priority
 >    `[ ]` task whose dependencies are `[x]`. Mark tasks `[x]`/`[~]`/`[!]` as you work.
 > 2. **`docs/PROGRESS_LOG.md`** — append-only journal. Newest entry at top.
 > 3. **`docs/AGENT_WORKFLOW.md`** — the operating procedure. FOLLOW IT EXACTLY.
 > 4. **`docs/ROOT_CAUSE_ANALYSIS.md`** — cross-layer RCA of the answer-selection
 >    gap. READ THIS before touching extract_answer ranking.
+> 5. **`docs/LESSONS_LEARNED.md`** — anti-pattern registry. READ BEFORE ANY
+>    experiment: if your idea matches the "ห้ามทำเด็ดขาด" table, it needs a
+>    fundamentally new approach, not a variant.
 >
 > ### Working procedure (2-minute rule):
 > 1. Read this handoff, then ROADMAP + PROGRESS_LOG + WORKFLOW (+ RCA).

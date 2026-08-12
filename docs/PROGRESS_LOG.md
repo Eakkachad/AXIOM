@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-08-11 — v15 (LESSONS_LEARNED registry — anti-pattern consolidation)
+
+**Commits:** docs only
+
+### What changed
+- **`docs/LESSONS_LEARNED.md`** created: permanent anti-pattern registry
+  consolidating every failure from history (DDTree ×4, percentile, IEF,
+  semantic-in-scoring, substring-consolidation, weight-tuning) + this session's
+  T1.8-T1.10 results. 9 "ห้ามทำเด็ดขาด" entries with measured numbers +
+  mechanism + the "way out" for each.
+- **AGENT_WORKFLOW** now mandates reading it before every experiment.
+- **AGENT_HANDOFF** lists it as file #5 in the source-of-truth system.
+
+### Key content (all bench-verified)
+- **Fusion redesigns all fail** (RRF 11.95-15.41%, percentile 12.58%, conformal
+  log-odds 12.58-19.18%) — p-value/rank normalization destroys magnitude gaps.
+  Linear sum with raw magnitudes keeps winning.
+- **IEF/log-frequency kills evidence mass** (5-10%); count term IS evidence,
+  not pure hub inflation (lowering it → 17.61%).
+- **Answer-type needs POS/NER-lite**, not relation heuristics (19.81%).
+- **Decomposition truncation breaks transitivity chains** — inference rules
+  need intermediate nodes that only L1 (POS/clause) can provide.
+- What WORKS: bug-fixing gates (query-penalty +2.2), new structural signals
+  (PPR +0.63), decomposition quality (T1.7 recall +4.72).
+
+### Measured results
+No metric change (docs only). Current: candidate 24.21% · recall 76.10%.
+
+---
+
 ## 2026-08-11 — v15 (T1.9b exploration + T1.9c hub-corrected PPR)
 
 **Commits:** T1.9b, T1.9c

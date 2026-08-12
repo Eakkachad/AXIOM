@@ -8,7 +8,10 @@
 1. Read `docs/AGENT_HANDOFF.md` → current state + next steps
 2. Read `docs/ROADMAP.md` → pick the highest-priority `[ ]` task whose deps are `[x]`
 3. Read `docs/PROGRESS_LOG.md` → confirm what was already tried (avoid re-trying failures)
-4. Run baseline: `cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa`
+4. **Read `docs/LESSONS_LEARNED.md`** → the anti-pattern registry. Any idea that
+   appears in its "ห้ามทำเด็ดขาด" table needs a fundamentally NEW approach,
+   not a variant. This is REQUIRED reading before every experiment.
+5. Run baseline: `cargo test -p tle-axiom-gen -p tle-vsa-lm -p tle-vsa`
 
 ## 2. Task Execution Loop
 
