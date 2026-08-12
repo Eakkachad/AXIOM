@@ -78,14 +78,166 @@ cargo run --release -p tle-deepman
 cargo test -p tle-axiom-gen
 ```
 
-## Architecture (high level)
+## Architecture
+
+### System Overview (data flow)
+
+```mermaid
+flowchart TD
+    subgraph IN["Input Layer"]
+        A1[Question / Query] --> A2[VSA Intent Detection<br/>tle-afc::vsa_intent]
+        A2 --> A3[Query Entity Extraction<br/>tle-axiom-gen::extract_query_entities]
+        A3 --> A4[Query Vector<br/>bundled VSA + stopword filter]
+    end
+
+    subgraph KG["Knowledge Layer (tle-axiom-gen)"]
+        B1[Wikipedia / Evidence Text] --> B2[clean_wikipedia_text]
+        B2 --> B3[Decompose<br/>tle-axiom-gen::decompose]
+        B3 --> B4{is_fact_worthy?}
+        B4 -->|yes| B5[KnowledgeGraph<br/>entities + triples + relations]
+        B4 -->|no| B6[discard junk]
+        B5 --> B7[consolidate entities<br/>comma / permutation]
+        B7 --> B8[Inference Layer<br/>tle-axiom-gen::inference<br/>inversion / transitivity]
+        B8 --> B5
+        B5 --> B9[Hub-corrected PPR<br/>graph::personalized_pagerank]
+    end
+
+    subgraph RANK["Answer Selection (tle-axiom-gen::extract_answer)"]
+        C1[Query entities] --> C2[Scan triples]
+        C2 --> C3[Signals per candidate]
+        C3 --> C4[conn_avg · role_avg · hop2_avg<br/>overlap · VSA cosine · heur · PPR]
+        C4 --> C5{linear weighted sum<br/>× query penalty}
+        C5 --> C6[ranked candidates]
+    end
+
+    subgraph OUT["Output Layer"]
+        D1[Best path] --> D2[Beam search<br/>tle-axiom-gen::search]
+        D2 --> D3[Linearize + TemplateBank<br/>tle-axiom-gen::linearize]
+        D3 --> D4[Answer entity + sentence]
+    end
+
+    A4 --> C2
+    A3 --> C1
+    A4 --> D2
+    B9 --> C3
+    C6 --> D2
+```
+
+### Scoring Detail (extract_answer)
+
+```mermaid
+flowchart LR
+    subgraph S["Candidate Entity e"]
+        S1[conn_avg<br/>avg connectivity to query]
+        S2[role_avg<br/>Who→subject / What→object]
+        S3[hop2_avg<br/>2-hop bonus]
+        S4[overlap<br/>question words in name]
+        S5[VSA cosine<br/>weak, N(0,1/√2048) noise]
+        S6[heur<br/>0.2·count − len + cap + det]
+        S7[PPR<br/>log π_q(e) − log π(e)]
+    end
+
+    S1 --> SCORE{score(e) =<br/>Σ wᵢ·signalᵢ<br/>× query_penalty}
+    S2 --> SCORE
+    S3 --> SCORE
+    S4 --> SCORE
+    S5 --> SCORE
+    S6 --> SCORE
+    S7 --> SCORE
+
+    SCORE --> QP{query-named?}
+    QP -->|Where/When| P1[x 0.2]
+    QP -->|What/Who| P2[x 0.6]
+    QP -->|no| P3[x 1.0]
+    P1 --> ANS[argmax → answer]
+    P2 --> ANS
+    P3 --> ANS
+```
+
+### Crate Map
+
+```mermaid
+graph TD
+    subgraph Core["Core Math"]
+        VSA[tle-vsa<br/>bind / bundle / permute / cosine]
+        TRANS[tle-transition<br/>Transition Binding Algebra]
+        RES[tle-resonator<br/>Resonator Networks]
+        CLIFF[tle-clifford<br/>Geometric Algebra]
+        TDA[tle-tda-router<br/>Topological routing]
+    end
+
+    subgraph Knowledge["Knowledge & Reasoning"]
+        ENG[tle-engram<br/>O(1) n-gram hash]
+        KNOW[tle-knowledge<br/>compressed VSA bundles]
+        AFC[tle-afc<br/>incremental store · δ-mem<br/>analogy · attractor · intent]
+        GEN[tle-axiom-gen<br/>KG · decompose · search<br/>extract_answer · inference]
+    end
+
+    subgraph LM["VSA Language Model (Path C)"]
+        VSALM[tle-vsa-lm<br/>TBA · Engram · Reservoir<br/>KnowledgePrior · cosine decoder]
+    end
+
+    subgraph App["Applications"]
+        DEEP[tle-deepman<br/>interactive REPL]
+        CHAT[tle-chat<br/>original chatbot]
+        PIPELINE[tle-pipeline<br/>orchestration]
+        MEM[tle-memory<br/>persistent memory]
+        DEC[tle-decoder<br/>token decoding]
+        BENCH[tle-bench<br/>benchmarks]
+    end
+
+    VSA --> TRANS
+    VSA --> RES
+    VSA --> ENG
+    VSA --> KNOW
+    VSA --> GEN
+    VSA --> VSALM
+    AFC --> GEN
+    KNOW --> AFC
+    GEN --> DEEP
+    VSALM --> DEEP
+    TRANS --> VSALM
+    ENG --> VSALM
+    CHAT --> AFC
+    PIPELINE --> GEN
+    DEC --> DEEP
+```
+
+### Repo Layout (following katgpt-rs conventions)
 
 ```
-Input → [Intent classify] → [Query entities] → [extract_answer: rank entities]
-      → [Knowledge Graph: triples + relations + PPR] → [Linearize] → Output
-Signals used to rank: connectivity, role bias, 2-hop, overlap,
-VSA cosine (weak), heuristics, hub-corrected PPR.
+topological-latent-engine/
+├── Cargo.toml            # workspace root (18 crates)
+├── crates/               # all workspace members
+│   ├── tle-vsa/          #   core VSA math (bind/bundle/permute/cosine)
+│   ├── tle-axiom-gen/    #   QA engine: decompose → KG → rank → answer
+│   │   ├── src/decompose.rs   # evidence → structured facts
+│   │   ├── src/graph.rs       # KG + PPR + adjacency
+│   │   ├── src/engine.rs      # extract_answer scoring (env-tunable)
+│   │   ├── src/inference.rs   # Datalog-style rules (inversion/transitivity)
+│   │   └── src/bin/           # triviaqa-bench, vsalm-wiki, ...
+│   ├── tle-vsa-lm/       #   non-neural LM (TBA+Engram+Reservoir)
+│   ├── tle-afc/          #   incremental store, analogy, attractor, intent
+│   └── ...               # 13 more crates (see Crate Map)
+├── docs/                 # source-of-truth + research (see Research Docs)
+│   ├── AGENT_HANDOFF.md          # current state + next steps
+│   ├── LESSONS_LEARNED.md        # anti-pattern registry (don't re-try)
+│   ├── ROOT_CAUSE_ANALYSIS.md    # why the selection gap exists
+│   ├── SESSION_RESEARCH_SUMMARY.md
+│   └── RANKING_RESEARCH_SYNTHESIS.md
+├── data/                 # TriviaQA + corpora (gitignored if large)
+├── scripts/              # weight-sweep A/B harness
+└── README.md
 ```
+
+### Performance
+
+| Operation | Speed |
+|-----------|:-----:|
+| Fact recall (taught) | 2-11 µs |
+| Yes/No reasoning | 42-140 µs |
+| Compositional (multi-hop) | 350-633 µs |
+| TriviaQA full answer | ~100ms (evidence ingest + rank) |
 
 ## Honest Limitations
 
