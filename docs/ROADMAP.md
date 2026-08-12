@@ -243,7 +243,14 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Guardrails:** keep all env-gated A/B; VSA never primary; no softmax
   (sigmoid-never-softmax, katgpt rule); no DDTree; deterministic.
 - **Verify:** full 318 bench, candidate up, recall NOT down
-- **Status:** — | **Result:** —
+- **Status:** T1.10a NEGATIVE (conformal fusion 12.58-19.18%, reverted).
+  T1.10b INFRA (Datalog rules built, no metric change; type-veto reverted).
+  T1.10c NEGATIVE (surface filter at graph regresses: NP edge-gate 23.90/75.79,
+  residue-only gate 23.58/75.16 — valid entities legitimately contain those
+  chars; M5 junk is mostly already filtered, residual too rare to be a lever).
+  See LESSONS_LEARNED §2.4. T1.10d resonator not attempted (VSA noise).
+  **Result:** 0 net gain from framework layers; keep infra (inference.rs,
+  PPR, query-penalty already in). Default 24.21%.
 
 ---
 

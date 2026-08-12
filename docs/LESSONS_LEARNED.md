@@ -91,6 +91,20 @@ intermediate node** — L2 ต้องพึ่ง L1 (POS/clause) ก่อน
 **บทเรียน:** อย่าเอา junk ไปแก้ที่ ranking (มันจะ pollute candidate set)
 ต้องแก้ที่ source (POS/NP-chunking ใน decompose)
 
+### 2.4 Surface filter ที่ graph regress ทุกแบบ (T1.10c)
+**หลักฐาน (วัดเต็ม 318 bench):**
+- NP edge-word gate (reject preposition/verb ที่ head/tail): candidate 24.21→23.90,
+  recall 76.10→75.79
+- แก้ให้ allow leading "the" ("The Beatles", "The King Shall Rejoice"): ยัง 23.90/75.79
+- เหลือแค่ residue-char + quote + em-dash gate: candidate 24.21→23.58, recall 76.10→75.16
+**กลไกที่พัง:** entity จริง legitimately มี character พวกนั้น; การ filter ทุกแบบ
+remove entity ที่ถูกต้องด้วยเสมอ (เช่น "Zadok the Priest" case หลุดไป 1 record)
+**บทเรียน:**
+- Junk surface ส่วนใหญ่ (15 ตัว) **ถูกจัดการแล้ว** โดย is_fact_worthy/proper-noun gate เดิม
+- ส่วนที่เหลือ rare มาก → filter เพิ่ม = loss > gain บน aggregate
+- **M5 ไม่ใช่ lever หลัก** — 15/165 เท่านั้น อย่าลงทุนกับ surface filter
+  ไปทำ deep-rank (149) / near-tie (25) แทน
+
 ---
 
 ## 3. บทเรียนระดับ process (วิธีทำงาน)
