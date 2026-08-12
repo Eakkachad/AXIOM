@@ -5,6 +5,46 @@
 
 ---
 
+## 2026-08-12 — v17 (strict metrics + QNP default ON; D1/D2/VSA-boost negative)
+
+**Commits:** code (bench metrics, QNP, answer_type.rs, typed expansion, D2,
+VSA-boost) + docs
+
+### Kept (measured, stable 3 runs, STRICT metrics)
+- **Strict metrics live** (`triviaqa-bench.rs`): `candidate_f1_accuracy`
+  (EM-or-token-F1≥0.7 over aliases — SQuAD/TriviaQA protocol),
+  `candidate_exact_accuracy`, `strict_recall` (F1≥0.7 vs graph nodes). Honest
+  baselines: **f1 16.98% · exact 15.09% · strict_recall 54.72%** (substring
+  recall 76.10% has ~21pt phantom).
+- **QNP default ON** (`AXIOM_V1_QNP`): full penalty for query-named entities
+  with conn=0 AND hop2=0 (the reference/anchor, never the answer). STRICT:
+  exact 14.78→15.09 (+0.31), f1 16.67→16.98 (+0.31), strict_recall unchanged.
+  Substring candidate 24.84→24.21 is the metric artifact (suppressing reference
+  entities that substring rewarded).
+
+### Negative (env-gated OFF, kept as tested infra)
+- **D1 typed final-hop expansion** (answer_type.rs + AXIOM_W_TYPED): fires but
+  typed_cands=0 for discriminative predictions — Who/Where/Number answers are
+  1-2 hop (already candidates); no distance-3 type-compatible golds. Additive
+  signal inert (w≤3) / regresses (w≥5). Mode-C golds are 2-hop ranked-low, not
+  distance-3.
+- **D2 conditional+saturated count** (AXIOM_W_RATIO): exact 15.09→7.55% at
+  ratio 0.5. count_cond of buried golds is small BY DEFINITION (that's why
+  they're buried) → destroys their signal.
+- **Conditional VSA boost** (AXIOM_VSA_NOSTRUCT): inert at 2-6, regresses at 8.
+  Buried golds are query-named (QNP penalty ×0.6) so even vsa=0.97/0.99 can't
+  beat a connected winner; boost raises noise equally.
+
+### Conclusion (banked)
+The buried-gold class (Mode C, ~26%: gold conn=0) is NOT liftable by any
+query-derived signal — golds are query-named+penalized+structurally weak, and
+every fix that helps them helps the structurally-connected+count-rich winners
+equally (net≈0). Remaining levers: genuinely different signal (PathHD
+relation-schema, T1.18e) or decomposition so golds connect properly (T1.7
+family).
+
+---
+
 ## 2026-08-12 — v16c (T1.13 MDL tiebreak — negative → env-gated off, documented)
 
 **Commits:** code (engine.rs shingle_cover + tiebreak) + docs

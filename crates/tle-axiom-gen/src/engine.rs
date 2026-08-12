@@ -21,6 +21,7 @@
 
 use tle_vsa::{cosine_similarity, Codebook, HyperVector};
 
+use crate::answer_type::{matches_answer_type_oriented, predict_answer_type, AnswerType};
 use crate::energy::EnergyConfig;
 use crate::graph::KnowledgeGraph;
 use crate::linearize::{classify_intent, linearize_with_templates, Intent};
@@ -464,6 +465,11 @@ impl AxiomGen {
         // connect via "Ovulation" but have no direct query link.
         let mut raw_2hop: HashMap<usize, f32> = HashMap::new();
         let mut raw_2hop_count: HashMap<usize, usize> = HashMap::new();
+        // T1.18c D1: typed final-hop expansion (OPI-style). New signal for
+        // answer-type-compatible candidates reachable at distance 3+ via a
+        // bridge — rescues the Mode C golds (conn=0, ~20% of failures).
+        let mut raw_typed: HashMap<usize, f32> = HashMap::new();
+        let mut raw_typed_count: HashMap<usize, usize> = HashMap::new();
 
         // First pass: collect entities directly connected to query entities.
         let mut one_hop: Vec<usize> = Vec::new();
@@ -544,10 +550,49 @@ impl AxiomGen {
             }
         }
 
+        // T1.18c D1 typed final-hop expansion: the principled widening. Instead
+        // of blind 3-hop (QASA: T=4 degrades), expand ONLY along relations
+        // whose tail type matches the predicted answer type (OPI 2606.28076:
+        // "+4.6/+8.9 Hit@1"). Bridges = query entities + 1-hop + 2-hop nodes
+        // (reaches distance 3, where Mode C golds live). Orientation-aware:
+        // Person can be the SUBJECT of wrote/`*_by` relations. Only fires for
+        // discriminative predictions (Place/Person/Number/Temporal) — the
+        // Entity (default) case is non-discriminative and blanket boosts regress.
+        let w_typed_env = weight_env("AXIOM_W_TYPED", 0.0);
+        let predicted_type = if w_typed_env > 0.0 {
+            predict_answer_type(intent, query)
+        } else {
+            AnswerType::Entity
+        };
+        if w_typed_env > 0.0 && predicted_type != AnswerType::Entity {
+            let mut bridges: Vec<usize> = query_entities.to_vec();
+            bridges.extend(one_hop.iter().copied());
+            bridges.extend(raw_2hop.keys().copied());
+            let mut visited: std::collections::HashSet<usize> = bridges.iter().copied().collect();
+            for &b in &bridges {
+                for &ti in graph.adjacency_of(b) {
+                    let t = &graph.triples[ti];
+                    let conf = graph.triple_confidence(ti);
+                    let rel_name = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                    let other = if t.subject_id == b { t.object_id } else { t.subject_id };
+                    if query_entities.contains(&other) || one_hop.contains(&other) { continue; }
+                    if !visited.insert(other) { continue; }
+                    let other_name = graph.entity_name(other);
+                    let other_is_object = t.subject_id == b;
+                    if matches_answer_type_oriented(predicted_type, rel_name, other_is_object, &other_name) {
+                        let kind_w = if matches!(rel_name, "mentions"|"is_related_to") { 0.4 } else { 1.0 };
+                        *raw_typed.entry(other).or_insert(0.0) += 1.0 * kind_w * conf;
+                        *raw_typed_count.entry(other).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
         let mut ranked: Vec<(f32, String, f32, f32, f32, f32, f32)> = Vec::new();
         // Candidate set = entities with direct conn OR 2-hop conn.
         let mut candidate_ids: std::collections::HashSet<usize> = raw_conn.keys().copied().collect();
         candidate_ids.extend(raw_2hop.keys().copied());
+        candidate_ids.extend(raw_typed.keys().copied());
         // T1.9a: RRF rank fusion (rank-position fusion instead of linear sum).
         // Enabled via AXIOM_RANK=rrf. Rank is invariant under per-signal scale,
         // so overlap (~50) can no longer dominate conn (~2) by magnitude.
@@ -607,8 +652,28 @@ impl AxiomGen {
             // Frequency term is the hub amplifier (23/57 top-5 failures won by
             // heur). Split its weight from the length/cap/det penalties so we
             // can reduce ONLY the count contribution (T1.9b). Env AXIOM_W_COUNT.
+            // T1.18d D2 (env AXIOM_W_RATIO, default off): query-conditional +
+            // saturated count (BM25/RSJ-grounded). count_cond = triples where
+            // the entity is actually connected to the query (conn+2hop), and
+            // count_ratio = count_cond/count is the Milne-Witten relative
+            // frequency (hub-invariant; the count analog of the relative PPR
+            // that already worked +0.63). BM25_sat(c)=c(k1+1)/(c+k1) caps the
+            // hub's multiplicative advantage while keeping absolute evidence
+            // monotonic. Fixes Mode B (count dominance, ~15% of failures)
+            // WITHOUT the failed global count cut (0.2→0.05 → 17.61%).
             let w_count = weight_env("AXIOM_W_COUNT", 0.2);
-            let heur = w_count * *raw_count.get(&id).unwrap_or(&0) as f32 - len_pen + cap_bonus + det_pen;
+            let w_ratio = weight_env("AXIOM_W_RATIO", 0.0);
+            let k1 = weight_env("AXIOM_W_RATIO_K1", 2.0);
+            let raw_count_c = *raw_count.get(&id).unwrap_or(&0) as f32;
+            let heur = if w_ratio > 0.0 {
+                let count_cond = (*raw_conn_count.get(&id).unwrap_or(&0)
+                    + *raw_2hop_count.get(&id).unwrap_or(&0)) as f32;
+                let count_ratio = count_cond / raw_count_c.max(1.0);
+                let sat = count_cond * (k1 + 1.0) / (count_cond + k1);
+                w_count * sat + w_ratio * count_ratio - len_pen + cap_bonus + det_pen
+            } else {
+                w_count * raw_count_c - len_pen + cap_bonus + det_pen
+            };
             // Average connectivity per link — neutralizes the hub problem:
             // an entity with 197 facts (Macron) must not beat an entity with
             // 1 strong link (Paris, capital_of France).
@@ -669,6 +734,13 @@ impl AxiomGen {
             // 0.15 — overlap dominance (question-named entities) was drowning
             // correct connected answers. Recall unchanged at 76.10%.
             let ppr = if w_ppr > 0.0 { ppr_scores.get(id).copied().unwrap_or(0.0) } else { 0.0 };
+            // T1.18c D1 typed signal: average typed-final-hop connectivity. A
+            // candidate that is the answer-type-compatible tail of a bridge
+            // relation gets a dedicated boost — this is what reaches Mode C
+            // golds that have conn=0 / hop2=0.
+            let typed = *raw_typed.get(&id).unwrap_or(&0.0);
+            let typed_links = *raw_typed_count.get(&id).unwrap_or(&1).max(&1);
+            let typed_avg = typed / typed_links as f32;
             // T1.11 M1 conditional overlap-veto (env AXIOM_V1_M1, default off).
             // Overlap counts ONLY when the candidate is structurally connected to
             // the query entities: direct conn, 2-hop, or relative-PPR support
@@ -687,13 +759,25 @@ impl AxiomGen {
             if w_m1 > 0.0 && ov_eff > 0.0 && !has_struct {
                 ov_eff = 0.0;
             }
+            // T1.18d conditional VSA boost (env AXIOM_VSA_NOSTRUCT, default
+            // off): a candidate with NO structural support (conn=0) that is
+            // semantically close to the query (high VSA cosine) is the buried
+            // Mode-C gold — measured: buried golds average vsa=0.12 vs winner
+            // 0.04 (e.g. gold 'beetroot' vsa=0.97, 'potato' 0.99). Give the
+            // semantic signal a conditional weight boost ONLY for structurally
+            // unsupported candidates — connected candidates keep rel_weight,
+            // so this cannot reproduce the global-VSA-weight regressions.
+            let w_vsa_ns = weight_env("AXIOM_VSA_NOSTRUCT", 0.0);
+            let vsa_weight = rel_weight
+                + if w_vsa_ns > 0.0 && conn_avg == 0.0 { w_vsa_ns } else { 0.0 };
             let score = (conn_avg * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2
                 + ov_eff * w_ov
-                + rel * rel_weight
+                + rel * vsa_weight
                 + heur * w_heur
-                + ppr * w_ppr) * query_penalty;
+                + ppr * w_ppr
+                + typed_avg * w_typed_env) * query_penalty;
             if rrf_mode || conformal_mode {
                 cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {

@@ -446,7 +446,7 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result:** +0.31pt strict (both metrics)
 
 ### T1.18c D1 Typed final-hop expansion (OPI-style answer-type) — PRIMARY
-- [ ] Status: pending · Priority: P0 · Effort: 1-2 days · Depends: T1.18b
+- [x] Status: done (negative formulation → env-gated off) · Priority: P0 · Effort: 1-2 days · Depends: T1.18b
 - **Goal:** fix Mode C (gold conn=0, 20% of failures) + attribute/value answers.
   `predict_answer_type(intent, query)` (word rules) + `RelationKind{head,tail}`
   table (~40 relations) + typed final-hop expansion (only candidates whose
@@ -455,17 +455,40 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   QASA-style monotonicity/visited guards. Recall monotone (adds candidates).
   Literature: OPI arXiv:2606.28076 (+4.6/+8.9 Hit@1).
 - **File:** new `crates/tle-axiom-gen/src/answer_type.rs` + `engine.rs`
-- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+- **Verify:** strict candidate up, recall NOT down
+- **Status:** BUILT + MEASURED NEGATIVE (default OFF). `answer_type.rs` kept
+  (5 unit tests: intent/relation/numeric matching). Typed expansion fires but
+  **typed_cands=0 for all discriminative predictions** — answers to Who/Where/
+  Number questions are 1-2 hop, already candidates (in one_hop / raw_2hop, so
+  skipped); no distance-3 type-compatible golds found. Additive signal inert at
+  w=0.5-3.0 (identical strict metrics), regresses at 5.0/10.0 (blanket boost
+  raises noise). Root cause: Mode-C golds are NOT distance-3 — they are 2-hop
+  candidates ranked low; type-match alone cannot separate them from noise.
+  **Result:** neutral/negative, kept env-gated off (infra: answer_type.rs)
 
 ### T1.18d D2 Conditional + saturated count (BM25/RSJ) — after D1
-- [ ] Status: pending · Priority: P1 · Effort: 1 day · Depends: T1.18c
+- [x] Status: done (negative → env-gated off) · Priority: P1 · Effort: 1 day · Depends: T1.18c
 - **Goal:** fix Mode B (count dominance, 15%): `count_cond` = query-connected
   triples (raw_conn_count+raw_2hop_count), `count_ratio` = count_cond/count
   (Milne-Witten, hub-invariant), `heur = w_count·BM25_sat(count_cond) +
   w_ratio·count_ratio − …` (k1≈2-3). NOT the failed global count cut. MUST ship
   after D1 (D2 zeroes conn=0 golds; D1 gives them typed connectivity).
 - **File:** `crates/tle-axiom-gen/src/engine.rs`
-- **Verify:** strict candidate up, recall NOT down | **Status:** — | **Result:** —
+- **Verify:** strict candidate up, recall NOT down
+- **Status:** MEASURED NEGATIVE (default OFF, env `AXIOM_W_RATIO`). Sweep
+  RATIO 0.5/1.0/2.0 × K1 2/4: exact 15.09→**7.55/6.92/5.66%**, f1 16.98→8.49/7.86/
+  6.60%. Root cause: Mode-C golds have FEW query-connected triples (count_cond
+  small) — that IS why they're buried. Any query-connectivity-derived count
+  destroys their signal; only raw_count (evidence mass) retains it. **Also
+  measured (env `AXIOM_VSA_NOSTRUCT`, default OFF): conditional VSA boost for
+  conn=0 candidates (buried golds avg vsa=0.12 vs winner 0.04, e.g. 'beetroot'
+  0.97, 'potato' 0.99) is inert at 2-6 and regresses at 8 (the gold is
+  query-named → QNP penalty ×0.6 keeps it below the connected winner, and the
+  boost raises noise equally).** Net conclusion: buried-gold class cannot be
+  lifted by query-derived signals — every fix that helps golds helps noise as
+  much (net≈0). Needs a genuinely different signal (PathHD relation-schema) or
+  decomposition so golds connect properly.
+  **Result:** negative ×2, kept env-gated off
 
 ### T1.18e B PathHD relation-schema retrieval — STRUCTURAL (big)
 - [ ] Status: pending · Priority: P1 · Effort: 2-3 days · Depends: T1.18b

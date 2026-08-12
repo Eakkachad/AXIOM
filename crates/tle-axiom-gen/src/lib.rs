@@ -12,6 +12,7 @@
 //! 4. **Linearization** (`linearize`): Converts graph paths to natural language
 //! 5. **Engine** (`engine`): Orchestrates the full generation pipeline
 
+pub mod answer_type;
 pub mod decompose;
 pub mod energy;
 pub mod engine;
