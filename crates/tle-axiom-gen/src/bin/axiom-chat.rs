@@ -17,6 +17,91 @@ use std::time::Instant;
 use tle_axiom_gen::AxiomGen;
 use tle_vsa_lm::{LmConfig, VsaLm};
 
+/// H4: deterministic TF-IDF sentence retrieval over a corpus (RAG). Query →
+/// top-K best-matching corpus sentences, scored by Σ tf×idf (cosine-ish).
+struct SentenceIndex {
+    sents: Vec<String>,
+    df: std::collections::HashMap<String, usize>,
+    postings: std::collections::HashMap<String, Vec<(usize, u32)>>,
+    n: usize,
+}
+
+impl SentenceIndex {
+    fn new() -> Self {
+        Self { sents: Vec::new(), df: std::collections::HashMap::new(), postings: std::collections::HashMap::new(), n: 0 }
+    }
+
+    fn tokens(s: &str) -> Vec<String> {
+        s.split(|c: char| !c.is_alphanumeric())
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| t.len() >= 3)
+            .collect()
+    }
+
+    fn add(&mut self, sentence: &str) {
+        let idx = self.n;
+        self.sents.push(sentence.to_string());
+        let toks = Self::tokens(sentence);
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut tf: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        for t in toks {
+            *tf.entry(t.clone()).or_insert(0) += 1;
+            seen.insert(t);
+        }
+        for t in seen {
+            let tfv = tf.get(&t).copied().unwrap_or(0);
+            *self.df.entry(t.clone()).or_insert(0) += 1;
+            self.postings.entry(t).or_default().push((idx, tfv));
+        }
+        self.n += 1;
+    }
+
+    fn idf(&self, term: &str) -> f32 {
+        let d = self.df.get(term).copied().unwrap_or(0) as f32;
+        if d == 0.0 {
+            0.0
+        } else {
+            (1.0 + self.n as f32 / d).ln()
+        }
+    }
+
+    /// Top-K sentences by TF-IDF cosine similarity to the query.
+    fn recall(&self, query: &str, k: usize) -> Vec<(f32, String)> {
+        let qt: Vec<String> = Self::tokens(query);
+        if qt.is_empty() {
+            return Vec::new();
+        }
+        let mut scores = vec![0.0f32; self.n];
+        let mut qnorms = vec![0.0f32; self.n];
+        let mut qidfs: Vec<(String, f32)> = qt.iter().map(|t| (t.clone(), self.idf(t))).collect();
+        let mut q_norm = 0.0f32;
+        for (_, idf) in &qidfs {
+            q_norm += idf * idf;
+        }
+        q_norm = q_norm.sqrt().max(1e-6);
+        for (t, idf) in &qidfs {
+            if let Some(postings) = self.postings.get(t) {
+                for (idx, tf) in postings {
+                    scores[*idx] += idf * idf * *tf as f32;
+                }
+            }
+        }
+        // length-normalize: divide by |sentence|
+        let mut ranked: Vec<(f32, usize)> = (0..self.n)
+            .map(|i| {
+                let len = self.sents[i].split_whitespace().count().max(1) as f32;
+                (scores[i] / len / q_norm, i)
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        ranked.into_iter().take(k).map(|(s, i)| (s, self.sents[i].clone())).collect()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║   AXIOM-CHAT — deterministic conversational reasoning         ║");
@@ -36,16 +121,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     });
 
-    // optional corpus for VSA-LM fluency (gen mode): `axiom-chat --corpus <file>`
+    // optional corpus for VSA-LM fluency + RAG recall: `axiom-chat --corpus <file>`
+    let mut corpus: SentenceIndex = SentenceIndex::new();
     if std::env::args().any(|a| a == "--corpus") {
         if let Some(path) = std::env::args().nth(2) {
             let text = std::fs::read_to_string(&path)?;
             let mut n = 0;
             for line in text.lines().filter(|l| l.len() > 8).take(2000) {
                 lm.learn(line);
+                corpus.add(line);
                 n += 1;
             }
-            println!("  VSA-LM corpus: learned {} sentences from {}", n, path);
+            println!("  corpus: learned {} sentences (VSA-LM + RAG index)", n);
         }
     }
 
@@ -129,6 +216,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if trimmed == "/stats" {
             println!("  graph triples: {}", graph.graph.triples.len());
             println!("  vocab: {} words", lm.vocab.len());
+            println!("  corpus sentences: {}", corpus.n);
+            if !corpus.is_empty() {
+                let (r1, r10) = self_recall(&corpus, 200);
+                println!("  self-retrieval R@1: {:.1}%  R@10: {:.1}% (H4 diagnostic)", r1 * 100.0, r10 * 100.0);
+            }
+            continue;
+        }
+        if let Some(q) = trimmed.strip_prefix("/recall ") {
+            // H4 RAG: retrieve the best-matching corpus sentences
+            if corpus.is_empty() {
+                println!("  No corpus loaded. Run with --corpus <file> first.");
+            } else {
+                let results = corpus.recall(q, 3);
+                for (score, sent) in results {
+                    println!("  [{:>4.2}] {}", score, sent);
+                }
+            }
             continue;
         }
 
@@ -239,12 +343,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("  I don't know \"{}\" yet. Teach me with /teach.", trimmed);
             }
+        } else if !corpus.is_empty() {
+            // H4 RAG fallback: the graph doesn't know — retrieve the best
+            // corpus sentence (deterministic, attributable, no hallucination).
+            let results = corpus.recall(&trimmed, 1);
+            if let Some((score, sent)) = results.first().filter(|(s, _)| *s > 0.05) {
+                println!("  (from my reading, relevance {:.2}) {}", score, sent);
+            } else {
+                println!("  I don't know \"{}\" yet. Teach me with /teach.", trimmed);
+            }
         } else {
             println!("  I don't know \"{}\" yet. Teach me with /teach, or ask me to generate with \"gen ...\".", trimmed);
         }
         println!("  [{:?}]", start.elapsed());
     }
     Ok(())
+}
+
+/// H4 diagnostic: self-retrieval R@1/R@10 — query each sentence with its own
+/// first 6 words, does the index retrieve it in the top-K? (a standard RAG
+/// sanity metric)
+fn self_recall(index: &SentenceIndex, max: usize) -> (f32, f32) {
+    let mut r1 = 0usize;
+    let mut r10 = 0usize;
+    let mut total = 0usize;
+    for (i, s) in index.sents.iter().take(max).enumerate() {
+        let words: Vec<&str> = s.split_whitespace().collect();
+        if words.len() < 8 {
+            continue;
+        }
+        let query = words[..6].join(" ");
+        let hits = index.recall(&query, 10);
+        total += 1;
+        let found = hits.iter().position(|(_, sent)| *sent == *s);
+        if let Some(pos) = found {
+            if pos == 0 {
+                r1 += 1;
+            }
+            if pos < 10 {
+                r10 += 1;
+            }
+        }
+        let _ = i;
+    }
+    if total == 0 {
+        (0.0, 0.0)
+    } else {
+        (r1 as f32 / total as f32, r10 as f32 / total as f32)
+    }
 }
 
 /// A short vague continuation that refers to the last topic.
