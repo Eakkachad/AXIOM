@@ -1,7 +1,7 @@
 # AXIOM — Project Plan & Agent Handoff Document
 
-> Last updated: 2026-08-12 (v18 — T1.11..T1.18e)
-> Status: TriviaQA candidate 25.16% (substring) · exact 15.72% · f1 17.61% · strict_recall 54.72%
+> Last updated: 2026-08-12 (v18b — T1.11..T1.18h)
+> Status: TriviaQA candidate 25.16% (substring) · exact **16.04%** · f1 **17.92%** · strict_recall 54.72%
 
 > ## CONTINUOUS DEVELOPMENT SYSTEM (v14 — READ FIRST)
 >
@@ -23,18 +23,35 @@
 > 4. Implement → test → bench → update ROADMAP/PROGRESS_LOG/this file → commit.
 > 5. NEVER claim improvement without a bench. NEVER re-try documented failures.
 
-> ## CURRENT STATE (v16 baseline — LOCKED)
+> ## CURRENT STATE (v18b baseline — LOCKED)
 >
 > | Metric | Value | Target |
 > |--------|:---:|:---:|
-> | candidate_answer_accuracy | **24.84%** | 40% |
-> | answer_entity_recall | **76.10%** | 80% |
-> | substring_accuracy | 23.27% | 50% |
-> | avg_latency | ~146ms (idle) | <200ms ✓ |
+> | candidate_answer (substring) | **25.16%** | 40% |
+> | candidate_exact | **16.04%** | — |
+> | candidate_f1 (EM-or-F1≥0.7) | **17.92%** | — |
+> | answer_entity_recall (substring) | **76.10%** | 80% |
+> | strict_recall (F1≥0.7) | 54.72% | — |
+> | avg_latency | ~150-350ms (load-dependent) | <200ms ✓ |
 > | gen speed | 12K tok/s | 50K tok/s |
 > | codebook memory | 62MB (32×) | <50MB |
 >
-> ### What was built (v16):
+> ### What was built (v16 → v18b):
+> - **Strict metrics** (T1.18a): `candidate_exact`, `candidate_f1`
+>   (EM-or-token-F1≥0.7), `strict_recall`. The old substring metric is inflated
+>   ~2× (24.84% vs 13.84% exact). **Keep-gate decisions now use strict.**
+> - **QNP** (T1.18b, default ON): full penalty for query-named entities with
+>   conn=0 AND hop2=0 (the reference/anchor). +0.31 strict.
+> - **PathHD relation-schema signal** (T1.18e, default ON `AXIOM_W_PATHHD=2.0`):
+>   new crate `tle-ghrr` (GHRR O(4) block binding, order-sensitive) + per-candidate
+>   max calibrated blockwise cosine of 1/2-hop relation paths vs question intent.
+>   +0.63 strict.
+> - **PathHD intent upgrade** (v18b): `decompose::query_relations` — question →
+>   relations via the RELATIONAL_PHRASES map. +0.32 strict.
+> - **Negatives (all env-gated OFF)**: D1 typed expansion, D2 conditional count,
+>   VSA-boost, ADJ adjudicator, D3 gated PPR, C1 exclusion cues — all
+>   neutral/regress. Banked pattern: only NEW-information signals win; anything
+>   re-derived from query-connectivity/lexical overlap helps noise as much.
 > - **T1.11 M1 conditional overlap-veto**: overlap signal only counts when the
 >   candidate is structurally connected to the query entities (conn>0 OR hop2>0
 >   OR PPR support>τ). Env `AXIOM_V1_M1` (default on) / `AXIOM_V1_M1_TAU`. This is

@@ -766,6 +766,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tle-afc",
+ "tle-ghrr",
  "tle-vsa",
  "tle-vsa-lm",
  "ureq",
@@ -832,6 +833,14 @@ dependencies = [
 
 [[package]]
 name = "tle-gen"
+version = "0.1.0"
+dependencies = [
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "tle-ghrr"
 version = "0.1.0"
 dependencies = [
  "rand",
