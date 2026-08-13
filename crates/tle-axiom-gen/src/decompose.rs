@@ -406,6 +406,13 @@ fn split_clauses(sentence: &str) -> Vec<String> {
         // If the remaining piece has a predicate, keep it; else drop it.
         if find_predicate(&piece).is_some() {
             clauses.push(piece);
+        } else if tail_enabled()
+            && piece.split_whitespace().count() <= 3
+            && piece.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+        {
+            // T1.19a: keep a short bare proper-noun continuation ("Scotland",
+            // "Paris") so a following location clause can extend the chain.
+            clauses.push(piece);
         }
     }
     clauses.retain(|clause| clause.len() >= 3);
@@ -552,8 +559,23 @@ fn truncate_object(object: &str) -> (String, Option<String>) {
     (normalize(object), None)
 }
 
+/// T1.19a env gate for tail-relation inheritance (default on).
+fn tail_enabled() -> bool {
+    std::env::var("AXIOM_V2_TAIL").map(|v| v != "0").unwrap_or(true)
+}
+
+/// Is this a location-producing relation (object is a place)?
+fn is_location_relation(relation: &str) -> bool {
+    matches!(
+        relation,
+        "located_in" | "located_at" | "located_near" | "part_of" | "from"
+            | "capital_of" | "born_in" | "died_in" | "lived_in" | "founded_in"
+            | "took_place_in" | "occurred_in" | "happened_in" | "released_in"
+            | "published_in" | "created_in" | "developed_in"
+    )
+}
+
 /// Is the subject a plausible entity (not a long lowercase descriptive phrase)?
-///
 /// A valid subject is either capitalized (proper noun) or short (≤3 words).
 /// Lowercase phrases longer than 3 words (e.g. "a change of heart two months
 /// later") are not entities and are dropped.
@@ -587,9 +609,36 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
     let mut facts = Vec::new();
     let clauses = split_clauses(sentence);
     let mut inherited_subject: Option<String> = None;
+    // T1.19a clause-level continuation: the object of the previous LOCATION
+    // fact, so a following bare proper-noun clause ("X is a village in Dumfries
+    // and Galloway, Scotland" → clause "Scotland") can be attached as the next
+    // hop of the location chain (LESSONS §2.2). env AXIOM_V2_TAIL (default on).
+    let mut last_location_object: Option<String> = None;
 
     for clause in clauses {
         let Some((position, relation, object)) = find_predicate(&clause) else {
+            // Bare continuation clause (no predicate): if the previous clause
+            // was a location fact, this is the tail of the chain.
+            if tail_enabled() {
+                if let Some(prev) = last_location_object.as_ref() {
+                    let entity = normalize(&clause);
+                    if !entity.is_empty()
+                        && is_entity_like(&entity)
+                        && entity.split_whitespace().count() <= 3
+                        && entity != *prev
+                    {
+                        let f = DecomposedFact {
+                            subject: prev.clone(),
+                            relation: "located_in".to_string(),
+                            object: entity.clone(),
+                        };
+                        if is_fact_worthy(&f) {
+                            facts.push(f);
+                            last_location_object = Some(entity);
+                        }
+                    }
+                }
+            }
             continue;
         };
         let raw_object = object.clone();
@@ -679,6 +728,7 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
 
         // Truncate the object to its entity-like head span.
         let (object, tail) = truncate_object(&object);
+        let _ = tail; // clause-level continuation handles location-chain tails
         if object.is_empty() {
             continue;
         }
@@ -705,6 +755,13 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         };
         if is_fact_worthy(&fact) {
             facts.push(fact.clone());
+        }
+        // T1.19a: track the object of a LOCATION fact so a following bare
+        // proper-noun clause can extend the chain ("..., Scotland").
+        if is_location_relation(relation) {
+            last_location_object = Some(object.clone());
+        } else {
+            last_location_object = None;
         }
 
         // When a birth or parentage fact is extracted, scan the raw
@@ -992,6 +1049,25 @@ mod tests {
         assert!(r2.iter().any(|x| x == "founded_by" || x == "founder_of"), "got {r2:?}");
         let r3 = query_relations("How many episodes were made?");
         assert!(r3.is_empty(), "no relational phrase expected, got {r3:?}");
+    }
+
+    #[test]
+    fn tail_inheritance_restores_location_chain() {
+        // "X ... in Dumfries and Galloway, Scotland" — the bare continuation
+        // clause "Scotland" must attach as (Dumfries, located_in, Scotland)
+        // so transitivity can chain X → Scotland (LESSONS §2.2).
+        let facts = decompose_sentence(
+            "Wanlockhead is a village in Dumfries and Galloway, Scotland.",
+            "",
+        );
+        let has_chain = facts.iter().any(|f| {
+            f.relation == "located_in"
+                && f.object == "Scotland"
+                && f.subject == "Dumfries"
+        }) || facts.iter().any(|f| {
+            f.relation == "located_in" && f.object == "Scotland" && f.subject == "Dumfries and Galloway"
+        });
+        assert!(has_chain, "expected a Dumfries→Scotland located_in edge, got {facts:?}");
     }
 
     #[test]

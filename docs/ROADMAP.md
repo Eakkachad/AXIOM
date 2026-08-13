@@ -550,6 +550,52 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   D1/D2: query-derived lexical signals help noise as much as golds.
   **Result:** negative, kept env-gated off (infra: gated PPR method)
 
+## TRACK 1.19 — Decomposition quality (deep-review conclusion: golds are buried because the graph doesn't connect them)
+
+> Source: deep review + LESSONS_LEARNED §2.2 (transitivity truncation), §2.5
+> (subject resolution), §4 (the "signal-scalpel" pattern — decomposition quality
+> is one of the two proven win families). The buried-gold class (62% of 163
+> failures) is NOT liftable by scoring (7 negatives measured); it needs the
+> gold to CONNECT properly in the graph so structural/relation signals fire.
+
+### T1.19a Tail-relation inheritance (restores transitivity chains)
+- [x] Status: done (neutral, mechanism verified) · Priority: P0 · Effort: 0.5 day · Depends: none
+- **Goal:** "X is a village in Dumfries and Galloway, Scotland" currently
+  truncates the object at the comma and DROPS ", Scotland" — so the
+  Wanlockhead→Dumfries→Scotland location chain never forms and the gold
+  (Scotland) stays buried. Fix: when a location relation's object is
+  comma-truncated, ALSO add `(head, located_in, tail)` so transitivity
+  (`derive_facts`, enabled by default) can chain X→Scotland.
+- **File:** `crates/tle-axiom-gen/src/decompose.rs` (`decompose_sentence` caller
+  of `truncate_object`) + `is_fact_worthy` guard
+- **Verify:** full 318 bench, strict candidate up, strict_recall NOT down
+- **Status:** IMPLEMENTED + MEASURED NEUTRAL. Root cause found: `split_clauses`
+  drops predicate-less clauses BEFORE truncate_object runs — the object-level
+  comma-tail never survives. Real fix at clause level: keep short bare
+  proper-noun continuation clauses + attach (prev_location_object, located_in,
+  continuation). Unit test verifies the Wanlockhead→Dumfries→Scotland edge.
+  Full bench ON vs OFF (`AXIOM_V2_TAIL`): candidate 16.04/17.92 identical,
+  strict_recall 54.72 — the specific chain cases don't occur / don't decide
+  any record in this dev set. Kept default-on (correct behavior, zero
+  regression, ~zero coverage here).
+  **Result:** neutral, mechanism correct + tested
+
+### T1.19b Expanded relation coverage (bare query forms)
+- [ ] Status: pending · Priority: P1 · Effort: 0.5 day · Depends: T1.19a
+- **Goal:** add high-precision bare/passive relation phrases missing from
+  RELATIONAL_PHRASES (discovered via query_relations: "located", "born",
+  "founded", "featured", "hosted"...) so golds enter via strong typed
+  relations instead of weak `mentions`. Reuse the v18b "located → located_in"
+  experiment lessons (keep phrases high-precision; watch decomposition cost).
+- **File:** `crates/tle-axiom-gen/src/decompose.rs` (RELATIONAL_PHRASES)
+- **Status:** — | **Result:** —
+
+### T1.19c Subject resolution for passive/relative clauses (T1.10e continuation)
+- [ ] Status: pending · Priority: P2 · Effort: 1 day · Depends: T1.19a/b
+- **Goal:** LESSONS §2.5: correct subject anchoring so `*_by`/passive golds
+  (Tchaikovsky, Spielberg) enter via strong relations with the RIGHT subject.
+- **Status:** — | **Result:** —
+
 ---
 
 ## TRACK 2 — System (Wikipedia scale + generation quality)
