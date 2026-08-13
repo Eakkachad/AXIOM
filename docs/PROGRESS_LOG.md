@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-08-13 — v20 (Phase A: VSA-LM generalization baseline + 7 negative experiments)
+
+### A1 baseline (vsalm-scale, wiki_train.txt, deterministic ✓)
+| corpus | TRAIN | TEST | vocab |
+|---|---|---|---|
+| 3000 sents | 65.0% | **11.0%** | 6628 |
+| 10000 sents | 58.2% | **9.7%** | 13030 |
+
+Single signals (300-pair TEST): trigram 18%, TBA 16.7%, engram 12% (these
+only count contexts WITH signal; combined counts all → the real honest number
+is the combined ~11%).
+
+### 7 negative experiments (all land at TEST ~11%)
+1. Fusion: sum vs **max** — flat
+2. TBA weight 1→5, Engram 0→1.5 — TRAIN drops, TEST flat
+3. Full-vocab scoring (skip engram shortlist) — flat
+4. Disable Tier-1 TBA cache — TRAIN 65→75.8%, TEST flat (cache hurt TRAIN;
+   kept env AXIOM_LM_NOTIER1)
+5. Trigram-only in combined — 9.3% (shortlist restricts)
+6. Full-vocab trigram-only — 2.7% (no-signal contexts forced to guess)
+7. **Bigger corpus (8000 train, vocab 13K) — TEST 9.7% (slightly WORSE)**
+
+### Conclusion (banked)
+TEST ~10-11% is the noise floor of d=4096 random-bipolar VSA at this scale.
+Cheap fixes (fusion/candidates/weights/corpus) are exhausted. The real lever
+is **A3: GHRR block-unitary sequence encoding** (tle-ghrr math exists) to
+replace TBA/trigram composition + vocabulary scaling. vsalm-scale now has
+env A/B infra (AXIOM_LM_W_*, FUSE, FULLVOCAB, NOTIER1).
+
+### Context
+Phase B (axiom-chat hybrid, T1.20/21) delivered the usable conversational
+experience. Phase A (chat-like-an-LLM) is a genuine research grind.
+
+---
+
 ## 2026-08-12 — v19 (T1.19 decomposition track: T1.19a neutral + T1.19b KEPT)
 
 ### T1.19a tail-relation inheritance — neutral (env AXIOM_V2_TAIL, default on)

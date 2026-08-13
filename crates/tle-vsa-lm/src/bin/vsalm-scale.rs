@@ -10,6 +10,10 @@ use std::time::Instant;
 
 use tle_vsa_lm::{LmConfig, VsaLm};
 
+fn env_f(name: &str, default: f32) -> f32 {
+    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
 fn main() {
     let path = std::env::args().nth(1).expect("usage: vsalm-scale <corpus.txt> [limit] [ratio]");
     let limit: usize = std::env::args().nth(2).and_then(|v| v.parse().ok()).unwrap_or(10_000);
@@ -41,9 +45,13 @@ fn main() {
         max_order: 4,
         beam_width: 8,
         max_gen_tokens: 12,
-        w_trigram: 0.6,
+        w_trigram: env_f("AXIOM_LM_W_TRI", 0.6),
+        w_tba: env_f("AXIOM_LM_W_TBA", 1.0),
+        w_engram: env_f("AXIOM_LM_W_ENG", 1.5),
+        w_reservoir: env_f("AXIOM_LM_W_RES", 0.5),
         ..Default::default()
     };
+    println!("  weights: tba={} tri={} eng={} res={}", config.w_tba, config.w_trigram, config.w_engram, config.w_reservoir);
     let mut lm = VsaLm::new(config);
 
     println!("\nStep 1: Ingesting {} train sentences...", train.len());
@@ -74,9 +82,9 @@ fn main() {
     println!("  TRAIN Trigram (trigram VSA): {:.1}%", tri_acc * 100.0);
     println!("  TRAIN Engram (n-gram): {:.1}%", eng_acc * 100.0);
 
-    let (tba_t, _) = tba_only_accuracy_sample(&lm, &test, 50);
-    let (tri_t, _) = trigram_only_accuracy_sample(&lm, &test, 50);
-    let (eng_t, _) = engram_only_accuracy_sample(&lm, &test, 50);
+    let (tba_t, _) = tba_only_accuracy_sample(&lm, &test, 300);
+    let (tri_t, _) = trigram_only_accuracy_sample(&lm, &test, 300);
+    let (eng_t, _) = engram_only_accuracy_sample(&lm, &test, 300);
     println!("  TEST  TBA (bigram VSA): {:.1}%", tba_t * 100.0);
     println!("  TEST  Trigram (trigram VSA): {:.1}%", tri_t * 100.0);
     println!("  TEST  Engram (n-gram): {:.1}%", eng_t * 100.0);

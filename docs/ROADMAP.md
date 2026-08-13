@@ -640,12 +640,29 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   imperfect" per AGENT_HANDOFF. **Result: visibly more natural; chat demo solid**
 
 ### T1.22 VSA-LM generalization (Phase A — after B)
-- [ ] Status: pending · Priority: P1 · Effort: 1-3 months · Depends: T1.20/21
-- **Goal:** close the TEST 10.7% next-token generalization gap: vocabulary
+- [x] Status: A1 baseline done; cheap fixes ruled out; A3 (GHRR) is the real path · Priority: P1 · Effort: 1-3 months · Depends: T1.20/21
+- **Goal:** close the TEST ~11% next-token generalization gap: vocabulary
   5K→50K+, better VSA encoding (TBA bindings), larger corpus. Research
   frontier — no published deterministic CPU-only LM at scale exists. This is
   what would make AXIOM "chat like an LLM" in the open-ended sense.
-- **Status:** — | **Result:** —
+- **Status (A1 baseline + sweep, 2026-08-12):** measured on wiki_train.txt:
+  - 3000 sentences: TRAIN 65%, **TEST 11%**, vocab 6628, deterministic ✓
+  - 10000 sentences: TRAIN 58.2%, TEST **9.7%**, vocab 13030 — bigger corpus
+    does NOT help generalization (more vocab = more candidate confusion)
+  - Single signals (300-pair TEST): trigram 18%, TBA 16.7%, engram 12% — all
+    BELOW useful; combined stuck at 11% regardless of: fusion (sum/max),
+    candidate pool (engram-shortlist vs full-vocab), Tier-1 cache on/off,
+    signal weights (TBA 1-5, Engram 0-1.5, Trigram-only).
+  - Conclusion: TEST ~10-11% is the noise floor of the current d=4096
+    random-bipolar encoding at this scale (candidates all score near-noise;
+    n-gram memorization wins toward wrong frequent tokens). **The cheap fixes
+    are exhausted — the generalization gap is structural.** The real lever is
+    A3: GHRR block-unitary sequence encoding (tle-ghrr already has the math;
+    replace TBA/trigram composition, provably better capacity per the
+    distractor bound) + vocabulary scaling + OOV. vsalm-scale now has env
+    overrides (AXIOM_LM_W_*, AXIOM_LM_FUSE, AXIOM_LM_FULLVOCAB,
+    AXIOM_LM_NOTIER1) for future A/B.
+  **Result:** baseline + 7 negative experiments banked; A3 = next real work
 
 ---
 

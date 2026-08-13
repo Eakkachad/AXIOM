@@ -269,7 +269,11 @@ impl VsaLm {
         let context_ids: Vec<usize> = context.iter().filter_map(|w| self.vocab.id(w)).collect();
 
         // Tier 1: TBA TopK cache — instant O(1) lookup.
-        if let (Some(last_id), false) = (context_ids.last(), self.tba_cache.is_empty()) {
+        // A3: env AXIOM_LM_NOTIER1=1 disables the cache path (it restricts to
+        // TRAIN transitions; on TEST the right next token is often absent).
+        let no_tier1 = std::env::var("AXIOM_LM_NOTIER1").map(|v| v == "1").unwrap_or(false);
+        if !no_tier1 {
+            if let (Some(last_id), false) = (context_ids.last(), self.tba_cache.is_empty()) {
             if let Some(cached) = self.tba_cache.get(*last_id) {
                 if !cached.is_empty() {
                     let knowledge_context: Vec<String> = context.iter().rev().take(self.config.repeat_window * 3).cloned().collect();
@@ -295,9 +299,21 @@ impl VsaLm {
                 }
             }
         }
+        }
 
         // Tier 2: Engram shortlist + TBA cosine (original path).
-        let shortlist = self.engram.top_candidates(&context_ids, 32);
+        // A3 experiment (env AXIOM_LM_FULLVOCAB): skip the n-gram shortlist and
+        // score the FULL vocabulary with TBA+trigram+knowledge. The shortlist
+        // restricts to TRAIN-seen n-grams, so on TEST (cold context) the right
+        // next token is often absent and a wrong in-shortlist token wins; the
+        // full-vocab TBA cosine generalizes (measured TBA-only TEST 26% vs
+        // combined 11%). O(V×D) cost — for benchmarking only.
+        let full_vocab = std::env::var("AXIOM_LM_FULLVOCAB").map(|v| v == "1").unwrap_or(false);
+        let shortlist: Vec<usize> = if full_vocab {
+            self.vocab.iter().map(|(id, _)| id).collect()
+        } else {
+            self.engram.top_candidates(&context_ids, 32)
+        };
         let tba_signal = self.tba_prediction(context);
         let trigram_signal = self.trigram_prediction(context);
         let knowledge_context: Vec<String> = context.iter().rev().take(self.config.repeat_window * 3).cloned().collect();
@@ -307,16 +323,28 @@ impl VsaLm {
             .iter()
             .map(|&id| {
                 let word = self.vocab.word(id).to_string();
-                let mut score = self.config.w_engram * engram_probability(self, &context_ids, id);
-                if let Some(signal) = &tba_signal {
-                    score += self.config.w_tba * tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
-                }
-                if let Some(signal) = &trigram_signal {
-                    score += self.config.w_trigram * tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap());
-                }
-                if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
-                    score += self.config.w_knowledge * boost;
-                }
+                // A3 fusion experiment (env AXIOM_LM_FUSE): 'sum' (default
+                // weighted sum) vs 'max' (per-candidate max of calibrated
+                // signals — measured single signals: trigram 18% > tba 16.7%
+                // > engram 12%, but the SUM gives 11% (signal-scale mismatch
+                // destroys info, the same lesson as AXIOM-Gen fusion).
+                let tba_c = if let Some(signal) = &tba_signal {
+                    self.config.w_tba * tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap())
+                } else {
+                    0.0
+                };
+                let tri_c = if let Some(signal) = &trigram_signal {
+                    self.config.w_trigram * tle_vsa::cosine_similarity(&signal, self.vocab.vector_by_id(id).unwrap())
+                } else {
+                    0.0
+                };
+                let eng_c = self.config.w_engram * engram_probability(self, &context_ids, id);
+                let know_c = knowledge.iter().find(|(w, _)| w == &word)
+                    .map(|(_, b)| self.config.w_knowledge * b).unwrap_or(0.0);
+                let score = match std::env::var("AXIOM_LM_FUSE").as_deref() {
+                    Ok("max") => tba_c.max(tri_c).max(eng_c).max(know_c),
+                    _ => tba_c + tri_c + eng_c + know_c,
+                };
                 DecodedToken { id, word, similarity: score }
             })
             .collect();
