@@ -55,6 +55,29 @@ impl GhrrVector {
         }
         sum / D_BLOCKS as f32
     }
+
+    /// Unbind: `X ⊛⁻¹ Y = X ⊛ Yᵀ` (blockwise product with the transpose —
+    /// exact for orthogonal blocks, so `unbind(bind(A, B), A) == B`).
+    pub fn unbind(&self, key: &GhrrVector) -> GhrrVector {
+        let mut out: Vec<UnitaryBlock> = Vec::with_capacity(D_BLOCKS);
+        for j in 0..D_BLOCKS {
+            let a = &self.blocks[j];
+            let k = &key.blocks[j];
+            // a * kᵀ
+            let mut c = [[0.0f32; 4]; 4];
+            for i in 0..4 {
+                for jj in 0..4 {
+                    let mut s = 0.0f32;
+                    for kk in 0..4 {
+                        s += a[i][kk] * k[jj][kk];
+                    }
+                    c[i][jj] = s;
+                }
+            }
+            out.push(crate::block::normalize(&c));
+        }
+        GhrrVector { blocks: out }
+    }
 }
 
 #[cfg(test)]

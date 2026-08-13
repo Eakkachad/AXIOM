@@ -7,6 +7,7 @@ description = "VSA Language Model: non-neural text generation via VSA binding, T
 
 [dependencies]
 tle-vsa = { workspace = true }
+tle-ghrr = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
@@ -30,3 +31,7 @@ path = "src/bin/vsalm-scale.rs"
 [[bin]]
 name = "vsalm-chat"
 path = "src/bin/vsalm-chat.rs"
+
+[[bin]]
+name = "vsalm-ghrr"
+path = "src/bin/vsalm-ghrr.rs"
