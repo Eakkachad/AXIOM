@@ -254,6 +254,15 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("led", "led"),
     ("ruled", "ruled"),
     ("owned", "owned"),
+    // T1.19b high-precision multi-word relations common in TriviaQA media /
+    // film / location questions — absent before, golds entered via weak
+    // is_related_to instead of these typed relations.
+    ("happened in", "happened_in"),
+    ("originated in", "originated_in"),
+    ("led by", "led_by"),
+    ("first appeared in", "first_appeared_in"),
+    ("featured in", "featured_in"),
+    ("hosted", "hosted"),
     ("has", "has"),
     ("have", "have"),
     ("had", "had"),

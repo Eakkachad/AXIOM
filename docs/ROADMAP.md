@@ -581,14 +581,21 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result:** neutral, mechanism correct + tested
 
 ### T1.19b Expanded relation coverage (bare query forms)
-- [ ] Status: pending · Priority: P1 · Effort: 0.5 day · Depends: T1.19a
+- [x] Status: done (KEPT) · Priority: P1 · Effort: 0.5 day · Depends: T1.19a
 - **Goal:** add high-precision bare/passive relation phrases missing from
   RELATIONAL_PHRASES (discovered via query_relations: "located", "born",
   "founded", "featured", "hosted"...) so golds enter via strong typed
   relations instead of weak `mentions`. Reuse the v18b "located → located_in"
   experiment lessons (keep phrases high-precision; watch decomposition cost).
 - **File:** `crates/tle-axiom-gen/src/decompose.rs` (RELATIONAL_PHRASES)
-- **Status:** — | **Result:** —
+- **Status:** KEPT — added 6 high-precision multi-word relations:
+  `happened_in, originated_in, led_by, first_appeared_in, featured_in,
+  hosted`. Full 318 bench (stable 3 runs): **strict_recall 54.72→55.03%
+  (+0.31, best ever)**, candidate exact 16.04% / f1 17.92% UNCHANGED
+  (no regression) — keep-gate passed. "based on" + "set in" were tried and
+  REVERTED (they add many noise edges: candidate −0.63 despite +0.31 recall).
+  Latency ~100ms (light load). **Result: strict_recall +0.31, candidate flat**
+  — first decomposition win; golds connect via typed relations without noise
 
 ### T1.19c Subject resolution for passive/relative clauses (T1.10e continuation)
 - [ ] Status: pending · Priority: P2 · Effort: 1 day · Depends: T1.19a/b

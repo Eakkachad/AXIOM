@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-08-12 — v19 (T1.19 decomposition track: T1.19a neutral + T1.19b KEPT)
+
+### T1.19a tail-relation inheritance — neutral (env AXIOM_V2_TAIL, default on)
+Root cause found: split_clauses DROPS predicate-less clauses before
+truncate_object runs → object-level comma-tail never survives. Clause-level
+fix (keep bare proper-noun continuation + attach (prev_loc, located_in,
+cont)) — unit test proves Wanlockhead→Dumfries→Scotland edge. Bench ON vs OFF
+identical: chain cases don't decide any record in this dev set.
+
+### T1.19b expanded relations — KEPT (strict_recall +0.31, best ever)
+Added 6 high-precision multi-word relations: happened_in, originated_in,
+led_by, first_appeared_in, featured_in, hosted. "based on"/"set in" tried +
+REVERTED (candidate −0.63, too much noise).
+
+| metric | before | after | Δ |
+|---|---|---|---|
+| strict_recall | 54.72% | **55.03%** | +0.31 (best ever) |
+| candidate_exact | 16.04% | 16.04% | 0 |
+| candidate_f1 | 17.92% | 17.92% | 0 |
+
+Stable 3 runs; keep-gate passed. First decomposition win — golds connect via
+typed relations without adding ranking noise. Latency ~100ms (machine idle —
+confirms earlier 350ms was load noise).
+
+---
+
 ## 2026-08-12 — v18c (D3 gated PPR — negative, env-gated off)
 
 ### What changed
