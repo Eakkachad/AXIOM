@@ -508,6 +508,10 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   (default **2.0** — sweep peak: exact 15.09→**15.72%** (+0.63), f1
   16.98→**17.61%** (+0.63), strict_recall 54.72% unchanged, stable 3 runs;
   >2.0 regresses). Substring candidate also up: 25.16% (best ever).
+  Adjudicator (spec §8, env `AXIOM_V2_ADJ`, default OFF) — top-K
+  intent-consistency re-rank — MEASURED NEUTRAL (identical strict metrics):
+  type-consistency ≈ what conn/role already encode at the top, adds no
+  information. Kept env-gated as infra.
   **Result: +0.63pt strict (both metrics)** — first new-signal win post-review
 
 ### T1.18f C1/C2 Reference suppression (exclusion cues + query-focus)

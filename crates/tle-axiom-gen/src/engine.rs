@@ -966,6 +966,66 @@ impl AxiomGen {
             }
         }
 
+        // T1.18f PathHD adjudicator: intent-consistency re-rank of the top-K
+        // (deterministic replacement for the paper's LLM step, spec §8, worth
+        // +0.7-0.8pt in PathHD). For a discriminative answer type (Place/
+        // Person/Number/Temporal), candidates whose connecting relation to a
+        // query entity matches the predicted type rank ABOVE type-contradicting
+        // ones — within the top-K only, resolving near-ties and direction
+        // errors. Env AXIOM_V2_ADJ (default off); AXIOM_V2_ADJ_K = top-K size.
+        let w_adj = weight_env("AXIOM_V2_ADJ", 0.0);
+        if w_adj > 0.0 {
+            let predicted = predict_answer_type(intent, query);
+            if predicted != AnswerType::Entity {
+                let k = weight_env("AXIOM_V2_ADJ_K", 5.0).max(2.0) as usize;
+                let top: Vec<usize> = (0..ranked.len().min(k)).collect();
+                let consistent: Vec<bool> = top
+                    .iter()
+                    .map(|&i| {
+                        let name = &ranked[i].1;
+                        for t in &graph.triples {
+                            let subj_q = query_entities.contains(&t.subject_id);
+                            let obj_q = query_entities.contains(&t.object_id);
+                            if subj_q != obj_q {
+                                let cand = if subj_q { t.object_id } else { t.subject_id };
+                                if graph.entity_name(cand) == *name {
+                                    let rel = graph.relations.get(t.relation_id).map(|s| s.as_str()).unwrap_or("");
+                                    let c_is_obj = subj_q;
+                                    if matches_answer_type_oriented(predicted, rel, c_is_obj, name) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                        false
+                    })
+                    .collect();
+                if consistent.iter().any(|&c| c) && consistent.iter().any(|&c| !c) {
+                    let mut order: Vec<usize> = top.clone();
+                    order.sort_by(|&ia, &ib| {
+                        consistent[ia]
+                            .cmp(&consistent[ib])
+                            .reverse()
+                            .then_with(|| {
+                                ranked[ib].0.partial_cmp(&ranked[ia].0)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                    });
+                    let in_top: std::collections::HashSet<usize> = top.iter().copied().collect();
+                    let mut new_ranked = Vec::with_capacity(ranked.len());
+                    for &i in &order {
+                        new_ranked.push(ranked[i].clone());
+                    }
+                    for (i, c) in ranked.iter().enumerate() {
+                        if !in_top.contains(&i) {
+                            new_ranked.push(c.clone());
+                        }
+                    }
+                    ranked = new_ranked;
+                }
+            }
+        }
+
         let answer = ranked.first().map(|(_, name, ..)| name.clone()).unwrap_or_default();
         (answer, ranked)
     }
