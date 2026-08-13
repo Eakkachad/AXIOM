@@ -32,3 +32,7 @@ path = "src/v3.rs"
 [[bin]]
 name = "tle-train-day1"
 path = "src/day1_train.rs"
+
+[[bin]]
+name = "kn5-acc"
+path = "src/bin/kn5-acc.rs"

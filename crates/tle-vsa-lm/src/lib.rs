@@ -15,6 +15,7 @@
 
 pub mod decode;
 pub mod engram;
+pub mod kn5;
 pub mod knowledge;
 pub mod reservoir;
 pub mod tba;
@@ -48,8 +49,10 @@ pub struct LmConfig {
     pub w_tba: f32,
     /// Weight of the trigram TBA score (higher-order transition).
     pub w_trigram: f32,
-    /// Weight of the Engram (n-gram) score in prediction.
+    /// Weight of the engram (n-gram) score in prediction.
     pub w_engram: f32,
+    /// Weight of the KN-5 probability in prediction (H3; 0 = off).
+    pub w_kn5: f32,
     /// Weight of the reservoir associative-memory score in prediction.
     pub w_reservoir: f32,
     /// Weight of the knowledge-prior (fact-grounded) score in prediction.
@@ -76,6 +79,7 @@ impl Default for LmConfig {
             w_tba: 1.0,
             w_trigram: 0.6,
             w_engram: 1.5,
+            w_kn5: 0.0,
             w_reservoir: 0.5,
             w_knowledge: 2.0,
             knowledge_only: false,
@@ -103,6 +107,8 @@ pub struct VsaLm {
     pub reservoir_mem: Option<ReservoirMemory>,
     /// Knowledge-grounded fact prior.
     pub knowledge: KnowledgePrior,
+    /// KN-5 n-gram shortlist (H3; 48% top-32 recall vs Engram 29.3%).
+    pub kn5: crate::kn5::Kn5Model,
     /// Configuration.
     pub config: LmConfig,
     /// Precomputed TBA top-128 per-word next-token rankings.
@@ -129,6 +135,7 @@ impl VsaLm {
             reservoir,
             reservoir_mem,
             knowledge: KnowledgePrior::new(),
+            kn5: crate::kn5::Kn5Model::new(),
             config,
             tba_cache: Vec::new(),
         }
@@ -152,6 +159,9 @@ impl VsaLm {
         self.engram.learn(&ids);
         self.tba.learn_ids(&ids, &self.vocab);
         self.trigram.learn_ids(&ids, &self.vocab);
+        // H3 (G0 finding): KN-5 n-gram shortlist has 48% top-32 recall vs the
+        // Engram's 29.3% on the wiki corpus — build it alongside.
+        self.kn5.train(&ids);
 
         // If a reservoir is configured, feed the tokens through it and record
         // each (state, next token) pair into the associative memory.
@@ -323,8 +333,17 @@ impl VsaLm {
         // the rerank is ~50% conditional, TEST scales ~0.5× recall. Cheap
         // (both sources are O(1)/O(k) lookups).
         let use_union = std::env::var("AXIOM_LM_UNION").map(|v| v == "1").unwrap_or(false);
+        // H3 (env AXIOM_LM_KN5): use the KN-5 top-32 shortlist (48% recall vs
+        // Engram's 29.3%) as the candidate pool.
+        let use_kn5 = std::env::var("AXIOM_LM_KN5").map(|v| v == "1").unwrap_or(false);
         let shortlist: Vec<usize> = if full_vocab {
             self.vocab.iter().map(|(id, _)| id).collect()
+        } else if use_kn5 {
+            if self.kn5.is_trained() {
+                self.kn5.top_candidates(&context_ids, 32)
+            } else {
+                self.engram.top_candidates(&context_ids, 32)
+            }
         } else if use_union {
             let mut pool: Vec<usize> = Vec::new();
             let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
@@ -369,11 +388,24 @@ impl VsaLm {
                     0.0
                 };
                 let eng_c = self.config.w_engram * engram_probability(self, &context_ids, id);
+                // H3: KN-5 probability as a primary signal (its argmax alone is
+                // 16.7% vs VSA-LM combined 11%; env AXIOM_LM_W_KN5).
+                let kn5_c = if self.kn5.is_trained() {
+                    let mut dist: Vec<f32> = Vec::new();
+                    self.kn5.predict_distribution(&context_ids, &mut dist);
+                    if id < dist.len() {
+                        self.config.w_kn5 * dist[id]
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
                 let know_c = knowledge.iter().find(|(w, _)| w == &word)
                     .map(|(_, b)| self.config.w_knowledge * b).unwrap_or(0.0);
                 let score = match std::env::var("AXIOM_LM_FUSE").as_deref() {
-                    Ok("max") => tba_c.max(tri_c).max(eng_c).max(know_c),
-                    _ => tba_c + tri_c + eng_c + know_c,
+                    Ok("max") => tba_c.max(tri_c).max(eng_c).max(kn5_c).max(know_c),
+                    _ => tba_c + tri_c + eng_c + kn5_c + know_c,
                 };
                 DecodedToken { id, word, similarity: score }
             })

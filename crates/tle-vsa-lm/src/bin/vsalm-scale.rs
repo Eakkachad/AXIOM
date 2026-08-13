@@ -120,10 +120,11 @@ fn main() {
         w_trigram: env_f("AXIOM_LM_W_TRI", 0.6),
         w_tba: env_f("AXIOM_LM_W_TBA", 1.0),
         w_engram: env_f("AXIOM_LM_W_ENG", 1.5),
+        w_kn5: env_f("AXIOM_LM_W_KN5", 0.0),
         w_reservoir: env_f("AXIOM_LM_W_RES", 0.5),
         ..Default::default()
     };
-    println!("  weights: dim={} tba={} tri={} eng={} res={}", config.dim, config.w_tba, config.w_trigram, config.w_engram, config.w_reservoir);
+    println!("  weights: dim={} tba={} tri={} eng={} kn5={} res={}", config.dim, config.w_tba, config.w_trigram, config.w_engram, config.w_kn5, config.w_reservoir);
     let mut lm = VsaLm::new(config);
 
     println!("\nStep 1: Ingesting {} train sentences...", train.len());
