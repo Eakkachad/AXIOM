@@ -167,6 +167,21 @@ fn is_no_article(text: &str) -> bool {
     )
 }
 
+/// Known proper nouns (no indefinite article, keep capitalization mid-sentence):
+/// countries, continents, planets, the sun/moon. H1 grammar finisher.
+fn is_proper_noun(text: &str) -> bool {
+    const PROPER: &[&str] = &[
+        "france", "england", "scotland", "wales", "ireland", "germany", "spain", "italy",
+        "portugal", "switzerland", "austria", "belgium", "netherlands", "greece", "russia",
+        "china", "japan", "india", "canada", "america", "australia", "brazil", "mexico",
+        "europe", "asia", "africa", "america", "antarctica", "earth", "mars", "venus",
+        "jupiter", "saturn", "uranus", "neptune", "mercury", "pluto", "sun", "moon",
+        "london", "paris", "berlin", "rome", "madrid", "washington", "new york", "tokyo",
+        "beijing", "moscow", "thailand", "bangkok",
+    ];
+    PROPER.contains(&text)
+}
+
 /// Does the entity text already begin with an article ("a/an/the")?
 fn starts_with_article(text: &str) -> bool {
     text.split_whitespace()
@@ -175,12 +190,50 @@ fn starts_with_article(text: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// H1 grammar finisher: lowercase a clause-initial word after a comma unless
+/// it is a proper noun or a short connective ("Cats are animals, and Animals
+/// have hearts" → "…and animals have hearts").
+fn finish_grammar(s: &str) -> String {
+    let words: Vec<&str> = s.split_whitespace().collect();
+    let mut out = String::new();
+    for (i, w) in words.iter().enumerate() {
+        // a comma in the previous 1-2 tokens (", and ", ", because ") marks a
+        // new clause → lowercase its first word unless proper/connective
+        let has_comma_before = i > 0 && (words[i - 1].ends_with(',') || words[i - 1] == "and" && i > 1 && words[i - 2].ends_with(','));
+        let lower_first = if has_comma_before {
+            let bare = w.trim_matches(|c: char| !c.is_alphabetic()).to_lowercase();
+            let connective = matches!(
+                bare.as_str(),
+                "and" | "or" | "but" | "because" | "that" | "which" | "while"
+                    | "when" | "where" | "so" | "yet" | "then" | "however"
+            );
+            if !connective
+                && !is_proper_noun(&bare)
+                && w.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+            {
+                let mut c = w.chars();
+                let first = c.next().unwrap().to_lowercase().collect::<String>();
+                Some(first + c.as_str())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        out.push_str(lower_first.as_deref().unwrap_or(w));
+        if i < words.len() - 1 {
+            out.push(' ');
+        }
+    }
+    out
+}
+
 /// Insert an appropriate article before a noun if it's first occurrence.
 fn with_article(entity: &str, seen: &mut HashSet<String>) -> String {
     let text = entity_to_text(entity);
 
-    // Mass nouns and adjectives/colors are not preceded by an indefinite article.
-    if is_no_article(&text) {
+    // Mass nouns, adjectives/colors, and known proper nouns get no article.
+    if is_no_article(&text) || is_proper_noun(&text.to_lowercase()) {
         seen.insert(text.clone());
         return text;
     }
@@ -281,8 +334,8 @@ pub fn linearize(
         result
     };
 
-    // Capitalize and add period
-    let sentence = capitalize_first(&joined);
+    // Capitalize and add period (H1: fix clause-initial capitalization first).
+    let sentence = capitalize_first(&finish_grammar(&joined));
     if sentence.ends_with('.') || sentence.ends_with('?') || sentence.ends_with('!') {
         sentence
     } else {
@@ -319,7 +372,7 @@ pub fn linearize_with_templates(
     for clause in &clauses[1..] {
         sentence = format!("{}, {} {}", sentence, connective, clause);
     }
-    let sentence = capitalize_first(&sentence);
+    let sentence = capitalize_first(&finish_grammar(&sentence));
     if sentence.ends_with('.') { sentence } else { format!("{}.", sentence) }
 }
 
