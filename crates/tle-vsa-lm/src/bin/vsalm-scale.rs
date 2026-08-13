@@ -14,6 +14,78 @@ fn env_f(name: &str, default: f32) -> f32 {
     std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
+/// Conditional rerank accuracy: among pairs where the correct token is in the
+/// engram top-K shortlist, how often does each signal rank it #1?
+fn conditional_rerank(lm: &VsaLm, sentences: &[String], k: usize, max_pairs: usize)
+    -> (f32, f32, f32, f32, usize) {
+    let mut combined = 0usize;
+    let mut tba = 0usize;
+    let mut tri = 0usize;
+    let mut eng = 0usize;
+    let mut total = 0usize;
+    'outer: for sentence in sentences {
+        let tokens = lm.tokenize(sentence);
+        for pos in 0..tokens.len().saturating_sub(1) {
+            if total >= max_pairs {
+                break 'outer;
+            }
+            let ctx: Vec<String> = tokens[..=pos].to_vec();
+            let ctx_ids: Vec<usize> = ctx.iter().filter_map(|w| lm.vocab.id(w)).collect();
+            let cands = lm.engram.top_candidates(&ctx_ids, k);
+            let want = lm.vocab.id(&tokens[pos + 1]);
+            let Some(want) = want else { continue };
+            if !cands.contains(&want) {
+                continue; // only condition on shortlist hit
+            }
+            total += 1;
+            let combined_top = lm.predict_next_fast(&ctx, 1).first().map(|c| c.id);
+            let tba_top = lm.predict_tba_only(&ctx, 1).first().map(|c| c.id);
+            let tri_top = predict_trigram_only(lm, &ctx, 1).first().map(|c| c.id);
+            let eng_top = lm.predict_engram_only(&ctx, 1).first().map(|c| c.id);
+            if combined_top == Some(want) { combined += 1; }
+            if tba_top == Some(want) { tba += 1; }
+            if tri_top == Some(want) { tri += 1; }
+            if eng_top == Some(want) { eng += 1; }
+        }
+    }
+    if total == 0 {
+        (0.0, 0.0, 0.0, 0.0, 0)
+    } else {
+        let t = total as f32;
+        (combined as f32 / t, tba as f32 / t, tri as f32 / t, eng as f32 / t, total)
+    }
+}
+
+/// Fraction of next-token pairs where the correct token is in the engram
+/// top-K shortlist (the ceiling of the shortlist+rerank architecture).
+fn shortlist_recall(lm: &VsaLm, sentences: &[String], k: usize, max_pairs: usize) -> (f32, usize) {
+    let mut hit = 0usize;
+    let mut total = 0usize;
+    'outer: for sentence in sentences {
+        let tokens = lm.tokenize(sentence);
+        for pos in 0..tokens.len().saturating_sub(1) {
+            if total >= max_pairs {
+                break 'outer;
+            }
+            let ctx: Vec<String> = tokens[..=pos].to_vec();
+            let ctx_ids: Vec<usize> = ctx.iter().filter_map(|w| lm.vocab.id(w)).collect();
+            let cands = lm.engram.top_candidates(&ctx_ids, k);
+            let want = lm.vocab.id(&tokens[pos + 1]);
+            total += 1;
+            if let Some(want) = want {
+                if cands.contains(&want) {
+                    hit += 1;
+                }
+            }
+        }
+    }
+    if total == 0 {
+        (0.0, 0)
+    } else {
+        (hit as f32 / total as f32, total)
+    }
+}
+
 fn main() {
     let path = std::env::args().nth(1).expect("usage: vsalm-scale <corpus.txt> [limit] [ratio]");
     let limit: usize = std::env::args().nth(2).and_then(|v| v.parse().ok()).unwrap_or(10_000);
@@ -41,7 +113,7 @@ fn main() {
     println!("Corpus: {} ({} train / {} test)", path, train.len(), test.len());
 
     let config = LmConfig {
-        dim: 4096,
+        dim: env_f("AXIOM_LM_DIM", 4096.0) as usize,
         max_order: 4,
         beam_width: 8,
         max_gen_tokens: 12,
@@ -51,7 +123,7 @@ fn main() {
         w_reservoir: env_f("AXIOM_LM_W_RES", 0.5),
         ..Default::default()
     };
-    println!("  weights: tba={} tri={} eng={} res={}", config.w_tba, config.w_trigram, config.w_engram, config.w_reservoir);
+    println!("  weights: dim={} tba={} tri={} eng={} res={}", config.dim, config.w_tba, config.w_trigram, config.w_engram, config.w_reservoir);
     let mut lm = VsaLm::new(config);
 
     println!("\nStep 1: Ingesting {} train sentences...", train.len());
@@ -72,6 +144,31 @@ fn main() {
     println!("  TRAIN: {:.1}% ({}/{})", train_acc * 100.0, train_n, train_n);
     println!("  TEST:  {:.1}% ({}/{})", test_acc * 100.0, test_n, test_n);
     println!("  elapsed (accuracy): {:.2?}", t0.elapsed());
+
+    // A3: shortlist recall — is the correct next token IN the engram top-K?
+    // This is the ceiling of the shortlist+rerank architecture.
+    for k in [16usize, 32, 64, 128] {
+        let (recall, _) = shortlist_recall(&lm, &test, k, 300);
+        println!("  TEST engram top-{} shortlist recall: {:.1}%", k, recall * 100.0);
+    }
+    // A3: conditional accuracy — when the correct token IS in the top-32,
+    // how often does each signal (and the combined) rank it #1? This isolates
+    // the rerank quality (shortlist recall 28.7% vs combined accuracy 11% ⇒
+    // the rerank loses ~17.7pt).
+    {
+        let (cond_combined, cond_tba, cond_tri, cond_eng, n) = conditional_rerank(&lm, &test, 32, 300);
+        println!("  of {n} TEST pairs with correct in top-32 shortlist:");
+        println!("    combined picks it: {:.1}%", cond_combined * 100.0);
+        println!("    TBA-only picks it:  {:.1}%", cond_tba * 100.0);
+        println!("    trigram-only:       {:.1}%", cond_tri * 100.0);
+        println!("    engram-only:        {:.1}%", cond_eng * 100.0);
+    }
+    // A3: UNION shortlist recall (engram top-32 ∪ TBA-cache top-32 ∪ trigram
+    // top-32) — the candidate pool of a multi-source architecture.
+    {
+        let (union_recall, _) = union_shortlist_recall(&lm, &test, 32, 300);
+        println!("  TEST UNION shortlist recall (eng∪tba∪tri): {:.1}%", union_recall * 100.0);
+    }
 
     println!("\nStep 3: Signal decomposition (small sample)");
     let t0 = Instant::now();
@@ -177,4 +274,51 @@ fn engram_only_accuracy_sample(lm: &VsaLm, sentences: &[String], max_pairs: usiz
         }
     }
     if total == 0 { (0.0, 0) } else { (correct as f32 / total as f32, total) }
+}
+
+/// Union shortlist recall: correct token in (engram top-K ∪ TBA-cache top-K
+/// ∪ trigram-VSA top-K). The candidate pool of a multi-source architecture.
+fn union_shortlist_recall(lm: &VsaLm, sentences: &[String], k: usize, max_pairs: usize) -> (f32, usize) {
+    use std::collections::HashSet;
+    let mut hit = 0usize;
+    let mut total = 0usize;
+    'outer: for sentence in sentences {
+        let tokens = lm.tokenize(sentence);
+        for pos in 0..tokens.len().saturating_sub(1) {
+            if total >= max_pairs {
+                break 'outer;
+            }
+            let ctx: Vec<String> = tokens[..=pos].to_vec();
+            let ctx_ids: Vec<usize> = ctx.iter().filter_map(|w| lm.vocab.id(w)).collect();
+            let mut pool: HashSet<usize> = lm.engram.top_candidates(&ctx_ids, k).into_iter().collect();
+            // TBA cache top-k (per-source bigram transitions)
+            if let Some(last) = ctx_ids.last() {
+                for (id, _) in lm.tba_cache_top_k(*last, k) {
+                    pool.insert(id);
+                }
+            }
+            // trigram VSA top-k
+            if let Some(sig) = lm.trigram_prediction(&ctx) {
+                let mut scored: Vec<(usize, f32)> = lm.vocab.iter()
+                    .map(|(id, word)| (id, tle_vsa::cosine_similarity(&sig, lm.vocab.vector_by_id(id).unwrap())))
+                    .collect();
+                scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                for (id, _) in scored.into_iter().take(k) {
+                    pool.insert(id);
+                }
+            }
+            let want = lm.vocab.id(&tokens[pos + 1]);
+            total += 1;
+            if let Some(want) = want {
+                if pool.contains(&want) {
+                    hit += 1;
+                }
+            }
+        }
+    }
+    if total == 0 {
+        (0.0, 0)
+    } else {
+        (hit as f32 / total as f32, total)
+    }
 }

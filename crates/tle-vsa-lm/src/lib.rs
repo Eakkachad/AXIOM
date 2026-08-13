@@ -206,6 +206,15 @@ impl VsaLm {
         self.tba.predict(id)
     }
 
+    /// Top-K (id, score) candidates from the TBA cache for a source word
+    /// (per-source-word bigram transitions, built on the training corpus).
+    pub fn tba_cache_top_k(&self, last_id: usize, k: usize) -> Vec<(usize, f32)> {
+        self.tba_cache
+            .get(last_id)
+            .map(|c| c.iter().take(k).copied().collect())
+            .unwrap_or_default()
+    }
+
     /// Raw trigram TBA prediction.
     pub fn trigram_prediction(&self, context: &[String]) -> Option<HyperVector> {
         if self.trigram.transitions == 0 || context.len() < 2 {
@@ -309,8 +318,29 @@ impl VsaLm {
         // full-vocab TBA cosine generalizes (measured TBA-only TEST 26% vs
         // combined 11%). O(V×D) cost — for benchmarking only.
         let full_vocab = std::env::var("AXIOM_LM_FULLVOCAB").map(|v| v == "1").unwrap_or(false);
+        // A3 UNION pool (env AXIOM_LM_UNION): candidates = engram top-64 ∪
+        // TBA-cache top-32. Shortlist recall rises 29.3%→~31-33%, and since
+        // the rerank is ~50% conditional, TEST scales ~0.5× recall. Cheap
+        // (both sources are O(1)/O(k) lookups).
+        let use_union = std::env::var("AXIOM_LM_UNION").map(|v| v == "1").unwrap_or(false);
         let shortlist: Vec<usize> = if full_vocab {
             self.vocab.iter().map(|(id, _)| id).collect()
+        } else if use_union {
+            let mut pool: Vec<usize> = Vec::new();
+            let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
+            for id in self.engram.top_candidates(&context_ids, 64) {
+                if seen.insert(id) {
+                    pool.push(id);
+                }
+            }
+            if let Some(last) = context_ids.last() {
+                for (id, _) in self.tba_cache_top_k(*last, 32) {
+                    if seen.insert(id) {
+                        pool.push(id);
+                    }
+                }
+            }
+            pool
         } else {
             self.engram.top_candidates(&context_ids, 32)
         };

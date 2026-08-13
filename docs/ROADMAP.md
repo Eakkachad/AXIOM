@@ -659,13 +659,24 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   full-vocab VSA decode cannot rank the correct token. TBA's 11% works ONLY
   because the n-gram shortlist (top-32) shrinks the candidate pool. PathHD's
   GHRR works only for M≈200 pools.
-- **CONCLUSION (banked):** pure-VSA full-vocab next-token prediction is bounded
-  by the VSA noise floor at feasible CPU dimensions (d≤4096). The ceiling for
-  the shortlist+rerank architecture is ~the shortlist's recall (18-20%).
-  Reaching 30%+ "LLM-like" needs a fundamentally different mechanism (hierarchical
-  decode, subword composition with small pools per level, or non-VSA structure)
-  — a genuine research frontier, NOT a config fix. vsalm-ghrr kept as the
-  experiment artifact. **Result: 2 more negative experiments banked (A3)
+- **Status (A3 diagnostics + final, 2026-08-13):** added shortlist-recall and
+  conditional-rerank diagnostics to vsalm-scale:
+  - engram top-32 shortlist recall: **29.3%** (top-128: 33.3%) — the correct
+    token is rarely in the candidate pool on TEST (novel contexts).
+  - conditional rerank (correct IS in shortlist): combined 49.7%, TBA 46.3%,
+    trigram 20.3% — the rerank is already near its ceiling.
+  - ceiling ≈ recall × rerank ≈ 30% × 50% ≈ **15% TEST**; measured 11%.
+  - **ALL levers flat at ~11%**: d 4096→16384, fusion sum/max, weights,
+    full-vocab, Tier-1 off, corpus 3000→8000, GHRR, union pool
+    (eng∪tba∪tri, recall +0.7pt only). **The n-gram-shortlist + VSA-rerank
+    architecture has a hard ~15% TEST ceiling on this corpus; 30%+ is not
+    reachable with pure deterministic VSA at feasible CPU dimensions.**
+    Reaching "chat like an LLM" requires a categorically different mechanism
+    (e.g. neural, or months of subword/hierarchical research with uncertain
+    payoff). **Recommendation: stop Phase A; invest in axiom-chat quality
+    (in-scope conversational) which is delivered and usable.**
+  **Result: 10 negative experiments total; hard ceiling confirmed; phase A
+  deprioritized
 
 ---
 
