@@ -181,6 +181,38 @@ impl VsaLm {
         }
     }
 
+    /// Greedy generation by KN-5 distribution argmax (H3 finding: KN-5
+    /// standalone beats the fused pipeline; 16.7% vs 11% TEST). Deterministic.
+    pub fn generate_kn5(&self, prompt: &str, max_tokens: usize) -> String {
+        let mut ctx: Vec<usize> = self.tokenize(prompt).iter().filter_map(|w| self.vocab.id(w)).collect();
+        let mut out: Vec<String> = self.tokenize(prompt);
+        let mut dist: Vec<f32> = Vec::new();
+        for _ in 0..max_tokens {
+            self.kn5.predict_distribution(&ctx, &mut dist);
+            if dist.is_empty() {
+                break;
+            }
+            let mut best = 0usize;
+            let mut best_p = -1.0f32;
+            for (i, &p) in dist.iter().enumerate() {
+                if p > best_p {
+                    best_p = p;
+                    best = i;
+                }
+            }
+            if best_p <= 0.0 {
+                break;
+            }
+            let word = self.vocab.word(best).to_string();
+            out.push(word.clone());
+            ctx.push(best);
+            if ctx.len() > 10 {
+                ctx.remove(0);
+            }
+        }
+        out.join(" ")
+    }
+
     /// Build the TBA TopK cache: for every word, precompute its top-128
     /// next-token candidates ranked by TBA transition cosine.  One-time build
     /// after learning — eliminates per-token cosine scoring for 95% of calls.

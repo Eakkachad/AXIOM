@@ -53,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for fact in [("sky", "is", "blue"), ("blue", "has", "short_wavelength")] {
         teach(&mut graph, &mut lm, &format!("{} {} {}", fact.0, fact.1, fact.2));
     }
+    lm.kn5.finalize();
 
     println!();
     println!("  Commands:");
@@ -119,7 +120,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         if let Some(prompt) = trimmed.strip_prefix("gen ") {
-            let out = lm.generate(prompt, Some(24));
+            // H7: KN-5 greedy argmax generation (16.7% TEST vs the fused
+            // VSA-LM 11%; deterministic, better local coherence).
+            let out = lm.generate_kn5(prompt, 24);
             println!("  {} [{:?}]", out, start.elapsed());
             continue;
         }

@@ -29,6 +29,7 @@ pub struct Kn5Model {
     total_continuation: u32,
     vocab_size: usize,
     trained: bool,
+    dirty: bool,
 }
 
 impl Kn5Model {
@@ -39,9 +40,11 @@ impl Kn5Model {
             total_continuation: 0,
             vocab_size: 0,
             trained: false,
+            dirty: false,
         }
     }
-    /// Train on a token stream (one call per sentence).
+    /// Train on a token stream (one call per sentence). Cheap: defers the
+    /// continuation-count pass to `finalize` (called lazily by prediction).
     pub fn train(&mut self, ids: &[usize]) {
         let max_id = ids.iter().max().map(|&m| m + 1).unwrap_or(0);
         if max_id > self.vocab_size {
@@ -49,6 +52,7 @@ impl Kn5Model {
             self.continuation.resize(max_id, 0);
         }
         self.trained = true;
+        self.dirty = true;
         for n in 1..=MAX_ORDER {
             for i in n..ids.len() {
                 let ctx = &ids[i - n..i];
@@ -57,7 +61,16 @@ impl Kn5Model {
                 *self.tables[n].entry(hash).or_default().entry(word).or_insert(0) += 1;
             }
         }
-        // continuation[w] = number of distinct contexts w continues
+    }
+
+    /// One-time continuation-count pass (O(entries)). Called lazily before the
+    /// first prediction; NOT per-sentence (that would be O(n²) over the corpus).
+    pub fn finalize(&mut self) {
+        if !self.dirty {
+            return;
+        }
+        self.dirty = false;
+        self.continuation.fill(0);
         let mut seen: HashMap<(usize, u64), ()> = HashMap::new();
         for n in 1..=MAX_ORDER {
             for (hash, entries) in self.tables[n].iter() {

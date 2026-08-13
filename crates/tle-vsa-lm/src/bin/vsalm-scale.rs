@@ -132,6 +132,7 @@ fn main() {
     for s in &train {
         lm.learn(s);
     }
+    lm.kn5.finalize();
     println!("  {} words in {:.2?}", lm.vocab.len(), t0.elapsed());
     print!("  Building TBA TopK cache... ");
     let t0 = Instant::now();

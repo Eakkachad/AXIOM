@@ -81,14 +81,21 @@ candidate filter whose own argmax decides. The hybrid chat (H7) should use
 KN-5 directly for free-form generation.
 
 ## Next steps (in order)
-1. **H3**: add a KN-5 shortlist to `tle-vsa-lm` predict (env `AXIOM_LM_KN5`),
-   measure TEST — expect ~16-24%.
-2. **H7**: hybrid planner in `axiom-chat` (intent → graph reasoning → template
-   realization + KN-5 filler) — the "fluent domain-expert".
-3. **H4**: retrieval-augmented generation (best-matching corpus sentence + graph
-   adaptation).
-4. **H1/H2/H6**: grammar finisher, turn memory, template variation (cheap polish).
+1. **H3 (DONE)**: KN-5 standalone is the filler (16.7% vs 11%); fused into
+   VSA = no gain. `kn5.rs` module + `generate_kn5` in tle-vsa-lm.
+2. **H7 (gen-mode DONE, 2026-08-13)**: axiom-chat `gen` mode now uses KN-5
+   greedy argmax — output is noticeably more fluent/coherent (stays on-topic
+   ~20-25 tokens vs VSA-LM's ~12). Remaining: hybrid PLANNER (factual answers
+   via graph+templates, free-form via KN-5, casual via rules) is fully wired
+   in axiom-chat; evaluate head-to-head fluency (H7 pass bar ≥70%).
+3. **H4**: retrieval-augmented generation (best-matching corpus sentence +
+   graph adaptation) — the "understand like an LLM" knowledge recall win.
+4. **H1/H2/H6**: grammar finisher, turn memory, template variation (cheap
+   polish).
 
 ## Files
 - `crates/tle-gen/src/bin/kn5-acc.rs` — G0 probe (KN-5 next-token + recall).
+- `crates/tle-vsa-lm/src/kn5.rs` — KN-5 model (shortlist + distribution).
+- `crates/tle-vsa-lm/src/lib.rs::generate_kn5` — KN-5 greedy generation.
+- `crates/tle-axiom-gen/src/bin/axiom-chat.rs` — hybrid chat (graph + KN-5 + casual).
 - (katgpt analysis, feasibility research — from sub-agents, 2026-08-13)
