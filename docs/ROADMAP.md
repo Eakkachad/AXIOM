@@ -512,7 +512,14 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   intent-consistency re-rank — MEASURED NEUTRAL (identical strict metrics):
   type-consistency ≈ what conn/role already encode at the top, adds no
   information. Kept env-gated as infra.
-  **Result: +0.63pt strict (both metrics)** — first new-signal win post-review
+  **Intent upgrade** (query_relations from RELATIONAL_PHRASES map, ~180
+  phrase→relation, filtering copula "is/was/has"): exact 15.72→**16.04%**
+  (+0.32), f1 17.61→**17.92%** (+0.31), stable 3 runs, strict_recall 54.72%.
+  NOTE: the bare "located" RELATIONAL_PHRASES additions were tried and REVERTED
+  (neutral metrics, +2× decomposition cost). Latency ~350ms under current
+  machine load (loadavg 6.7, runc/containerd 250-600% CPU) — measured noise,
+  NOT a code regression; verify latency under idle load.
+  **Result: +0.95pt strict cumulative (PathHD signal + intent upgrade)**
 
 ### T1.18f C1/C2 Reference suppression (exclusion cues + query-focus)
 - [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: T1.18b

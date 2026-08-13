@@ -5,6 +5,37 @@
 
 ---
 
+## 2026-08-12 — v18b (PathHD intent upgrade via RELATIONAL_PHRASES — +0.32 strict)
+
+**Commits:** code (decompose::query_relations, engine intent) + docs
+
+### What changed
+- `decompose::query_relations(query)`: scan the question for the ~180-entry
+  RELATIONAL_PHRASES map (the same map the decomposer uses, so relations align
+  with the graph vocabulary), filtering degenerate copula/have phrases
+  ("is"/"was"/"has"/"had"). Exported via lib.rs. Unit test added.
+- `ghrr_pathhd_signal`: intent now comes FIRST from `query_relations`, falling
+  back to content-word→relation-name matching, then most-frequent-relation.
+- Reverted: bare "located"/"located in" RELATIONAL_PHRASES additions — neutral
+  metrics but ~2× decomposition cost (more triples per graph).
+
+### Bench (full 318, STRICT, stable 3 runs)
+| metric | v18 | v18b (intent upgrade) | Δ |
+|---|---|---|---|
+| candidate_exact | 15.72% | **16.04%** | +0.32 |
+| candidate_f1 | 17.61% | **17.92%** | +0.31 |
+| strict_recall | 54.72% | 54.72% | 0 |
+
+Latency: ~350ms under current machine load (loadavg 6.7; runc/containerd
+250-600% CPU) — measured noise vs the ~153ms idle runs earlier; NOT a code
+regression (PathHD=0 shows same ~310ms under load). Verify under idle.
+
+### Cumulative (deep-review baseline → now)
+exact 13.84 → **16.04%** (+2.20) · f1 ~16.0 → **17.92%** (+1.9) · substring
+24.84 → 25.16% peak. All from: strict metrics + QNP + PathHD + intent upgrade.
+
+---
+
 ## 2026-08-12 — v18 (T1.18e PathHD relation-schema retrieval — FIRST NEW-SIGNAL WIN)
 
 **Commits:** new crate `tle-ghrr` + engine integration + workspace + docs

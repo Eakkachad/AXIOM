@@ -431,6 +431,33 @@ pub fn is_question_stop_word(word: &str) -> bool {
         | "will" | "would" | "could" | "should" | "may" | "might" | "must" | "shall" | "you")
 }
 
+/// Extract the relation(s) a question implies, by scanning the question for
+/// the RELATIONAL_PHRASES vocabulary (the same map the decomposer uses, so the
+/// returned relations align with the graph's relation vocabulary). Used as the
+/// PathHD query relation INTENT.
+pub fn query_relations(query: &str) -> Vec<String> {
+    let lower = query.to_lowercase();
+    let mut found: Vec<(usize, String)> = Vec::new();
+    for (phrase, relation) in RELATIONAL_PHRASES {
+        // skip degenerate copula/have phrases ("is", "was", "has", "had", ...)
+        // — they carry no query-intent signal
+        if matches!(*relation, "is" | "are" | "was" | "were" | "has" | "have" | "had") {
+            continue;
+        }
+        if let Some(pos) = find_word_boundary(&lower, phrase) {
+            found.push((pos, relation.to_string()));
+        }
+    }
+    found.sort_by_key(|(pos, _)| *pos);
+    let mut out: Vec<String> = Vec::new();
+    for (_, r) in found {
+        if !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
+}
+
 /// Rank answer candidates for a query from a set of candidate strings.
 ///
 /// The score combines exact question-word overlap (tokens length >= 4) with a
@@ -929,6 +956,16 @@ fn extract_parent_names(raw_object: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_relations_extracts_intent() {
+        let r = query_relations("Who composed the ballet Swan Lake?");
+        assert!(r.contains(&"composed".to_string()) || r.contains(&"created_by".to_string()), "got {r:?}");
+        let r2 = query_relations("Who was the founder of Microsoft?");
+        assert!(r2.iter().any(|x| x == "founded_by" || x == "founder_of"), "got {r2:?}");
+        let r3 = query_relations("How many episodes were made?");
+        assert!(r3.is_empty(), "no relational phrase expected, got {r3:?}");
+    }
 
     #[test]
     fn decomposes_relative_clause_into_chain() {

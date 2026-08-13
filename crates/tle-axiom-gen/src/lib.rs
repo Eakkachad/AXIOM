@@ -23,7 +23,7 @@ pub mod search;
 pub mod semantic;
 pub mod templates;
 
-pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy};
+pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy, query_relations};
 pub use engine::{AxiomGen, GenerationResult};
 pub use graph::{KnowledgeGraph, Triple};
 pub use energy::EnergyConfig;

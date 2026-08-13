@@ -1046,36 +1046,40 @@ impl AxiomGen {
         use tle_ghrr::{GhrrCodebook, GhrrVector, RelationSchemaIndex};
         use std::collections::HashMap;
 
-        let _ = query; // intent derived from content_words (relation names)
         let mut codebook = GhrrCodebook::new(0xA5E1_2016_1D12_5EED);
         let mut index = RelationSchemaIndex::new();
         for r in &graph.relations {
             index.count(r);
         }
 
-        // Query relation intent: content words → graph relation names
-        // (substring/prefix match; "composed" ⊂ "composed_by").
-        let mut intent_rels: Vec<String> = Vec::new();
-        for w in content_words {
-            if w.len() < 4 {
-                continue;
-            }
-            for r in &graph.relations {
-                let rn = r.replace('_', " ");
-                let rw = r.replace('_', "");
-                if rn.contains(w.as_str())
-                    || rw.contains(w.as_str())
-                    || w.as_str().starts_with(&rn)
-                    || rn.starts_with(w.as_str())
-                {
-                    if !intent_rels.contains(r) {
-                        intent_rels.push(r.clone());
+        // Query relation intent: FIRST scan the question for the
+        // RELATIONAL_PHRASES vocabulary (aligns with the graph's relation
+        // names, e.g. "composed" / "was written by" → "written_by").
+        let mut intent_rels: Vec<String> = crate::decompose::query_relations(query);
+        if intent_rels.is_empty() {
+            // fallback 1: content words → graph relation names (substring/
+            // prefix match; "composed" ⊂ "composed_by").
+            for w in content_words {
+                if w.len() < 4 {
+                    continue;
+                }
+                for r in &graph.relations {
+                    let rn = r.replace('_', " ");
+                    let rw = r.replace('_', "");
+                    if rn.contains(w.as_str())
+                        || rw.contains(w.as_str())
+                        || w.as_str().starts_with(&rn)
+                        || rn.starts_with(w.as_str())
+                    {
+                        if !intent_rels.contains(r) {
+                            intent_rels.push(r.clone());
+                        }
                     }
                 }
             }
         }
         if intent_rels.is_empty() {
-            // fallback: relation most frequent among query entities' triples
+            // fallback 2: relation most frequent among query entities' triples
             let mut freq: HashMap<usize, usize> = HashMap::new();
             for &qe in query_entities {
                 for &ti in graph.adjacency_of(qe) {
