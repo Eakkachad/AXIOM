@@ -5,6 +5,30 @@
 
 ---
 
+## 2026-08-12 — v18c (D3 gated PPR — negative, env-gated off)
+
+### What changed
+- `graph.rs::personalized_pagerank_query_aware`: QASA-style lexical gate on the
+  personalized walk (`gate[v]^γ`, global PPR ungated). Wired in `extract_answer`
+  via `AXIOM_W_GATE` (default off).
+
+### Bench (full 318, STRICT)
+Sweep GATE 0.3/0.5 × GAMMA 0.5/1.0: exact 16.04→**15.72/15.41%** (regress),
+f1→17.61%. The gate cuts PPR for exactly the buried golds (their fact text
+lacks query words) and drifts to surface-overlap nodes — same root cause as
+D1/D2/VSA-boost/ADJ. **Result: negative, kept env-gated off.**
+
+### Pattern locked in
+Across 5 negative experiments (D1 typed, D2 conditional count, VSA-boost,
+ADJ, D3 gate), the ONLY wins are signals that ADD genuinely new information
+(QNP gate, PathHD relation-schema, PathHD intent map). Everything that
+re-weights/re-derives from existing query-connectivity or lexical-overlap
+signals is neutral or regresses. Future work should focus on (a) more
+relation-schema signal depth (PathHD plan BFS, multi-hop paths), (b)
+decomposition so golds connect properly, (c) exclusion-cue intent (C1).
+
+---
+
 ## 2026-08-12 — v18b (PathHD intent upgrade via RELATIONAL_PHRASES — +0.32 strict)
 
 **Commits:** code (decompose::query_relations, engine intent) + docs

@@ -621,7 +621,40 @@ impl AxiomGen {
         // M3 (hub debias via π_q/π ratio) without hurting recall/substring.
         let w_ppr = weight_env("AXIOM_W_PPR", 0.3);
         let ppr_scores: Vec<f32> = if w_ppr > 0.0 {
-            graph.personalized_pagerank(query_entities, 60)
+            // T1.18g D3 query-aware PPR gate (env AXIOM_W_GATE, default off).
+            // QASA-style gate σ[v] = lexical overlap of query content words in
+            // the entity's fact text, normalized to [0,1]; gates the PPR walk
+            // mass into v by σ[v]^γ so it drifts toward question-relevant
+            // nodes instead of unrelated hubs. Never VSA cosine (noise).
+            let w_gate = weight_env("AXIOM_W_GATE", 0.0);
+            if w_gate > 0.0 {
+                let gamma = weight_env("AXIOM_W_GATE_GAMMA", 0.5);
+                let mut gate = vec![0.0f32; graph.entities.len()];
+                let mut max_ov = 0.0f32;
+                for (i, _) in graph.entities.iter().enumerate() {
+                    let mut s = String::new();
+                    for &ti in graph.adjacency_of(i) {
+                        let t = &graph.triples[ti];
+                        let rel = graph.relations.get(t.relation_id).map(|x| x.as_str()).unwrap_or("");
+                        let other = if t.subject_id == i { t.object_id } else { t.subject_id };
+                        s.push_str(rel);
+                        s.push(' ');
+                        s.push_str(&graph.entity_name(other).to_lowercase());
+                        s.push(' ');
+                    }
+                    let ov = content_words.iter().filter(|w| s.contains(w.as_str())).count() as f32;
+                    gate[i] = ov;
+                    max_ov = max_ov.max(ov);
+                }
+                if max_ov > 0.0 {
+                    for g in gate.iter_mut() {
+                        *g /= max_ov;
+                    }
+                }
+                graph.personalized_pagerank_query_aware(query_entities, 60, Some(&gate), gamma)
+            } else {
+                graph.personalized_pagerank(query_entities, 60)
+            }
         } else {
             Vec::new()
         };

@@ -316,6 +316,90 @@ impl KnowledgeGraph {
         scores
     }
 
+    /// Query-aware personalized PageRank (T1.18g, QASA-style gate).
+    ///
+    /// Same relative-PPR hub-corrected signal as [`Self::personalized_pagerank`],
+    /// but the PERSONALIZED walk's mass into each node `v` is gated by
+    /// `gate[v].powf(gamma)` (QASA arXiv:2606.30133: `σ(v)=max(cos(e_v,e_q),0)`
+    /// — here a deterministic LEXICAL proxy, never VSA cosine). The global
+    /// PageRank baseline is ungated (so hub correction still holds). The gate
+    /// makes the walk drift toward nodes whose evidence discusses the question,
+    /// instead of diffusing into unrelated hubs.
+    pub fn personalized_pagerank_query_aware(
+        &self,
+        seeds: &[usize],
+        iterations: usize,
+        gate: Option<&[f32]>,
+        gamma: f32,
+    ) -> Vec<f32> {
+        let n = self.entities.len();
+        if n == 0 || seeds.is_empty() {
+            return vec![0.0; n];
+        }
+        let c = 0.85f32;
+        let mut out_degree = vec![0usize; n];
+        for t in &self.triples {
+            out_degree[t.subject_id] += 1;
+            out_degree[t.object_id] += 1;
+        }
+        let mut neighbors: Vec<Vec<usize>> = (0..n).map(|_| Vec::new()).collect();
+        for t in &self.triples {
+            neighbors[t.subject_id].push(t.object_id);
+            neighbors[t.object_id].push(t.subject_id);
+        }
+        let step = |pi: &[f32]| -> Vec<f32> {
+            let mut next = vec![0.0f32; n];
+            for u in 0..n {
+                let deg = out_degree[u].max(1);
+                let share = pi[u] / deg as f32;
+                for &v in &neighbors[u] {
+                    next[v] += share;
+                }
+            }
+            next
+        };
+        // Global PageRank (ungated baseline for hub correction).
+        let mut pi_global = vec![1.0 / n as f32; n];
+        for _ in 0..iterations {
+            let walked = step(&pi_global);
+            for i in 0..n {
+                pi_global[i] = (1.0 - c) / n as f32 + c * walked[i];
+            }
+        }
+        // Personalized PageRank with the query-aware gate on the walk.
+        let mut pi_q = vec![0.0f32; n];
+        let seed_mass = 1.0 / seeds.len() as f32;
+        for &s in seeds {
+            pi_q[s] = seed_mass;
+        }
+        for _ in 0..iterations {
+            let mut next = vec![0.0f32; n];
+            for u in 0..n {
+                let deg = out_degree[u].max(1);
+                let share = pi_q[u] / deg as f32;
+                for &v in &neighbors[u] {
+                    let w = match gate {
+                        Some(g) => g[v].max(0.0).powf(gamma),
+                        None => 1.0,
+                    };
+                    next[v] += share * w;
+                }
+            }
+            for i in 0..n {
+                let teleport = if seeds.contains(&i) { seed_mass } else { 0.0 };
+                pi_q[i] = (1.0 - c) * teleport + c * next[i];
+            }
+        }
+        let mut scores = vec![0.0f32; n];
+        let min_p = 1e-6f32;
+        for i in 0..n {
+            let a = pi_q[i].max(min_p);
+            let b = pi_global[i].max(min_p);
+            scores[i] = (a / b).ln();
+        }
+        scores
+    }
+
     /// Get the name of a relation by ID.
     pub fn relation_name(&self, id: usize) -> &str {
         &self.relations[id]

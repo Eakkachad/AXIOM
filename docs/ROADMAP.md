@@ -531,11 +531,18 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** — | **Result:** —
 
 ### T1.18g D3 QASA-style query-aware PPR gate (tertiary)
-- [ ] Status: pending · Priority: P2 · Effort: 0.5 day · Depends: T1.18c/d
+- [x] Status: done (negative → env-gated off) · Priority: P2 · Effort: 0.5 day · Depends: T1.18c/d
 - **Goal:** gate PPR mass-share by lexical query-overlap of `fact_texts[v]`
   (NOT VSA cosine), γ≈0.5-0.8 + CatRAG symbolic-anchor teleport ε=0.2.
 - **File:** `crates/tle-axiom-gen/src/graph.rs` (`personalized_pagerank`)
-- **Status:** — | **Result:** —
+- **Status:** MEASURED NEGATIVE (env `AXIOM_W_GATE`, default off).
+  `personalized_pagerank_query_aware` + lexical gate σ[v]=overlap(query content
+  words, fact_text[v]) normalized, gated walk mass by σ[v]^γ. Sweep GATE
+  0.3/0.5 × GAMMA 0.5/1.0: exact 16.04→15.72/15.41%, f1→17.61% — regresses.
+  The gate reduces PPR for exactly the buried golds (their fact text lacks
+  query words) and drifts toward surface-overlap nodes. Same root cause as
+  D1/D2: query-derived lexical signals help noise as much as golds.
+  **Result:** negative, kept env-gated off (infra: gated PPR method)
 
 ---
 
