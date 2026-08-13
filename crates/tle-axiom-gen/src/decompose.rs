@@ -458,6 +458,33 @@ pub fn query_relations(query: &str) -> Vec<String> {
     out
 }
 
+/// Does the question contain an EXCLUSION/CONTRAST cue (NegEx-style)? If so,
+/// the entities named in the question are REFERENCES (the answer is the OTHER
+/// one), never the answer themselves. Examples: "Buddy Holly ... Who was the
+/// other one?", "besides X", "apart from X", "two of the three musicians".
+/// High-precision cue lexicon — only fires on strong signals.
+pub fn has_exclusion_cue(query: &str) -> bool {
+    let lower = query.to_lowercase();
+    const CUES: &[&str] = &[
+        "the other", "other than", "other one", "who was the other",
+        "besides", "apart from", "except", "except for", "excluding",
+        "one of the", "two of the", "three of the", "four of the",
+        "alongside", "as well as",
+    ];
+    for cue in CUES {
+        if find_word_boundary(&lower, cue).is_some() {
+            return true;
+        }
+    }
+    // "not X but Y" contrast pattern
+    let has_not = find_word_boundary(&lower, "not").is_some();
+    let has_but = find_word_boundary(&lower, "but").is_some();
+    if has_not && has_but {
+        return true;
+    }
+    false
+}
+
 /// Rank answer candidates for a query from a set of candidate strings.
 ///
 /// The score combines exact question-word overlap (tokens length >= 4) with a

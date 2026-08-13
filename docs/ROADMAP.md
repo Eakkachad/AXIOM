@@ -522,13 +522,19 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   **Result: +0.95pt strict cumulative (PathHD signal + intent upgrade)**
 
 ### T1.18f C1/C2 Reference suppression (exclusion cues + query-focus)
-- [ ] Status: pending · Priority: P2 · Effort: 1-2 days · Depends: T1.18b
+- [x] Status: C1 done (neutral, env-gated off) · Priority: P2 · Effort: 1-2 days · Depends: T1.18b
 - **Goal:** complement QNP: C1 NegEx-style exclusion-cue detection ("the other
   one", "besides", "apart from", "other than") → full penalty on named anchors;
   C2 query-focus classifier (Identity default; Anchor on possessive/of-PP/"for
   X and Y") → winner must have has_struct and not be a named anchor.
 - **File:** `crates/tle-axiom-gen/src/engine.rs` + `decompose.rs`
-- **Status:** — | **Result:** —
+- **Status:** C1 BUILT + NEUTRAL (env `AXIOM_V2_EXCL`, default off). 
+  `has_exclusion_cue` (NegEx-style cue lexicon, incl. "two of the three" +
+  not-but pattern) + full penalty on query-named entities. Only **2 exclusion
+  questions in the whole dev set**: 1 is the Buddy Holly failure (cue fires
+  correctly, anchor suppressed) but the gold "Richie Valens" scores too low to
+  win regardless — deep-rank, not anchor-penalty. **Result: correct mechanism,
+  ~zero coverage on this dataset; kept off.**
 
 ### T1.18g D3 QASA-style query-aware PPR gate (tertiary)
 - [x] Status: done (negative → env-gated off) · Priority: P2 · Effort: 0.5 day · Depends: T1.18c/d

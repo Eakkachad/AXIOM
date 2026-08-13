@@ -661,6 +661,9 @@ impl AxiomGen {
         // Raw per-candidate signals, captured for both scoring modes.
         // (id, name, conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named)
         let mut cands: Vec<(usize, String, f32, f32, f32, f32, f32, f32, f32, bool)> = Vec::new();
+        // T1.18h C1 exclusion-cue flag (computed once per question).
+        let w_excl = weight_env("AXIOM_V2_EXCL", 0.0);
+        let excl_cue = w_excl > 0.0 && crate::decompose::has_exclusion_cue(query);
         // T1.13 MDL differenced tiebreak (env AXIOM_V1_MDL, default off).
         // For each candidate, Δ(e) = shingle_cover(q, name) − shingle_cover(q,
         // facts(e)): how much MORE the query is explained by the entity's
@@ -761,8 +764,18 @@ impl AxiomGen {
             // answer must be connected to the question's entities. Measured on
             // the STRICT metric: exact 13.84→14.47% (+0.63, stable 3 runs).
             let qp_cond = weight_env("AXIOM_V1_QNP", 1.0);
+            // T1.18h C1 exclusion-cue (env AXIOM_V2_EXCL, default off): when
+            // the question has an exclusion/contrast cue ("the other one",
+            // "besides X", "apart from X", "two of the three"), EVERY
+            // query-named entity is a reference/anchor — the answer is the
+            // OTHER — so they get the full penalty regardless of intent or
+            // connectivity. Harder than QNP (which needs conn==0 && hop2==0);
+            // Buddy Holly (conn=0, hop2>0) escapes QNP's mild penalty but must
+            // not survive an exclusion question.
             let query_penalty = if is_query_named {
-                if qp_cond > 0.0 && conn_avg == 0.0 && hop2_avg == 0.0 {
+                if (qp_cond > 0.0 && conn_avg == 0.0 && hop2_avg == 0.0)
+                    || (excl_cue && w_excl > 0.0)
+                {
                     qp_full
                 } else {
                     match intent {
