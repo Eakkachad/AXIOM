@@ -155,6 +155,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // ── factual question ───────────────────────────────────────────────
+        // fast path: "what/who is X" → answer the direct is/are fact cleanly
+        // (avoids over-chaining "A sun is a star, that is An earth orbits a sun")
+        let mut answered = false;
+        for prefix in ["what is ", "what's ", "who is ", "what was ", "what are ", "who was "] {
+            if let Some(subj) = lower.strip_prefix(prefix) {
+                let subj = subj.trim().trim_matches('?').trim();
+                let subj = subj
+                    .strip_prefix("the ")
+                    .or_else(|| subj.strip_prefix("a "))
+                    .unwrap_or(subj);
+                if let Some(sid) = graph.graph.entity_id(subj) {
+                    for t in &graph.graph.triples {
+                        if t.subject_id == sid {
+                            let r = graph.graph.relation_name(t.relation_id);
+                            if r == "is" || r == "is_a" || r == "are" || r == "has" || r == "has_a" {
+                                println!("  {} is {}.", capitalize(subj), graph.graph.entity_name(t.object_id));
+                                println!("  [{:?}]", start.elapsed());
+                                answered = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if answered {
+                    break;
+                }
+            }
+        }
+        if answered {
+            continue;
+        }
+        // 1-hop fast path: "what does X <verb>?" → direct object (no over-chain)
+        for subj_prefix in ["what does ", "what do ", "what did ", "who does ", "which "] {
+            if let Some(rest) = lower.strip_prefix(subj_prefix) {
+                let words: Vec<&str> = rest.split_whitespace().collect();
+                let subj = words
+                    .first()
+                    .map(|w| w.trim_matches(|c: char| c == ',' || c == '?'))
+                    .unwrap_or("");
+                if let Some(sid) = graph.graph.entity_id(subj) {
+                    for t in &graph.graph.triples {
+                        if t.subject_id == sid {
+                            let r = graph.graph.relation_name(t.relation_id);
+                            let o = graph.graph.entity_name(t.object_id);
+                            println!("  {} {} {}.", capitalize(subj), r, o);
+                            println!("  [{:?}]", start.elapsed());
+                            answered = true;
+                            break;
+                        }
+                    }
+                }
+                if answered {
+                    break;
+                }
+            }
+        }
+        if answered {
+            continue;
+        }
+
         let gen = graph.generate(&trimmed);
         if gen.path_length >= 1 && !gen.sentence.is_empty() {
             println!("  {}", gen.sentence);
@@ -164,13 +224,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !gen.answer.is_empty() {
                 last_subject = Some(gen.answer.clone());
             }
-        } else if let Some(prev) = last_subject.take() {
-            // follow-up on the last topic
-            let gen = graph.generate(&format!("{} {}", prev, trimmed));
-            if gen.path_length >= 1 && !gen.sentence.is_empty() {
-                println!("  {}", gen.sentence);
+        } else if is_followup(&lower) {
+            // short continuation on the last topic ("and what about it?")
+            if let Some(prev) = last_subject.take() {
+                let gen = graph.generate(&format!("what is {}?", prev));
+                if gen.path_length >= 1 && !gen.sentence.is_empty() {
+                    println!("  {}", gen.sentence);
+                } else {
+                    println!("  I don't know more about \"{}\" yet.", prev);
+                }
             } else {
-                println!("  I don't know about \"{}\" yet. Teach me with /teach.", trimmed);
+                println!("  I don't know \"{}\" yet. Teach me with /teach.", trimmed);
             }
         } else {
             println!("  I don't know \"{}\" yet. Teach me with /teach, or ask me to generate with \"gen ...\".", trimmed);
@@ -180,11 +244,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// A short vague continuation that refers to the last topic.
+fn is_followup(lower: &str) -> bool {
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    words.len() <= 4
+        && (lower.contains("about it") || lower.contains("more") || lower.contains("tell me")
+            || lower.contains("what else") || lower.contains("and"))
+}
+
 /// Teach a fact to both the graph and the VSA-LM.
 fn teach(graph: &mut AxiomGen, lm: &mut VsaLm, fact: &str) {
     // extract triples the same way the pipeline does
+    let mut added = false;
     for d in tle_axiom_gen::decompose::decompose_sentence(fact, "") {
         graph.add_fact(&d.subject, &d.relation, &d.object);
+        added = true;
+    }
+    // fallback parse for verbs the decomposer doesn't know:
+    // "earth orbits the sun" → (earth, orbits, sun)
+    if !added {
+        let words: Vec<&str> = fact.split_whitespace().collect();
+        if words.len() >= 3 {
+            let subj = words[0].trim_matches(|c: char| c == ',');
+            let mut body: Vec<&str> = words[1..].to_vec();
+            // object = longest tail after the LAST preposition ("boils at 100
+            // degrees" → object "100 degrees"), else the last word
+            let mut obj_idx = words.len() - 1;
+            for i in (1..words.len() - 1).rev() {
+                if matches!(words[i], "at" | "in" | "on" | "by" | "from" | "to" | "for" | "with") {
+                    obj_idx = i + 1;
+                    break;
+                }
+            }
+            let obj = words[obj_idx..].join(" ").trim_matches('.').to_string();
+            body.truncate(obj_idx - 1); // relation = words[1..obj_idx]
+            let rel: String = body
+                .iter()
+                .filter(|w| !matches!(**w, "the" | "a" | "an"))
+                .map(|w| w.to_string())
+                .collect::<Vec<_>>()
+                .join("_");
+            if !subj.is_empty() && !obj.is_empty() && !rel.is_empty() {
+                graph.add_fact(subj, &rel, &obj);
+                println!("  (parsed: {} {} {})", subj, rel, obj);
+                added = true;
+            }
+        }
     }
     lm.learn(fact);
     graph.sync_into_vsa_lm(lm);
