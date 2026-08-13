@@ -153,6 +153,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let stdin = io::stdin();
     let mut last_subject: Option<String> = None;
+    // H2 turn memory: resolve pronouns ("it/they/that") → last discussed topic.
+    let mut mem = tle_afc::DeltaMem::new(2048);
 
     loop {
         eprint!("you> ");
@@ -170,6 +172,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let start = Instant::now();
         let lower = trimmed.to_lowercase();
+        // H2: resolve pronouns against the last discussed topic BEFORE intent
+        // handling, so "what is it?" continues the previous turn.
+        let mut resolved = mem.resolve_pronoun(&lower);
+        // word-boundary pronoun swap (handles "it?" / "that." / "they,")
+        if let Some(ls) = last_subject.clone() {
+            let words: Vec<String> = resolved.split_whitespace().map(|w| {
+                let bare = w.trim_matches(|c: char| !c.is_alphabetic());
+                if matches!(bare, "it" | "it's" | "that" | "they" | "them") {
+                    if let Some(s) = ls.split_whitespace().next() {
+                        w.replace(bare, s)
+                    } else {
+                        w.to_string()
+                    }
+                } else {
+                    w.to_string()
+                }
+            }).collect();
+            resolved = words.join(" ");
+        }
+        let question = if resolved != lower { &resolved } else { &lower };
 
         if trimmed == "/quit" || trimmed == "/exit" || trimmed == "/q" {
             println!("  Goodbye!");
@@ -266,7 +288,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // (avoids over-chaining "A sun is a star, that is An earth orbits a sun")
         let mut answered = false;
         for prefix in ["what is ", "what's ", "who is ", "what was ", "what are ", "who was "] {
-            if let Some(subj) = lower.strip_prefix(prefix) {
+            if let Some(subj) = question.strip_prefix(prefix) {
                 let subj = subj.trim().trim_matches('?').trim();
                 let subj = subj
                     .strip_prefix("the ")
@@ -279,6 +301,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if r == "is" || r == "is_a" || r == "are" || r == "has" || r == "has_a" {
                                 println!("  {} is {}.", capitalize(subj), graph.graph.entity_name(t.object_id));
                                 println!("  [{:?}]", start.elapsed());
+                                // H2: register the topic so "what is it?" resolves
+                                last_subject = Some(subj.to_string());
+                                mem.update_topic(subj);
                                 answered = true;
                                 break;
                             }
@@ -295,7 +320,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         // 1-hop fast path: "what does X <verb>?" → direct object (no over-chain)
         for subj_prefix in ["what does ", "what do ", "what did ", "who does ", "which "] {
-            if let Some(rest) = lower.strip_prefix(subj_prefix) {
+            if let Some(rest) = question.strip_prefix(subj_prefix) {
                 let words: Vec<&str> = rest.split_whitespace().collect();
                 let subj = words
                     .first()
@@ -322,7 +347,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        let gen = graph.generate(&trimmed);
+        let gen = graph.generate(question);
         if gen.path_length >= 1 && !gen.sentence.is_empty() {
             println!("  {}", gen.sentence);
             if !gen.reasoning.is_empty() {
@@ -330,6 +355,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if !gen.answer.is_empty() {
                 last_subject = Some(gen.answer.clone());
+                mem.update_topic(&gen.answer);
             }
         } else if is_followup(&lower) {
             // short continuation on the last topic ("and what about it?")
