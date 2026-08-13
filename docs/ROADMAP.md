@@ -605,6 +605,45 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 
 ---
 
+## TRACK 4 — Conversational (Phase B: hybrid chat, 2026-08-12)
+
+> User direction (2026-08-12): "want to chat with it like an LLM" → do Phase B
+> (hybrid chat) first, then VSA-LM generalization (Phase A) later. AXIOM's
+> TriviaQA answer-selection has plateaued (16% exact, +2.2pt total from many
+> experiments); the conversational experience is a DIFFERENT pipeline (VSA-LM
+> generation + graph reasoning), and it already works as a demo.
+
+### T1.20 axiom-chat hybrid REPL
+- [x] Status: done · Priority: P0 · Effort: 0.5 day · Depends: none
+- **Goal:** a deterministic conversational experience combining (1) AxiomGen
+  multi-hop graph reasoning, (2) VSA-LM free-form generation, (3) casual
+  greetings/thanks/help, (4) honest "I don't know" (never hallucinates).
+  Fast startup (no 38s corpus build like tle-deepman).
+- **File:** `crates/tle-axiom-gen/src/bin/axiom-chat.rs`
+- **Status:** KEPT — works: teach "cats are animals"+"animals have hearts" →
+  "do cats have hearts?" → "Cats are animals, and Animals have hearts." (2-fact
+  chain + trace, ~1ms). gen mode (with `--corpus data/wiki_train.txt`) produces
+  fluent Wikipedia-style continuations (drifts after ~12 tokens — known VSA-LM
+  caveat). Casual handling + honest unknown. **Result:** working hybrid demo
+
+### T1.21 Grammar polish for chat answers (linearize articles)
+- [ ] Status: pending · Priority: P1 · Effort: 0.5-1 day · Depends: T1.20
+- **Goal:** "A sky is a blue" → "The sky is blue" (indefinite-article on
+  adjective/mass-noun objects; mid-sentence capitalization). The visible
+  "not-like-LLM" gap in the demo.
+- **File:** `crates/tle-axiom-gen/src/linearize.rs`
+- **Status:** — | **Result:** —
+
+### T1.22 VSA-LM generalization (Phase A — after B)
+- [ ] Status: pending · Priority: P1 · Effort: 1-3 months · Depends: T1.20/21
+- **Goal:** close the TEST 10.7% next-token generalization gap: vocabulary
+  5K→50K+, better VSA encoding (TBA bindings), larger corpus. Research
+  frontier — no published deterministic CPU-only LM at scale exists. This is
+  what would make AXIOM "chat like an LLM" in the open-ended sense.
+- **Status:** — | **Result:** —
+
+---
+
 ## TRACK 2 — System (Wikipedia scale + generation quality)
 
 Goal: usable conversational knowledge system
