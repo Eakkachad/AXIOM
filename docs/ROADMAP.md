@@ -627,12 +627,17 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   caveat). Casual handling + honest unknown. **Result:** working hybrid demo
 
 ### T1.21 Grammar polish for chat answers (linearize articles)
-- [ ] Status: pending · Priority: P1 · Effort: 0.5-1 day · Depends: T1.20
+- [x] Status: done (partial) · Priority: P1 · Effort: 0.5-1 day · Depends: T1.20
 - **Goal:** "A sky is a blue" → "The sky is blue" (indefinite-article on
   adjective/mass-noun objects; mid-sentence capitalization). The visible
   "not-like-LLM" gap in the demo.
 - **File:** `crates/tle-axiom-gen/src/linearize.rs`
-- **Status:** — | **Result:** —
+- **Status:** IMPROVED — colors/adjectives/mass-nouns no longer take an
+  indefinite article ("a blue"→"blue", "Water is liquid." perfect), first
+  clause subject is definite ("the sky is blue"; skips plurals/copula-less).
+  Remaining: mid-clause entity capitalization ("A sky"/"Animals" in chained
+  clauses) — entity case preserved from graph; KNOWN ISSUE "articles
+  imperfect" per AGENT_HANDOFF. **Result: visibly more natural; chat demo solid**
 
 ### T1.22 VSA-LM generalization (Phase A — after B)
 - [ ] Status: pending · Priority: P1 · Effort: 1-3 months · Depends: T1.20/21

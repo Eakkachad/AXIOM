@@ -106,12 +106,34 @@ fn article_for(word: &str) -> &'static str {
     }
 }
 
+/// Words that never take an indefinite article: mass nouns and
+/// adjective/color complements ("the sky is blue", "water is liquid").
+fn is_no_article(text: &str) -> bool {
+    matches!(
+        text,
+        "evaporation" | "water" | "information" | "knowledge" | "software"
+            | "equipment" | "research" | "blue" | "red" | "green" | "yellow"
+            | "black" | "white" | "purple" | "orange" | "pink" | "brown"
+            | "grey" | "gray" | "liquid" | "solid" | "gas" | "alive" | "dead"
+            | "hot" | "cold" | "warm" | "wet" | "dry" | "soft" | "hard"
+            | "heavy" | "light" | "old" | "new" | "big" | "small" | "large"
+    )
+}
+
+/// Does the entity text already begin with an article ("a/an/the")?
+fn starts_with_article(text: &str) -> bool {
+    text.split_whitespace()
+        .next()
+        .map(|w| matches!(w, "a" | "an" | "the" | "A" | "An" | "The"))
+        .unwrap_or(false)
+}
+
 /// Insert an appropriate article before a noun if it's first occurrence.
 fn with_article(entity: &str, seen: &mut HashSet<String>) -> String {
     let text = entity_to_text(entity);
 
-    // Mass nouns are not preceded by an indefinite article.
-    if matches!(text.as_str(), "evaporation" | "water" | "information" | "knowledge" | "software" | "equipment" | "research") {
+    // Mass nouns and adjectives/colors are not preceded by an indefinite article.
+    if is_no_article(&text) {
         seen.insert(text.clone());
         return text;
     }
@@ -178,12 +200,22 @@ pub fn linearize(
     let mut seen_entities: HashSet<String> = HashSet::new();
     let mut clauses: Vec<String> = Vec::new();
 
-    for triple in path_triples {
+    for (ci, triple) in path_triples.iter().enumerate() {
         let subject = &entities[triple.subject_id];
         let relation = &relations[triple.relation_id];
         let object = &entities[triple.object_id];
 
-        let subj_text = with_article(subject, &mut seen_entities);
+        // T1.21: the FIRST clause's subject is the topic we asked about →
+        // definite ("the sky is blue"), not indefinite ("a sky is blue").
+        // Skip plurals ("cats") and article-less words ("water").
+        let mut subj_text = with_article(subject, &mut seen_entities);
+        if ci == 0 && !is_no_article(&entity_to_text(subject)) && !starts_with_article(&subj_text) {
+            let w = entity_to_text(subject);
+            let plural = w.ends_with('s') && !w.ends_with("ss");
+            if !plural {
+                subj_text = format!("the {}", subj_text);
+            }
+        }
         let rel_text = relation_to_template(relation);
         let obj_text = with_article(object, &mut seen_entities);
 
