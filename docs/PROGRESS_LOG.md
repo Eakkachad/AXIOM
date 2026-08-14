@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-08-13 — HONEST ASSESSMENT & DOCUMENTATION REALIGNMENT
+
+**Commits:** docs (STATUS_VISION_ASSESSMENT.md + updates to AGENTS.md,
+AGENT_HANDOFF.md, PROJECT_SUMMARY.md, ROADMAP.md)
+
+### The honest verdict (recorded in docs/STATUS_VISION_ASSESSMENT.md)
+- **No scientific breakthrough.** After 20+ experiments + deep research
+  (katgpt forensic, literature, hypothesis tree G0-H8): KN-5 > VSA-LM is known
+  knowledge; GHRR noise-floor confirms known VSA limits. The project's real
+  output is **disciplined negative results** (pure VSA cannot reach LLM-level).
+- **Metric audit:** the reported 24.84% candidate was inflated ~2× (substring);
+  honest strict numbers: exact 16.04%, f1 17.92%, strict_recall 55.03%.
+- **Overclaim registry:** aspirational claims ("AI เปลี่ยนโลก", "Nobel-level",
+  "ชนะ LLM 8/10 dimensions", "VSA-LM = LM แบบใหม่") flagged as superseded in
+  AGENTS.md / AGENT_HANDOFF.md / PROJECT_SUMMARY.md.
+- **Vision reframed:** from "algebraic general intelligence (unproven, now
+  ruled out)" to **"deterministic domain-expert"** (fluent, no-hallucination,
+  reproducible, answers from supplied knowledge) — the achievable, honest target.
+
+### What this means for future work
+- TriviaQA exact 16% / strict_recall 55% is the honest baseline; further
+  selection work must use strict metrics + full bench.
+- axiom-chat (graph reasoning + KN-5 fluency + RAG + turn memory + grammar)
+  is the delivered "fluent domain-expert" — a viable product-level demo.
+- Bachelor-thesis viability: YES, framed as an empirical capability study with
+  rigorous negative results. World-class claim: NOT supported.
+
+---
+
 ## 2026-08-13 — v20 (Phase A: VSA-LM generalization baseline + 7 negative experiments)
 
 ### A1 baseline (vsalm-scale, wiki_train.txt, deterministic ✓)

@@ -6,6 +6,24 @@
 
 **Repository:** `topological-latent-engine/` (Rust, 10 crates, ~5,000 LOC)
 
+> **⚠️ 2026-08-13 REALITY CHECK (read before citing this draft):**
+> This draft contains aspirational claims that our own experiments later
+> qualified or ruled out. Ground truth = `docs/STATUS_VISION_ASSESSMENT.md`.
+> Specifically:
+> - "**first framework / novel math**" (Abstract, §claim table): TBA is a
+>   permutation-binding composition — known VSA operations (Kanerva 2009,
+>   Plate 2003) applied to text generation. Claim it as an *application*, not
+>   first/novel math.
+> - "**perplexity < 60**" / "**73% coherence**" (§Results): these were not
+>   reproduced at scale; the VSA-LM TEST next-token is ~11% on real held-out
+>   text, and non-neural generation caps at ~16-47% (∞-gram, 5T tokens).
+> - The honest publishable contribution is the **negative result**: pure VSA
+>   full-vocab decoding is bounded by the noise floor (d=4096, M=13K →
+>   distractor cos≈0.09), which is why VSA must be candidate-restricted
+>   (retrieval/shortlist) — not a config fix.
+> Revise all "first/novel/SOTA/competitive" claims to verified measurements
+> before any submission.
+
 ---
 
 ## Abstract

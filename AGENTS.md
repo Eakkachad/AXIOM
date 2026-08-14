@@ -5,6 +5,13 @@
 > It is the ONLY file guaranteed to be read; everything else must be reachable
 > from here.
 
+> **⚠️ READ THIS FIRST:** `docs/STATUS_VISION_ASSESSMENT.md` is the ground-truth
+> reality check (2026-08-13). It records the honest verdict: **no scientific
+> breakthrough** — the project empirically confirmed the limits of pure
+> deterministic VSA for language. Older docs may still contain aspirational/
+> overclaimed language ("AI เปลี่ยนโลก", "Nobel-level"); treat those as
+> superseded by the assessment doc.
+
 ## What AXIOM Is (30-second version)
 
 A **deterministic, zero-training, CPU-only** question-answering + reasoning system
@@ -12,8 +19,12 @@ in Rust (18 crates) built on hyperdimensional vectors (VSA, d=2048 random bipola
 over a knowledge graph. It ingests Wikipedia/evidence → decomposes to triples →
 ranks entities → answers. **Not** an LLM. No gradients, no sampling.
 
-**Current state (v18):** TriviaQA candidate 25.16% (substring) · exact 15.72%
-· f1 17.61% · entity recall 76.10% · evidence recall 99.69%. These are **evidence-ingested pipeline
+**Current state (v18b):** TriviaQA candidate 25.16% (substring) · exact 15.72%
+· f1 17.61% · entity recall 76.10% · evidence recall 99.69%. **Honest numbers
+(STRICT): exact 16.04%, f1 17.92%, strict_recall 55.03%** — see
+docs/STATUS_VISION_ASSESSMENT.md. These are **evidence-ingested pipeline
+diagnostics, NOT open-domain benchmark scores.** The active research gap: system
+*finds* the answer 76% of the time but *selects* it only ~16% (honest). These are **evidence-ingested pipeline
 diagnostics, NOT open-domain benchmark scores.** The active research gap: system
 *finds* the answer 76% of the time but *selects* it only 24.8% (~51pt gap).
 

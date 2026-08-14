@@ -270,7 +270,10 @@
 **Repo:** `/home/eggchad/eakject/research/Deep_Man/topological-latent-engine/`  
 **GitHub:** `https://github.com/Eakkachad/AXIOM.git`  
 **Language:** Rust (workspace, 16 crates)  
-**Vision:** สร้าง AI แบบใหม่ที่เปลี่ยนโลก — ไม่ต้อง train, เร็วกว่า LLM 1000×, ทุกคนสร้างเองได้
+**Vision (aspirational, superseded — see docs/STATUS_VISION_ASSESSMENT.md):** สร้าง AI แบบใหม่ที่เปลี่ยนโลก — ไม่ต้อง train, เร็วกว่า LLM 1000×, ทุกคนสร้างเองได้
+**Reality (2026-08-13):** งานนี้พิสูจน์ว่าเส้นทาง "pure VSA = general intelligence"
+**ไม่สำเร็จ** (noise-floor + literature) — vision reframed เป็น **deterministic
+domain-expert** (fluent, ไม่หลอน, reproducible, ตอบจากความรู้ที่ให้จริง)
 
 ---
 
@@ -649,12 +652,26 @@ Selection:      best_path = argmin_π E(π, query)
 
 ## IMPACT ASSESSMENT — IF AXIOM SUCCEEDS
 
-### What "Success" Means:
+> **⚠️ 2026-08-13 REALITY CHECK:** This section was written aspirationally and
+> is **superseded**. See `docs/STATUS_VISION_ASSESSMENT.md` for the honest
+> verdict: **no breakthrough; the "Nobel-level / game-changer" tiers were
+> empirically ruled out** (pure VSA cannot reach LLM-level generalization). The
+> realistic impact is a deterministic, no-hallucination, reproducible
+> domain-expert for privacy/education/offline niches.
+
+### What "Success" Means (original — superseded):
 - **Minimum viable:** TriviaQA 40%+, fluent paragraphs, auto-learns from web
 - **Game-changer:** TriviaQA 60%+, reasoning competitive with GPT-3.5, 50K tok/s
 - **Nobel-level:** Proves algebraic composition = general intelligence without training
 
-### Impact at Each Level:
+### What is ACTUALLY achievable (verified):
+- **Realistic target:** fluent domain-expert (graph reasoning + KN-5 fluency +
+  RAG over a supplied corpus) — deterministic, attributable, no hallucination.
+- **Theoretical wall (confirmed by our experiments + literature):** next-token
+  generalization for non-neural systems caps at ~16-47% (∞-gram at 5T tokens),
+  and open-ended generation is "harmful" per the ∞-gram paper. LLM-level chat
+  requires trained parameters.
+### Impact at Each Level: (original — superseded, aspirational)
 
 **Level 1: Useful Tool (TriviaQA 40%+, Week 12)**
 - Personal knowledge assistant that runs offline

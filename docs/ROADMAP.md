@@ -4,17 +4,21 @@
 > mark done + record new metrics. Status: `pending` → `in_progress` → `done` / `blocked`.
 > Last updated: 2026-08-12 (v16)
 
-## Current System State (baseline v16)
+## Current System State (baseline v18b)
+
+> ⚠️ Honest numbers (STRICT metrics) in **bold** — see
+> docs/STATUS_VISION_ASSESSMENT.md. Substring metrics are print-only diagnostics.
 
 | Metric | Value | Target |
 |--------|:---:|:---:|
-| candidate_answer_accuracy | **24.84%** | 40% |
-| answer_entity_recall | 76.10% | 80% |
-| substring_accuracy | 23.27% | 50% |
-| avg_latency | ~146ms (idle) | <200ms ✓ |
+| candidate_answer (substring) | 25.16% | 40% |
+| **candidate_exact** | **16.04%** | — |
+| **candidate_f1 (EM-or-F1≥0.7)** | **17.92%** | — |
+| answer_entity_recall (substring) | 76.10% | 80% |
+| **strict_recall** | **55.03%** | — |
+| avg_latency | ~100-350ms (load-dependent) | <200ms ✓ |
 | gen speed | 12K tok/s | 50K tok/s |
 | codebook memory | 62MB (32×) | <50MB |
-| evidence_answer_recall | 99.69% | 99.7% |
 
 ## RCA deliverable
 
