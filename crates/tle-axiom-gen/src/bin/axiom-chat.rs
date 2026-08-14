@@ -135,6 +135,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  corpus: learned {} sentences (VSA-LM + RAG index)", n);
         }
     }
+    // H5: load a sample of the Wikipedia evidence corpus into the RAG index.
+    // `--evidence <dir> [limit]` (default limit 3000 files)
+    if std::env::args().any(|a| a == "--evidence") {
+        let dir = std::env::args().nth(2).unwrap_or_default();
+        let limit: usize = std::env::args().nth(3).and_then(|v| v.parse().ok()).unwrap_or(3000);
+        let t0 = Instant::now();
+        let mut n_sent = 0usize;
+        let mut n_file = 0usize;
+        for entry in std::fs::read_dir(&dir).into_iter().flatten() {
+            if n_file >= limit {
+                break;
+            }
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if path.extension().map(|e| e != "txt").unwrap_or(true) {
+                continue;
+            }
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                for s in text.split(|c: char| matches!(c, '.' | '\n')) {
+                    let s = s.trim();
+                    let clean: &str = s.trim_start_matches(|c: char| matches!(c, '*' | '#' | '|' | '-' | '=' | ':' | ' '));
+                    if clean.len() >= 30
+                        && clean.len() < 300
+                        && !clean.contains("http")
+                        && !clean.contains("://")
+                        && !clean.contains('|')
+                        && !clean.contains('=')
+                        && !clean.contains('<')
+                        && !clean.contains('>')
+                        && !clean.contains('{')
+                        && clean.split_whitespace().count() >= 6
+                    {
+                        corpus.add(clean);
+                        n_sent += 1;
+                    }
+                }
+                n_file += 1;
+            }
+        }
+        println!("  evidence: {} sentences from {} files in {:.2?}", n_sent, n_file, t0.elapsed());
+    }
 
     // optional starter facts so a first chat isn't empty
     for fact in [("sky", "is", "blue"), ("blue", "has", "short_wavelength")] {
