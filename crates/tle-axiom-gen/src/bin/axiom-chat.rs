@@ -301,14 +301,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // ── conversational handling ────────────────────────────────────────
         if is_greeting(&lower) {
-            println!("  Hello! I'm AXIOM — a deterministic reasoning engine.");
-            println!("  I don't guess: teach me facts with /teach, then ask me questions.");
-            println!("  I can chain facts, e.g. teach \"cats are animals\" + \"animals have hearts\"");
-            println!("  then ask \"do cats have hearts?\"");
+            let g = vary(&lower, &[
+                "Hello! I'm AXIOM — a deterministic reasoning engine.".to_string(),
+                "Hey there! I'm AXIOM. I reason over facts, no guessing.".to_string(),
+                "Hi! I'm AXIOM — teach me facts with /teach and I'll reason from them.".to_string(),
+            ]);
+            println!("  {}", g);
             continue;
         }
         if is_thanks(&lower) {
-            println!("  You're welcome! Teach me more whenever you like.");
+            let g = vary(&lower, &[
+                "You're welcome! Teach me more whenever you like.".to_string(),
+                "Anytime! The more you teach, the more I can reason about.".to_string(),
+                "Glad to help. Determinism never forgets.".to_string(),
+            ]);
+            println!("  {}", g);
             continue;
         }
         if lower.contains("what can you do") || lower.contains("help") || lower.contains("who are you") {
@@ -340,7 +347,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if t.subject_id == sid {
                             let r = graph.graph.relation_name(t.relation_id);
                             if r == "is" || r == "is_a" || r == "are" || r == "has" || r == "has_a" {
-                                println!("  {} is {}.", capitalize(subj), graph.graph.entity_name(t.object_id));
+                                let obj = graph.graph.entity_name(t.object_id);
+                                let cap = capitalize(subj);
+                                let variants = vec![
+                                    format!("{} is {}.", cap, obj),
+                                    format!("{} — that's {}.", cap, obj),
+                                    format!("Simply put, {} is {}.", cap, obj),
+                                ];
+                                println!("  {}", vary(subj, &variants));
                                 println!("  [{:?}]", start.elapsed());
                                 // H2: register the topic so "what is it?" resolves
                                 last_subject = Some(subj.to_string());
@@ -509,6 +523,17 @@ fn teach(graph: &mut AxiomGen, lm: &mut VsaLm, fact: &str) {
     }
     lm.learn(fact);
     graph.sync_into_vsa_lm(lm);
+}
+
+/// H6: deterministic template variation — same seed → same phrasing, different
+/// subjects vary (reduces the canned feel without breaking reproducibility).
+fn vary(seed: &str, variants: &[String]) -> String {
+    let mut h = 0xcbf29ce484222325u64;
+    for b in seed.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    variants[(h as usize) % variants.len()].clone()
 }
 
 fn is_greeting(lower: &str) -> bool {
