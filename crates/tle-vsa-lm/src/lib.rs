@@ -15,12 +15,14 @@
 
 pub mod decode;
 pub mod engram;
+pub mod hippo;
 pub mod kn5;
 pub mod knowledge;
 pub mod reservoir;
 pub mod tba;
 pub mod vocab;
 
+pub use hippo::{HippoLegSMemory, HippoLegTMemory};
 pub use knowledge::KnowledgePrior;
 pub use reservoir::{ReservoirConfig, ReservoirMemory};
 
