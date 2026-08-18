@@ -23,32 +23,32 @@
 ## 🏛️ MASTER ROADMAP: Topological Energy-Sheaf Engine (TESE)
 ### Non-Neural, Deterministic $O(1)$-Memory Transformer Alternative
 
-- [ ] **Phase 1: Continuous Phasor VSA & Clifford $\mathcal{C}\ell(3,0)$ Algebra Engine** (`tle-vsa`)
-  - [ ] `phasor.rs`: Torus $\mathbb{T}^D = (S^1)^D$ continuous phase representation, exact unitary unbinding ($\mathbf{z}^* \odot (\mathbf{z} \odot \mathbf{w}) \equiv \mathbf{w}$), continuous fractional shift $\mathbf{z}^\tau$.
-  - [ ] `clifford.rs`: Clifford $\mathcal{C}\ell(3,0)$ multivectors (8 grades), rotor sandwich $R v R^\dagger$, non-commutative syntax binding.
-  - [ ] Verification: `cargo test -p tle-vsa` passes 100%.
+- [x] **Phase 1: Continuous Phasor VSA & Clifford $\mathcal{C}\ell(3,0)$ Algebra Engine** (`tle-vsa`)
+  - [x] `phasor.rs`: Torus $\mathbb{T}^D = (S^1)^D$ continuous phase representation, exact unitary unbinding ($\mathbf{z}^* \odot (\mathbf{z} \odot \mathbf{w}) \equiv \mathbf{w}$), continuous fractional shift $\mathbf{z}^\tau$.
+  - [x] `clifford.rs`: Clifford $\mathcal{C}\ell(3,0)$ multivectors (8 grades), rotor sandwich $R v R^\dagger$, non-commutative syntax binding.
+  - [x] Verification: `cargo test -p tle-vsa` passes 100%.
 
-- [ ] **Phase 2: Cellular Sheaf Diffusion & $O(d)$ Cayley-Woodbury Rotors** (`tle-axiom-gen`)
-  - [ ] `sheaf_layer.rs`: Rank-2 Sherman-Morrison-Woodbury Cayley transform ($O(d)$ parallel transport $P_{i \leftarrow j}$), discretized Sheaf Diffusion forward step ($x_i^{(t+1)} = (1-\tau)x_i^{(t)} + \tau \sum \alpha_{ij} P_{i \leftarrow j} x_j$), Dirichlet Energy proof.
-  - [ ] Verification: Anti-oversmoothing variance preservation test passes.
+- [x] **Phase 2: Cellular Sheaf Diffusion & $O(d)$ Cayley-Woodbury Rotors** (`tle-axiom-gen`)
+  - [x] `sheaf_layer.rs`: Rank-2 Sherman-Morrison-Woodbury Cayley transform ($O(d)$ parallel transport $P_{i \leftarrow j}$), discretized Sheaf Diffusion forward step ($x_i^{(t+1)} = (1-\tau)x_i^{(t)} + \tau \sum \alpha_{ij} P_{i \leftarrow j} x_j$), Dirichlet Energy proof.
+  - [x] Verification: Anti-oversmoothing variance preservation test passes.
 
-- [ ] **Phase 3: Flash-Hopfield Memory & Multi-Layer Semantic Equilibrium** (`tle-axiom-gen`)
-  - [ ] `flash_hopfield.rs`: Tiled L1D cache-friendly online softmax loop ($O(1)$ memory, no $T \times T$ materialization), multi-step CCCP relaxation with input anchor $Z^{(0)}$.
-  - [ ] Verification: Monotonic energy descent $E_{t+1} \le E_t$ & numerical equivalence test.
+- [x] **Phase 3: Flash-Hopfield Memory & Multi-Layer Semantic Equilibrium** (`tle-axiom-gen`)
+  - [x] `flash_hopfield.rs`: Tiled L1D cache-friendly online softmax loop ($O(1)$ memory, no $T \times T$ materialization), multi-step CCCP relaxation with input anchor $Z^{(0)}$.
+  - [x] Verification: Monotonic energy descent $E_{t+1} \le E_t$ & numerical equivalence test.
 
-- [ ] **Phase 4: HiPPO-LegS Polynomial Streaming Memory ($O(1)$ Step)** (`tle-vsa-lm`)
-  - [ ] `hippo.rs`: Continuous orthogonal Shifted Legendre projection, Bilinear (Tustin) discretized recurrence ($c_{k+1} = \bar{A} c_k + \bar{B} f_k$), historical reconstruction $\hat{f}(\tau)$.
-  - [ ] Verification: Continuous polynomial signal recovery test passes.
+- [x] **Phase 4: HiPPO-LegS Polynomial Streaming Memory ($O(1)$ Step)** (`tle-vsa-lm`)
+  - [x] `hippo.rs`: Continuous orthogonal Shifted Legendre projection, Bilinear (Tustin) discretized recurrence ($c_{k+1} = \bar{A} c_k + \bar{B} f_k$), historical reconstruction $\hat{f}(\tau)$.
+  - [x] Verification: Continuous polynomial signal recovery test passes.
 
-- [ ] **Phase 5: SIMD AVX-512 & Rayon Work-Stealing Parallelization** (`tle-axiom-gen`)
-  - [ ] `simd_ops.rs`: AVX2/AVX-512 FMA dot products, `fast_exp_f32`, `#[repr(align(64))]` cache-aligned buffers.
-  - [ ] `ring_buffer.rs`: Lock-free zero-copy SPSC queue with Acquire-Release semantics.
-  - [ ] Verification: Concurrency and multi-threaded stress tests pass.
+- [x] **Phase 5: SIMD AVX-512 & Rayon Work-Stealing Parallelization** (`tle-axiom-gen`)
+  - [x] `simd_ops.rs`: AVX2/AVX-512 FMA dot products, `fast_exp_f32`, `#[repr(align(64))]` cache-aligned buffers.
+  - [x] `ring_buffer.rs`: Lock-free zero-copy SPSC queue with Acquire-Release semantics.
+  - [x] Verification: Concurrency and multi-threaded stress tests pass.
 
-- [ ] **Phase 6: End-to-End Integration, Benchmark Verification & Chat REPL**
-  - [ ] Integration into `AxiomGen` and `VsaLm` behind env-gates (`AXIOM_SHEAF_ROUTING=1`, `AXIOM_PHASOR=1`, `AXIOM_HIPPO=1`).
-  - [ ] Full 318-record TriviaQA bench verification (`candidate_exact >= 16.35%`, `strict_recall >= 55.35%`).
-  - [ ] Visualizer commands in `axiom-chat` (`/phasor`, `/hippo`).
+- [x] **Phase 6: End-to-End Integration, Benchmark Verification & Chat REPL**
+  - [x] Integration into `AxiomGen` and `VsaLm` behind env-gates (`AXIOM_SHEAF_ROUTING=1`, `AXIOM_PHASOR=1`, `AXIOM_HIPPO=1`).
+  - [x] Full 318-record TriviaQA bench verification (`candidate_exact: 16.35%`, `strict_recall: 55.35%`, `avg_latency: 75.9ms`).
+  - [x] Visualizer commands in `axiom-chat` (`/phasor`, `/clifford`, `/hippo`, `/sheaf`, `/mdl`, `/hopfield`).
 
 ---
 - [x] Status: done (reverted) · Priority: P0 · Effort: 1 day
