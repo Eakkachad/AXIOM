@@ -559,11 +559,7 @@ impl AxiomGen {
         // discriminative predictions (Place/Person/Number/Temporal) — the
         // Entity (default) case is non-discriminative and blanket boosts regress.
         let w_typed_env = weight_env("AXIOM_W_TYPED", 0.0);
-        let predicted_type = if w_typed_env > 0.0 {
-            predict_answer_type(intent, query)
-        } else {
-            AnswerType::Entity
-        };
+        let predicted_type = predict_answer_type(intent, query);
         if w_typed_env > 0.0 && predicted_type != AnswerType::Entity {
             let mut bridges: Vec<usize> = query_entities.to_vec();
             bridges.extend(one_hop.iter().copied());
@@ -665,6 +661,7 @@ impl AxiomGen {
         let w_excl = weight_env("AXIOM_V2_EXCL", 0.0);
         let excl_cue = w_excl > 0.0 && crate::decompose::has_exclusion_cue(query);
         let letter_cue = crate::decompose::extract_letter_cue(query);
+        let w_type_gate = weight_env("AXIOM_W_TYPE_GATE", 0.0);
         let w_sheaf = weight_env("AXIOM_W_SHEAF", 0.0);
         // T1.13 MDL differenced tiebreak (env AXIOM_V1_MDL, default off).
         // For each candidate, Δ(e) = shingle_cover(q, name) − shingle_cover(q,
@@ -901,7 +898,42 @@ impl AxiomGen {
             } else {
                 1.0
             };
-            let total_penalty = query_penalty * letter_penalty;
+            let type_multiplier = if w_type_gate > 0.0 {
+                match predicted_type {
+                    AnswerType::Number => {
+                        if crate::answer_type::is_numeric_or_count_word(name) {
+                            2.0
+                        } else {
+                            0.15
+                        }
+                    }
+                    AnswerType::Temporal => {
+                        if crate::answer_type::is_temporal_value(name) {
+                            1.8
+                        } else {
+                            0.2
+                        }
+                    }
+                    AnswerType::Person => {
+                        if crate::answer_type::is_person_disqualifier(name) {
+                            0.1
+                        } else {
+                            1.0
+                        }
+                    }
+                    AnswerType::Place => {
+                        if crate::answer_type::is_numeric_or_count_word(name) {
+                            0.1
+                        } else {
+                            1.0
+                        }
+                    }
+                    _ => 1.0,
+                }
+            } else {
+                1.0
+            };
+            let total_penalty = query_penalty * letter_penalty * type_multiplier;
             let score = (conn_effective * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2

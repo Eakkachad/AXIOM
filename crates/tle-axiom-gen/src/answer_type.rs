@@ -123,6 +123,39 @@ pub fn is_temporal_value(name: &str) -> bool {
     ))
 }
 
+/// Does this string look like a number, digit, or spoken count word (e.g. "3", "three", "dozen")?
+pub fn is_numeric_or_count_word(name: &str) -> bool {
+    if is_numeric_value(name) {
+        return true;
+    }
+    let lower = name.trim().to_lowercase();
+    matches!(
+        lower.as_str(),
+        "zero" | "one" | "two" | "three" | "four" | "five" | "six" | "seven" | "eight" | "nine" | "ten"
+            | "eleven" | "twelve" | "thirteen" | "fourteen" | "fifteen" | "sixteen" | "seventeen"
+            | "eighteen" | "nineteen" | "twenty" | "thirty" | "forty" | "fifty" | "sixty" | "seventy"
+            | "eighty" | "ninety" | "hundred" | "thousand" | "million" | "billion" | "dozen"
+    )
+}
+
+/// Checks if an entity name is clearly disqualified from being a Person.
+pub fn is_person_disqualifier(name: &str) -> bool {
+    if is_temporal_value(name) || is_numeric_or_count_word(name) {
+        return true;
+    }
+    let lower = name.to_lowercase();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    words.iter().any(|&w| matches!(
+        w,
+        "records" | "record" | "album" | "song" | "music" | "band" | "orchestra"
+            | "corporation" | "inc." | "inc" | "ltd" | "ltd." | "company" | "llc"
+            | "university" | "college" | "school" | "institute" | "academy"
+            | "airport" | "station" | "railway" | "airline" | "hospital" | "park"
+            | "castle" | "palace" | "museum" | "monument" | "bridge" | "river"
+            | "house" | "dynasty" | "kingdom" | "republic" | "empire" | "state"
+    ))
+}
+
 /// For the person-producing relations, which side is the person?
 /// `Some(true)` = the person is the SUBJECT (e.g. "Tchaikovsky wrote X"),
 /// `Some(false)` = the person is the OBJECT (e.g. "X has author Y").

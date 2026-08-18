@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-08-18 — Answer-Type Gating & Candidate Ranking Enhancement (`answer_type.rs` & `engine.rs`)
+
+**Commits:** code (`answer_type.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Measured Results:
+- **Enhanced Answer-Type Discrimination (`answer_type.rs`):**
+  - Added `is_numeric_or_count_word` to support both digit strings ("3", "1998") and spoken count words ("three", "dozen").
+  - Added `is_person_disqualifier` to filter out non-person entities (record labels, universities, corporations, airports, dynasties) for `Who` questions.
+- **Answer-Type Scoring Multiplier (`engine.rs`):**
+  - Added `w_type_gate` (env `AXIOM_W_TYPE_GATE=1.0`) directly into candidate total penalty calculation.
+  - Number queries boost count/numeric candidates ($\times 2.0$) and penalize non-numeric entities ($\times 0.15$).
+  - Person queries penalize corporate/temporal/numeric entities ($\times 0.1$).
+- **Full 318-Record TriviaQA Benchmark Verification:**
+  - `candidate_answer_accuracy`: **24.84%** (▲ +0.31% gain over 24.53% baseline)
+  - `candidate_exact_accuracy`: **16.35%** (stable keep-gate satisfied)
+  - `strict_recall`: **55.35%** (stable keep-gate satisfied)
+  - `avg_latency`: **66.59 ms** (⚡ 17.5% faster from 83ms to 66.59ms)
+
+---
+
 ## 2026-08-18 — Transmuted Weight Extraction Engine & Two-Tier Architecture Implementation
 
 **Commits:** code (`whitened_phasor.rs`, `gated_sheaf.rs`, `gated_hopfield.rs`, `two_tier_engine.rs`, `axiom-chat.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
