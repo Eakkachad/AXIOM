@@ -16,6 +16,7 @@ pub mod answer_type;
 pub mod decompose;
 pub mod energy;
 pub mod engine;
+pub mod flash_hopfield;
 pub mod graph;
 pub mod hopfield;
 pub mod inference;
@@ -29,6 +30,7 @@ pub mod templates;
 
 pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy, query_relations};
 pub use engine::{AxiomGen, GenerationResult};
+pub use flash_hopfield::{FlashHopfieldConfig, FlashHopfieldLayer};
 pub use graph::{KnowledgeGraph, Triple};
 pub use energy::EnergyConfig;
 pub use search::{SearchConfig, ScoredPath};
