@@ -86,8 +86,9 @@ pub fn relation_is_temporal(relation: &str) -> bool {
     matches!(
         relation,
         "released" | "published" | "founded" | "won" | "born_in" | "born_on"
-            | "died_in" | "happened_in" | "founded_in" | "took_place_in" | "occurred_in"
-            | "released_in" | "published_in" | "created_in" | "developed_in"
+            | "died_in" | "died_on" | "happened_in" | "founded_in" | "took_place_in" | "occurred_in"
+            | "released_in" | "released_on" | "published_in" | "created_in" | "developed_in"
+            | "premiered_in" | "premiered_on"
     )
 }
 
@@ -105,6 +106,21 @@ pub fn is_numeric_value(name: &str) -> bool {
     let digits = cleaned.len();
     let alpha_digitish = stripped.len() >= digits;
     alpha_digitish && digits >= 1 && digits <= 4
+}
+
+/// Does this string look like a temporal expression (year, date, century, month)?
+pub fn is_temporal_value(name: &str) -> bool {
+    if is_numeric_value(name) {
+        return true;
+    }
+    let lower = name.to_lowercase();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    words.iter().any(|&w| matches!(
+        w,
+        "january" | "february" | "march" | "april" | "may" | "june"
+        | "july" | "august" | "september" | "october" | "november" | "december"
+        | "century" | "millennium" | "decade" | "era" | "bc" | "ad" | "bce" | "ce"
+    ))
 }
 
 /// For the person-producing relations, which side is the person?
@@ -141,7 +157,7 @@ pub fn matches_answer_type(
             relation_tail_kind(relation) == AnswerType::Person
         }
         AnswerType::Number => is_numeric_value(node_name),
-        AnswerType::Temporal => is_numeric_value(node_name) && relation_is_temporal(relation),
+        AnswerType::Temporal => is_temporal_value(node_name) && relation_is_temporal(relation),
         AnswerType::Entity => true,
     }
 }
@@ -167,7 +183,7 @@ pub fn matches_answer_type_oriented(
             None => false,
         },
         AnswerType::Number => is_numeric_value(node_name),
-        AnswerType::Temporal => is_numeric_value(node_name) && relation_is_temporal(relation),
+        AnswerType::Temporal => is_temporal_value(node_name) && relation_is_temporal(relation),
         AnswerType::Entity => false,
     }
 }
