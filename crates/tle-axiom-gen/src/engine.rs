@@ -693,7 +693,23 @@ impl AxiomGen {
             HashMap::new()
         };
         let mut mdls: HashMap<String, (f32, bool)> = HashMap::new();
-        for id in candidate_ids.into_iter() {
+        let prune_k = weight_env("AXIOM_PATHHD_PRUNE", 0.0) as usize;
+        let mut pruned_ids: Vec<usize> = candidate_ids.into_iter().collect();
+        if prune_k > 0 && w_pathhd > 0.0 && !pathhd_scores.is_empty() {
+            let max_score = pruned_ids
+                .iter()
+                .map(|id| pathhd_scores.get(id).copied().unwrap_or(-9999.0))
+                .fold(f32::NEG_INFINITY, f32::max);
+            if max_score > -100.0 {
+                pruned_ids.sort_by(|&a, &b| {
+                    let sa = pathhd_scores.get(&a).copied().unwrap_or(-9999.0);
+                    let sb = pathhd_scores.get(&b).copied().unwrap_or(-9999.0);
+                    sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                pruned_ids.truncate(prune_k);
+            }
+        }
+        for id in pruned_ids {
             let name = graph.entity_name(id);
             let words = name.split_whitespace().count();
             if words > 5 || words == 0 { continue; }

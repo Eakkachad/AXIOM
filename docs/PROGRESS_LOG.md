@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-08-18 — T1.15 PathHD Top-K Pruning Evaluation
+
+**Commits:** code (`crates/tle-axiom-gen/src/engine.rs`), docs (`docs/PROGRESS_LOG.md`, `docs/ROADMAP.md`, `docs/AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **T1.15 PathHD-style candidate pruning** implemented. Added `AXIOM_PATHHD_PRUNE` configuration to restrict the candidate answer set to the Top-K candidates sorted by PathHD GHRR path scores (`pathhd_scores`) before final linear sum scoring and argmax.
+- **Empirical Evaluation on the 318-record TriviaQA Bench:**
+  - `AXIOM_PATHHD_PRUNE=3`: candidate_exact_accuracy collapsed to **4.40%** (baseline 16.04%), candidate_f1 to **5.97%** (baseline 17.92%).
+  - `AXIOM_PATHHD_PRUNE=10`: exact to **9.75%**, f1 to **12.26%**.
+  - `AXIOM_PATHHD_PRUNE=30`: exact to **13.52%**, f1 to **16.04%**.
+  - `AXIOM_PATHHD_PRUNE=50`: exact to **15.72%**, f1 to **17.61%**.
+  - `AXIOM_PATHHD_PRUNE=0` (disabled/default): exact **16.04%**, f1 **17.92%** (stable baseline).
+- **Core Finding:**
+  - Hard pruning based solely on the PathHD score regresses accuracy. Unlike structured clean KBQA databases (where relation paths are exact), open-domain text-decomposed knowledge graphs have noisy/generic relations (like `mentions` or `is_related_to`).
+  - Pruning to a small Top-K throws away correct candidates that lack specific relation intent matches in VSA space.
+  - The optimal setting remains `AXIOM_PATHHD_PRUNE=0.0` (disabled), keeping the baseline intact. The pruning logic is preserved as env-gated configuration.
+
+---
+
 ## 2026-08-13 — HONEST ASSESSMENT & DOCUMENTATION REALIGNMENT
 
 **Commits:** docs (STATUS_VISION_ASSESSMENT.md + updates to AGENTS.md,

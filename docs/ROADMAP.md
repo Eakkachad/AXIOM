@@ -387,14 +387,14 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** — | **Result:** —
 
 ### T1.15 PathHD-style calibrated blockwise cosine + Top-K prune
-- [ ] Status: pending · Priority: P1 · Effort: 2 days · Depends: T1.11
+- [x] Status: done (negative -> env-gated, off) · Priority: P1 · Effort: 2 days · Depends: T1.11
 - **Goal:** port the published answer-selection pipeline closest to this gap
   (arXiv 2512.09369): GHRR-style non-commutative path hypervectors per candidate
   (order-sensitive, aligns with existing `HDV(π)=Σρⁱ(HDV(τᵢ))`), calibrated
   blockwise cosine to comparable scale, hard Top-K prune before final argmax.
   Veto-first (katgpt screening-007 lesson), env-gated.
 - **File:** `crates/tle-axiom-gen/src/engine.rs`
-- **Status:** — | **Result:** —
+- **Status:** IMPLEMENTED + MEASURED NEGATIVE (default OFF, env `AXIOM_PATHHD_PRUNE`). Pruning candidates based *only* on GHRR PathHD scores to Top-K (K=3/10/30/50) was evaluated on the full 318-record bench. K=3 collapsed candidate exact accuracy from 16.04% to 4.40% (f1 to 5.97%); K=50 reached 15.72% exact / 17.61% f1. The hard prune is lossy for text-decomposed graphs because generic relations like `mentions` or `is_related_to` score poorly in VSA space against specific query intents, pruning correct candidates. Keeps `AXIOM_PATHHD_PRUNE=0.0` as default. | **Result:** negative, kept env-gated off
 
 ### T1.16 CLR (mean)^M sigmoid reliability gate for near-ties (M2)
 - [ ] Status: pending · Priority: P2 · Effort: 0.5 day · Depends: T1.11
