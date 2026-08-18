@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-08-18 — Interactive Mathematical Tracing & Inspection in `axiom-chat`
+
+**Commits:** code (`axiom-chat.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **Interactive Mathematical Inspection Commands (`axiom-chat.rs`):**
+  - Added `/sheaf <e1> <e2>`: extracts subgraph paths connecting entities, evaluates Cellular Sheaf Laplacian ($\mathcal{L}_{\mathcal{F}} = \delta^T \delta$), solves Harmonic Extension, and prints the exact quadratic Dirichlet Energy $E(x)$ proof.
+  - Added `/mdl <context> | <candidate>`: computes algorithmic Shannon entropy, Normalized Compression Distance (NCD), and conditional description rate $\mathcal{H}_C(A | B)$ in bits/byte.
+  - Added `/hopfield <entity>`: demonstrates 1-step CCCP Log-Sum-Exp attractor recovery under noise.
+- **Verification:**
+  - Tested interactive REPL: taught 2-hop facts (*Alice was born in Kyoto*, *Kyoto is located in Japan*) $\to$ `/sheaf Alice Japan` proved $E(x) = 0.000000$ (Perfect Harmonic Consistency).
+
+---
+
 ## 2026-08-18 — Modern Continuous Hopfield Memory Attractor Recovery Integration
 
 **Commits:** code (`hopfield.rs`, `energy.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
