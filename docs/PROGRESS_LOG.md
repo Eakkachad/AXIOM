@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-08-18 — Initial Letter Cue Constraint Extraction in `decompose.rs` & `engine.rs`
+
+**Commits:** code (`decompose.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **Initial Letter Constraint (`decompose.rs`):**
+  - Added `extract_letter_cue(query: &str) -> Option<char>` to parse explicit single-letter constraints (e.g. `Which 'B' was the name...`, `What 'S' is the capital...`).
+  - Added severe penalty ($\times 0.05$) for candidates violating the requested initial letter, and bonus ($\times 1.5$) for matching candidates.
+- **Verification:**
+  - Full 318-record TriviaQA Bench: `candidate_exact: 16.35%`, `candidate_f1: 18.24%`, `strict_recall: 55.35%`, `avg_latency: 83.06 ms`. Stable keep-gate confirmed.
+
+---
+
 ## 2026-08-18 — Full Implementation of the 6-Phase Topological Energy-Sheaf Engine (TESE)
 
 **Commits:** code (`phasor.rs`, `clifford.rs`, `sheaf_layer.rs`, `flash_hopfield.rs`, `hippo.rs`, `simd_ops.rs`, `ring_buffer.rs`, `axiom-chat.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`, `breakthrough_transformer_replacement_blueprint.md`)

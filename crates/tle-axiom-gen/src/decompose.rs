@@ -531,6 +531,32 @@ pub fn has_exclusion_cue(query: &str) -> bool {
     false
 }
 
+/// Extracts single-letter initial constraint if explicitly requested in question.
+/// e.g. "Which 'B' was the name...", "Which `B` was...", "What 'S' is the...", "starts with the letter B"
+pub fn extract_letter_cue(query: &str) -> Option<char> {
+    let chars: Vec<char> = query.chars().collect();
+    let n = chars.len();
+    for i in 0..n {
+        if matches!(chars[i], '\'' | '`' | '"' | '‘' | '’' | '“' | '”') {
+            if i + 2 < n && matches!(chars[i + 2], '\'' | '`' | '"' | '‘' | '’' | '“' | '”') {
+                let candidate = chars[i + 1];
+                if candidate.is_ascii_alphabetic() {
+                    let prefix: String = chars[..i].iter().collect();
+                    let p_lower = prefix.to_lowercase();
+                    if p_lower.ends_with("which ")
+                        || p_lower.ends_with("what ")
+                        || p_lower.ends_with("letter ")
+                        || p_lower.ends_with("with ")
+                    {
+                        return Some(candidate.to_ascii_uppercase());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Rank answer candidates for a query from a set of candidate strings.
 ///
 /// The score combines exact question-word overlap (tokens length >= 4) with a
@@ -1415,5 +1441,13 @@ mod tests {
             "expected (Harry Potter, written_by, J. K. Rowling), got {:?}",
             facts_hp.iter().map(|f| (f.subject.as_str(), f.relation.as_str(), f.object.as_str())).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_extract_letter_cue() {
+        assert_eq!(extract_letter_cue("Which 'B' was the name of the mechanical shark?"), Some('B'));
+        assert_eq!(extract_letter_cue("What `S` is the capital of Chile?"), Some('S'));
+        assert_eq!(extract_letter_cue("Which letter 'K' starts the word?"), Some('K'));
+        assert_eq!(extract_letter_cue("Who is the president of France?"), None);
     }
 }

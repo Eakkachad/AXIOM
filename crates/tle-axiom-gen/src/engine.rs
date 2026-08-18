@@ -664,6 +664,7 @@ impl AxiomGen {
         // T1.18h C1 exclusion-cue flag (computed once per question).
         let w_excl = weight_env("AXIOM_V2_EXCL", 0.0);
         let excl_cue = w_excl > 0.0 && crate::decompose::has_exclusion_cue(query);
+        let letter_cue = crate::decompose::extract_letter_cue(query);
         let w_sheaf = weight_env("AXIOM_W_SHEAF", 0.0);
         // T1.13 MDL differenced tiebreak (env AXIOM_V1_MDL, default off).
         // For each candidate, Δ(e) = shingle_cover(q, name) − shingle_cover(q,
@@ -890,6 +891,17 @@ impl AxiomGen {
             } else {
                 conn_avg
             };
+            let letter_penalty = if let Some(lc) = letter_cue {
+                let first_char = name.trim().chars().next().map(|c| c.to_ascii_uppercase());
+                if first_char == Some(lc) {
+                    1.5
+                } else {
+                    0.05
+                }
+            } else {
+                1.0
+            };
+            let total_penalty = query_penalty * letter_penalty;
             let score = (conn_effective * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2
@@ -899,7 +911,7 @@ impl AxiomGen {
                 + ppr * w_ppr
                 + typed_avg * w_typed_env
                 + pathhd * w_pathhd
-                + sheaf_score * w_sheaf) * query_penalty;
+                + sheaf_score * w_sheaf) * total_penalty;
             if rrf_mode || conformal_mode {
                 cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {
