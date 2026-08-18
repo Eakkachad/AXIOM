@@ -193,6 +193,23 @@ impl HeteroHopfieldMemory {
     }
 }
 
+/// Constructs a Continuous Hopfield Network from HyperVector patterns.
+pub fn build_hopfield_from_hypervectors(vectors: &[&tle_vsa::HyperVector], beta: f64) -> ContinuousHopfield {
+    let patterns: Vec<Vec<f64>> = vectors
+        .iter()
+        .map(|hv| hv.as_slice().iter().map(|&v| v as f64).collect())
+        .collect();
+    ContinuousHopfield::new(&patterns, beta)
+}
+
+/// Snaps a query hypervector to its nearest memory pattern attractor via 1-step CCCP update.
+pub fn snap_to_attractor(query: &tle_vsa::HyperVector, hopfield: &ContinuousHopfield) -> tle_vsa::HyperVector {
+    let q_vec: Vec<f64> = query.as_slice().iter().map(|&v| v as f64).collect();
+    let retrieved = hopfield.update_step(&q_vec);
+    let snapped_values: Vec<f32> = retrieved.into_iter().map(|v| v as f32).collect();
+    tle_vsa::HyperVector::new(snapped_values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +236,19 @@ mod tests {
         let sim_p1: f64 = retrieved.iter().zip(p1.iter()).map(|(a, b)| a * b).sum();
 
         assert!(sim_p1 > 0.99, "1-step retrieval must snap to p1 attractor, got sim {}", sim_p1);
+    }
+
+    #[test]
+    fn test_snap_to_attractor_hypervector() {
+        let hv1 = tle_vsa::HyperVector::new(vec![1.0, 0.0, 0.0, 0.0]);
+        let hv2 = tle_vsa::HyperVector::new(vec![0.0, 1.0, 0.0, 0.0]);
+
+        let hopfield = build_hopfield_from_hypervectors(&[&hv1, &hv2], 25.0);
+
+        let noisy_q = tle_vsa::HyperVector::new(vec![0.9, 0.1, 0.05, 0.0]);
+        let snapped = snap_to_attractor(&noisy_q, &hopfield);
+
+        let sim = tle_vsa::cosine_similarity(&snapped, &hv1);
+        assert!(sim > 0.98, "HyperVector must snap to hv1, got cosine {}", sim);
     }
 }

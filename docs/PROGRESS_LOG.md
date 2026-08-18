@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-08-18 — Modern Continuous Hopfield Memory Attractor Recovery Integration
+
+**Commits:** code (`hopfield.rs`, `energy.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **Continuous Hopfield Attractor Snapping (`hopfield.rs`, `energy.rs`):**
+  - Added `build_hopfield_from_hypervectors` and `snap_to_attractor` to clean up composite hypervector noise via 1-step CCCP / attention update ($x^{t+1} = M \operatorname{softmax}(\beta M^T x^t)$).
+  - Integrated into `compute_energy` behind `AXIOM_W_HOPFIELD` (default 0.0).
+- **Benchmark Evaluation (Full 318-record TriviaQA Bench):**
+  - `AXIOM_W_HOPFIELD=1.0`: `exact_accuracy: 16.35%`, `f1_accuracy: 18.24%`, `strict_recall: 55.35%`, `entity_recall: 76.73%` (baseline preserved).
+  - Latency: 363.4 ms. All 91 unit tests pass.
+
+---
+
 ## 2026-08-18 — T1.19d Longest-Prefix Ordering & Temporal/Media Relational Extraction (KEPT +0.31 Exact, +0.63 F1)
 
 **Commits:** code (`decompose.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)

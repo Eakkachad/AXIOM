@@ -88,7 +88,20 @@ pub fn compute_energy(
     }
 
     let path_hdv = encode_path(path_triples, entities, relations, codebook);
-    let relevance = compute_relevance(&path_hdv, query_vector);
+    let w_hopfield = std::env::var("AXIOM_W_HOPFIELD").ok().and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
+    let relevance = if w_hopfield > 0.0 {
+        let mut seed_vecs: Vec<tle_vsa::HyperVector> = Vec::new();
+        for t in path_triples {
+            seed_vecs.push(codebook.get_or_insert(&entities[t.subject_id]).clone());
+            seed_vecs.push(codebook.get_or_insert(&entities[t.object_id]).clone());
+        }
+        let refs: Vec<&tle_vsa::HyperVector> = seed_vecs.iter().collect();
+        let hopfield = crate::hopfield::build_hopfield_from_hypervectors(&refs, 30.0);
+        let clean_path_hdv = crate::hopfield::snap_to_attractor(&path_hdv, &hopfield);
+        compute_relevance(&clean_path_hdv, query_vector)
+    } else {
+        compute_relevance(&path_hdv, query_vector)
+    };
     let consistency = compute_consistency(path_triples, entities, relations, codebook);
     let coherence = compute_coherence(path_triples, entities, relations, codebook);
     let confidence = compute_confidence(path_triples, entities, relations, triple_confidences);

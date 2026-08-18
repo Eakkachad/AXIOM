@@ -100,6 +100,9 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
+> - **Modern Continuous Hopfield Memory Attractor Recovery done:** End-to-end integration
+>   in `energy.rs` (`AXIOM_W_HOPFIELD`, default off) — performs 1-step CCCP attractor
+>   snapping on composite path hypervectors.
 > - **T1.19d done (KEPT):** Longest-prefix priority & media/temporal relation expansion —
 >   exact accuracy **16.04% → 16.35%** (+0.31), f1 **17.61% → 18.24%** (+0.63),
 >   strict recall **55.03% → 55.35%** (+0.32).
