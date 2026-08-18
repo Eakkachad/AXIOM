@@ -218,6 +218,20 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("releases", "releases"),
     ("uses the", "uses"),
     ("uses", "uses"),
+    ("written by", "written_by"),
+    ("written in", "written_in"),
+    ("directed by", "directed_by"),
+    ("played for", "played_for"),
+    ("played by", "played_by"),
+    ("portrayed by", "portrayed_by"),
+    ("painted by", "painted_by"),
+    ("invented by", "invented_by"),
+    ("discovered by", "discovered_by"),
+    ("built by", "built_by"),
+    ("produced by", "created_by"),
+    ("recorded by", "created_by"),
+    ("performed by", "played_by"),
+    ("composed by", "created_by"),
     ("made of", "made_of"),
     ("made from", "made_from"),
     ("comprised of", "consists_of"),
@@ -233,14 +247,10 @@ const RELATIONAL_PHRASES: &[(&str, &str)] = &[
     ("designed", "designed"),
     ("built", "built"),
     ("wrote", "wrote"),
-    ("written by", "written_by"),
-    ("written in", "written_in"),
-    ("composed by", "created_by"),
     ("composed", "composed"),
     ("released", "released"),
     ("published", "published"),
     ("won", "won"),
-    ("played for", "played_for"),
     ("played", "played"),
     ("became", "became"),
     ("contains", "contains"),
@@ -393,7 +403,9 @@ fn split_clauses(sentence: &str) -> Vec<String> {
             parts.push(current.trim().to_string());
             current.clear();
         }
-        if token.ends_with('.') {
+        let is_abbrev = (token.len() <= 2 && token.chars().next().map(|c| c.is_uppercase()).unwrap_or(false))
+            || matches!(lower.trim_end_matches('.'), "st" | "dr" | "mr" | "mrs" | "ms" | "prof" | "jr" | "sr" | "u.s" | "e.g" | "i.e");
+        if token.ends_with('.') && !is_abbrev {
             parts.push(current.trim().to_string());
             current.clear();
         }
@@ -692,6 +704,21 @@ pub fn decompose_sentence(sentence: &str, fallback_subject: &str) -> Vec<Decompo
         if let Some(pos) = subject.find(',') {
             let head = subject[..pos].trim();
             if !head.is_empty() { subject = head.to_string(); }
+        }
+        // T1.19c: If the subject contains a mid-clause copula (e.g. "Jurassic Park is a 1993 film"
+        // before predicate "directed by"), trim to the pre-copula entity ("Jurassic Park").
+        for copula in [" is ", " was ", " are ", " were "] {
+            if let Some(pos) = subject.find(copula) {
+                let head = subject[..pos].trim();
+                let head_canonical = canonical_subject(head);
+                if !head_canonical.is_empty()
+                    && !is_discardable(&head_canonical.to_lowercase())
+                    && is_entity_like(&head_canonical)
+                {
+                    subject = head_canonical;
+                    break;
+                }
+            }
         }
         // Strip a trailing copula verb from the subject (T1.10d subject
         // resolution): "Zadok the Priest were composed by ..." → subject
@@ -1342,6 +1369,33 @@ mod tests {
             nouns.iter().any(|n| n == "France"),
             "expected France, got {:?}",
             nouns
+        );
+    }
+
+    #[test]
+    fn subject_resolution_handles_mid_clause_copulas() {
+        let facts = decompose_sentence(
+            "Jurassic Park is a 1993 American science fiction adventure film directed by Steven Spielberg.",
+            "Jurassic Park",
+        );
+        assert!(
+            facts.iter().any(|f| f.subject == "Jurassic Park"
+                && f.relation == "directed_by"
+                && f.object == "Steven Spielberg"),
+            "expected (Jurassic Park, directed_by, Steven Spielberg), got {:?}",
+            facts.iter().map(|f| (f.subject.as_str(), f.relation.as_str(), f.object.as_str())).collect::<Vec<_>>()
+        );
+
+        let facts_hp = decompose_sentence(
+            "Harry Potter is a series of fantasy novels written by J. K. Rowling.",
+            "Harry Potter",
+        );
+        assert!(
+            facts_hp.iter().any(|f| f.subject == "Harry Potter"
+                && f.relation == "written_by"
+                && f.object.contains("Rowling")),
+            "expected (Harry Potter, written_by, J. K. Rowling), got {:?}",
+            facts_hp.iter().map(|f| (f.subject.as_str(), f.relation.as_str(), f.object.as_str())).collect::<Vec<_>>()
         );
     }
 }

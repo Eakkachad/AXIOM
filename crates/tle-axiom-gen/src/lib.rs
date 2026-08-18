@@ -17,10 +17,13 @@ pub mod decompose;
 pub mod energy;
 pub mod engine;
 pub mod graph;
+pub mod hopfield;
 pub mod inference;
 pub mod linearize;
+pub mod mdl;
 pub mod search;
 pub mod semantic;
+pub mod sheaf;
 pub mod templates;
 
 pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy, query_relations};

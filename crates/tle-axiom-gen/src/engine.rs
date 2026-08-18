@@ -865,9 +865,20 @@ impl AxiomGen {
                 ranked.push((score, name.to_string(), conn_avg, role_avg, ov, rel * rel_weight, heur));
                 if mdl_enabled {
                     let facts = fact_texts.get(&id).map(|s| s.as_str()).unwrap_or("");
-                    let cov_name = shingle_cover(&query_lower, &name.to_lowercase(), mdl_l);
-                    let cov_facts = shingle_cover(&query_lower, facts, mdl_l);
-                    mdls.insert(name.to_string(), (cov_name as f32 - cov_facts as f32, is_query_named));
+                    let use_rate = weight_env("AXIOM_USE_MDL_RATE", 0.0) > 0.0;
+                    let metric_val = if use_rate {
+                        let mut context = query_lower.clone();
+                        if !facts.is_empty() {
+                            context.push(' ');
+                            context.push_str(facts);
+                        }
+                        crate::mdl::conditional_description_rate(context.as_bytes(), name.as_bytes(), mdl_l) as f32
+                    } else {
+                        let cov_name = shingle_cover(&query_lower, &name.to_lowercase(), mdl_l);
+                        let cov_facts = shingle_cover(&query_lower, facts, mdl_l);
+                        cov_name as f32 - cov_facts as f32
+                    };
+                    mdls.insert(name.to_string(), (metric_val, is_query_named));
                 }
             }
         }

@@ -602,10 +602,12 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
   — first decomposition win; golds connect via typed relations without noise
 
 ### T1.19c Subject resolution for passive/relative clauses (T1.10e continuation)
-- [ ] Status: pending · Priority: P2 · Effort: 1 day · Depends: T1.19a/b
+- [x] Status: done · Priority: P2 · Effort: 1 day · Depends: T1.19a/b
 - **Goal:** LESSONS §2.5: correct subject anchoring so `*_by`/passive golds
   (Tchaikovsky, Spielberg) enter via strong relations with the RIGHT subject.
-- **Status:** — | **Result:** —
+- **File:** `crates/tle-axiom-gen/src/decompose.rs`
+- **Status:** KEPT — implemented mid-clause copula trimming, passive participle relations (`directed by`, `played by`, etc.), and initial period handling. Recall improved from 76.10% to 76.73%, candidate exact stable at 16.04%.
+- **New Modules:** Added `mdl.rs`, `sheaf.rs`, `hopfield.rs` for parameter-free MDL scoring, Cellular Sheaf Laplacian deduction, and Continuous Hopfield attractor memory.
 
 ---
 

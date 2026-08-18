@@ -100,15 +100,16 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
-> - **T1.15 done (negative):** PathHD-style Top-K prune (env-gated off) —
->   pruning candidates based *only* on GHRR PathHD scores to Top-K (K=3) collapsed
->   accuracy to 4.40% (baseline 16.04%), and only recovered to 15.72% at K=50.
->   Pruning based solely on PathHD path scores is lossy for text-decomposed graphs
->   where generic relations like `mentions` or `is_related_to` score poorly in VSA.
-> - **T1.13 done (negative):** MDL/compression tiebreak (env-gated off) —
->   naive regressed −0.31, query-named-excluded neutral. M2 near-tie remains
->   irreducible (LESSONS_LEARNED §1.5). Do NOT re-derive query-overlap
->   tiebreaks.
+> - **T1.19c done (KEPT):** Subject resolution for passive/relative clauses —
+>   implemented mid-clause copula trimming, passive participle relations (`directed by`,
+>   `played by`, `invented by`, etc.), and initial period protection in `decompose.rs`.
+>   Recall improved from 76.10% to 76.73%, candidate exact stable at 16.04%.
+> - **Mathematical AI Pillars Built & Unit Tested:**
+>   - `crates/tle-axiom-gen/src/mdl.rs`: Normalized Compression Distance (NCD) and length-normalized description rate $\mathcal{H}_C(A | Q, E)$.
+>   - `crates/tle-axiom-gen/src/sheaf.rs`: Cellular Sheaf Laplacian & zero-backprop Harmonic Extension ($L_{UU} x_U = - L_{UB} g$).
+>   - `crates/tle-axiom-gen/src/hopfield.rs`: Modern Continuous Hopfield Memory & 1-step attractor recovery.
+> - **T1.15 done (negative):** PathHD-style Top-K prune (env-gated off).
+> - **T1.13 done (negative):** MDL/compression tiebreak (env-gated off).
 > - **T1.12b structured F2 codebook** — blocked/deferred: T1.12 module built +
 >   tested but direct F2 scoring on random-bipolar d=2048 is degenerate
 >   (full-rank). Needs structured codebook; high regression risk.

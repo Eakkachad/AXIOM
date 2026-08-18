@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-08-18 — T1.19c Subject Resolution & Modules `mdl.rs`, `sheaf.rs`, `hopfield.rs` Implementation
+
+**Commits:** code (`decompose.rs`, `engine.rs`, `lib.rs`, `mdl.rs`, `sheaf.rs`, `hopfield.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **T1.19c Subject Resolution for Passive/Relative Clauses (`decompose.rs`):**
+  - Added multi-word passive relation phrases (`directed by`, `played by`, `portrayed by`, `painted by`, `invented by`, `discovered by`, `built by`, `produced by`, `recorded by`, `performed by`).
+  - Added mid-clause copula trimming: splits sentences like *"Jurassic Park is a 1993 film directed by Steven Spielberg"* so the real entity (`Jurassic Park`) is extracted with relation `directed_by` and object `Steven Spielberg` instead of long 9-word descriptive subject fragments rejected by `is_fact_worthy`.
+  - Added protection for abbreviation initials (e.g. `J. K. Rowling`, `Dr.`, `St.`, `U.S.`) to avoid erroneous sentence boundary splitting.
+- **New Mathematical Reasoning Modules:**
+  - `crates/tle-axiom-gen/src/mdl.rs`: Implemented Normalized Compression Distance (NCD) and Length-Normalized Conditional Description Rate $\mathcal{H}_C(A | Q, E)$ via fast Shannon shingle Markov entropy.
+  - `crates/tle-axiom-gen/src/sheaf.rs`: Implemented Cellular Sheaf Laplacian ($\mathcal{L}_{\mathcal{F}} = \delta^T \delta$), Dirichlet Energy, and Zero-Backpropagation Harmonic Extension ($L_{UU} x_U = - L_{UB} g$) via PCG solver.
+  - `crates/tle-axiom-gen/src/hopfield.rs`: Implemented Modern Continuous Hopfield Memory with Log-Sum-Exp energy and 1-step attractor recovery.
+- **Empirical Evaluation on 318-record TriviaQA Bench:**
+  - `exact_accuracy`: 16.04% (stable baseline)
+  - `answer_entity_recall`: **76.73%** (improved from 76.10%)
+  - `strict_recall`: 55.03%
+  - `evidence_answer_recall`: 99.69%
+  - All 90 unit tests pass with 0 failures.
+
+---
+
 ## 2026-08-18 — T1.15 PathHD Top-K Pruning Evaluation
 
 **Commits:** code (`crates/tle-axiom-gen/src/engine.rs`), docs (`docs/PROGRESS_LOG.md`, `docs/ROADMAP.md`, `docs/AGENT_HANDOFF.md`)
