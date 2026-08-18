@@ -180,6 +180,41 @@ impl TwoTierEngine {
         let out_phasor = WhitenedPhasor::from_real_embedding(&retrieved_state);
         self.vocabulary.nearest_token(&out_phasor).map(|(s, _)| s.to_string())
     }
+
+    /// Generates a continuous multi-token sequence autoregressively from a prompt.
+    ///
+    /// Implements sliding context windowing and repetition suppression for fluent multi-sentence generation.
+    pub fn generate_sequence(&mut self, prompt: &[&str], max_tokens: usize) -> Vec<String> {
+        let mut sequence: Vec<String> = prompt.iter().map(|&s| s.to_string()).collect();
+        let window_size = 16;
+        let mut generated_count = 0;
+
+        while generated_count < max_tokens {
+            let start_idx = if sequence.len() > window_size {
+                sequence.len() - window_size
+            } else {
+                0
+            };
+            let context_slice: Vec<&str> = sequence[start_idx..].iter().map(|s| s.as_str()).collect();
+
+            let next_opt = self.generate_step(&context_slice);
+            match next_opt {
+                Some(next_tok) => {
+                    // Check for immediate repetition loop
+                    let recent_len = sequence.len().min(4);
+                    let recent = &sequence[sequence.len() - recent_len..];
+                    if recent.iter().filter(|&w| w == &next_tok).count() >= 2 {
+                        break;
+                    }
+                    sequence.push(next_tok);
+                    generated_count += 1;
+                }
+                None => break,
+            }
+        }
+
+        sequence
+    }
 }
 
 #[cfg(test)]

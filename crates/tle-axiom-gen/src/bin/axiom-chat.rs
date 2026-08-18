@@ -517,6 +517,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("      • Memory Wall Status: Bypassed via Sparse Top-k Product-Key Hashing");
             continue;
         }
+        if let Some(rest) = trimmed.strip_prefix("/twotier_run ") {
+            let model_path = "data/models/real_transmuted_10k.twotier";
+            if let Ok(mut engine) = tle_axiom_gen::two_tier_engine::TwoTierEngine::load_from_file(model_path) {
+                let words: Vec<&str> = rest.split_whitespace().collect();
+                let gen_start = std::time::Instant::now();
+                let seq = engine.generate_sequence(&words, 10);
+                let elapsed = gen_start.elapsed();
+                println!("  [Two-Tier Engine ({:?})]", elapsed);
+                println!("    Generated: {}", seq.join(" -> "));
+            } else {
+                println!("  Model file not found at {}. Build it first with scripts/build_real_scale_model.py", model_path);
+            }
+            continue;
+        }
+        if trimmed == "/twotier_bench" {
+            let model_path = "data/models/real_transmuted_10k.twotier";
+            if let Ok(mut engine) = tle_axiom_gen::two_tier_engine::TwoTierEngine::load_from_file(model_path) {
+                println!("  Running live CPU micro-benchmark (1,000 steps)...");
+                let b_start = std::time::Instant::now();
+                for _ in 0..1_000 {
+                    let _ = engine.generate_step(&["paris"]);
+                }
+                let b_elapsed = b_start.elapsed();
+                let tps = 1000.0 / b_elapsed.as_secs_f64();
+                println!("  [+] 1,000 Steps completed in {:.2?}: {:.1} tokens/sec on CPU", b_elapsed, tps);
+            } else {
+                println!("  Model file not found at {}. Build it first with scripts/build_real_scale_model.py", model_path);
+            }
+            continue;
+        }
 
         // ── conversational handling ────────────────────────────────────────
         if is_greeting(&lower) {

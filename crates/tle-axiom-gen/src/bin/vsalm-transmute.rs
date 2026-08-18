@@ -126,5 +126,21 @@ fn main() {
     println!("     • Average Latency/Token:  {:.2} μs ({:.4} ms)", latency_us, latency_us / 1000.0);
     println!("     • CPU Generation Speed:   {:.1} tokens/sec ⚡", tok_per_sec);
     println!("     • RAM Footprint:          ~2.76 MB (Fits completely in CPU L3 Cache)");
+
+    // 3. Multi-Token Autoregressive Sequence Generation
+    println!("\n  3. Multi-Token Continuous Autoregressive Generation (10-Token Synthesis):");
+    let test_prompts = vec![
+        vec!["paris"],
+        vec!["einstein"],
+        vec!["tchaikovsky"],
+        vec!["dna"],
+        vec!["sun"],
+    ];
+
+    for prompt in test_prompts {
+        let seq = engine.generate_sequence(&prompt, 10);
+        println!("     Prompt: {:<12} -> Generated: {}", prompt.join(" "), seq.join(" -> "));
+    }
+
     println!("================================================================================");
 }
