@@ -24,6 +24,7 @@ pub mod mdl;
 pub mod search;
 pub mod semantic;
 pub mod sheaf;
+pub mod sheaf_layer;
 pub mod templates;
 
 pub use decompose::{DecomposedFact, decompose_sentence, extract_sentence_entities, is_fact_worthy, query_relations};
@@ -31,4 +32,5 @@ pub use engine::{AxiomGen, GenerationResult};
 pub use graph::{KnowledgeGraph, Triple};
 pub use energy::EnergyConfig;
 pub use search::{SearchConfig, ScoredPath};
+pub use sheaf_layer::{RotorType, SheafConfig, SheafContextLayer};
 pub use linearize::Intent;
