@@ -24,6 +24,7 @@ pub mod hopfield;
 pub mod inference;
 pub mod linearize;
 pub mod mdl;
+pub mod model_loader;
 pub mod ring_buffer;
 pub mod search;
 pub mod semantic;

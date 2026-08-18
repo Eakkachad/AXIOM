@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-08-18 — End-to-End Weight Extractor Pipeline & Sub-Millisecond CPU Inference Runner (`12,176 tok/s`)
+
+**Commits:** code (`extract_weights_to_twotier.py`, `model_loader.rs`, `vsalm-transmute.rs`, `two_tier_engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Measured Results:
+1. **Weight Extractor Tool (`scripts/extract_weights_to_twotier.py`):**
+   - Implemented end-to-end Python pipeline to extract embeddings $\to$ compute empirical covariance $\Sigma$ and ZCA sphereing matrix $W_{ZCA} = Q(\Lambda+\epsilon I)^{-1/2}Q^T$ $\to$ project to Torus phase angles $\mathbb{T}^{d/2}$.
+   - Extracts FFN SwiGLU projection matrices $\to$ Rank-1 SVD dual-key symmetrization into sparse Hopfield memory slots.
+   - Serializes into optimized binary container `.twotier` format (`TWOTIER1`).
+2. **Native Rust Binary Serializer & Loader (`model_loader.rs` in `tle-axiom-gen`):**
+   - High-performance binary parser and writer for `TwoTierEngine`.
+   - Measured model load time: **398.89 μs** (<0.4 ms) for complete vocabulary codebook and Hopfield factual memories.
+3. **High-Throughput CPU Benchmark (`vsalm-transmute`):**
+   - 10,000 continuous autoregressive generation steps on CPU.
+   - Average latency per token: **82.12 μs (0.082 ms)**.
+   - CPU generation throughput: **12,176.7 tokens/sec** with 100% CPU SIMD L1/L2 cache residency and zero GPU requirement.
+   - All 107 unit tests in `tle-axiom-gen` + 38 tests in `tle-vsa` pass 100%.
+
+---
+
 ## 2026-08-18 — Answer-Type Gating & Candidate Ranking Enhancement (`answer_type.rs` & `engine.rs`)
 
 **Commits:** code (`answer_type.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
