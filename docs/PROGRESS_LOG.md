@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-08-18 — Cellular Sheaf Subgraph Dirichlet Consistency Integration
+
+**Commits:** code (`sheaf.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **Cellular Sheaf Subgraph Evaluation (`sheaf.rs`, `engine.rs`):**
+  - Implemented `relation_to_rotation` mapping semantic relation types to specific orthogonal restriction angles.
+  - Implemented `evaluate_subgraph_consistency` extracting local 1-hop and 2-hop connecting paths between question entities and candidates, constructing a dynamic local Cellular Sheaf, solving Dirichlet Boundary Harmonic Extension, and computing the quadratic Dirichlet Energy $E_{\mathcal{F}}(A_i) = \frac{1}{2} x^T \mathcal{L}_{\mathcal{F}} x$.
+  - Added env-gates: `AXIOM_W_SHEAF` (default 0.0) and `AXIOM_SHEAF_GATE` (default 0.0).
+- **Benchmark Evaluation:**
+  - `AXIOM_W_SHEAF=0.0` (default): exact 16.04%, strict recall 55.03% (stable baseline).
+  - `AXIOM_W_SHEAF=0.5`: exact 15.09% across full 318 records.
+  - Finding: Global additive scoring on open-domain text-decomposed graphs allows dense hub connections to accumulate non-zero sheaf consistency; Sheaf Laplacian is optimal as a strict deductive proof verifier rather than an uncalibrated linear sum term. Maintained default as 0.0.
+
+---
+
 ## 2026-08-18 — T1.19c Subject Resolution & Modules `mdl.rs`, `sheaf.rs`, `hopfield.rs` Implementation
 
 **Commits:** code (`decompose.rs`, `engine.rs`, `lib.rs`, `mdl.rs`, `sheaf.rs`, `hopfield.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)

@@ -100,6 +100,10 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
+> - **Cellular Sheaf Subgraph Dirichlet Consistency done:** End-to-end integration
+>   in `engine.rs` (`AXIOM_W_SHEAF`, `AXIOM_SHEAF_GATE`, default off) — measures
+>   quadratic Dirichlet Energy $E(x) = \frac{1}{2} x^T \mathcal{L}_{\mathcal{F}} x$
+>   along connecting paths.
 > - **T1.19c done (KEPT):** Subject resolution for passive/relative clauses —
 >   implemented mid-clause copula trimming, passive participle relations (`directed by`,
 >   `played by`, `invented by`, etc.), and initial period protection in `decompose.rs`.

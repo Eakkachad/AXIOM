@@ -388,6 +388,83 @@ fn conjugate_gradient(a: &StalkMatrix, b: &StalkVector, max_iter: usize, tol: f6
     x
 }
 
+/// Deterministically maps a semantic relation to a rotation angle in radians.
+pub fn relation_to_rotation(relation: &str) -> f64 {
+    let lower = relation.to_lowercase();
+    match lower.as_str() {
+        // Location / Spatial hierarchy (π/4)
+        "located_in" | "located_at" | "located_near" | "part_of" | "from" | "capital_of"
+        | "born_in" | "died_in" | "lived_in" => std::f64::consts::PI / 4.0,
+
+        // Temporal / Event progression (π/3)
+        "happened_in" | "took_place_in" | "occurred_in" | "released_in" | "published_in"
+        | "founded_in" | "created_in" => std::f64::consts::PI / 3.0,
+
+        // Creator / Authorship / Agency (π/6)
+        "created_by" | "written_by" | "directed_by" | "composed_by" | "painted_by"
+        | "invented_by" | "discovered_by" | "built_by" | "produced_by" | "written"
+        | "directed" | "composed" | "painted" | "invented" | "discovered" | "built" => {
+            std::f64::consts::PI / 6.0
+        }
+
+        // Kinship / Social connection (5π/12)
+        "child_of" | "married_to" | "has_mother" | "has_father" | "has_parent"
+        | "sister_of" | "brother_of" | "son_of" | "daughter_of" => {
+            5.0 * std::f64::consts::PI / 12.0
+        }
+
+        // Default: deterministic angle based on bytes
+        _ => {
+            let hash: u64 = lower.bytes().fold(5381, |acc, b| ((acc << 5).wrapping_add(acc)).wrapping_add(b as u64));
+            let deg = (hash % 180) as f64 + 10.0;
+            deg * std::f64::consts::PI / 180.0
+        }
+    }
+}
+
+/// Evaluates the consistency of candidate paths connecting query entities to candidate answer.
+/// Returns Dirichlet Energy E(x) >= 0.0. (Lower energy = higher deductive consistency).
+pub fn evaluate_subgraph_consistency(
+    triples: &[(usize, String, usize)],
+    query_nodes: &[usize],
+    _target_node: usize,
+) -> f64 {
+    if triples.is_empty() || query_nodes.is_empty() {
+        return 0.0;
+    }
+
+    let mut node_set = std::collections::HashSet::new();
+    for &(src, _, tgt) in triples {
+        node_set.insert(src);
+        node_set.insert(tgt);
+    }
+    for &q in query_nodes {
+        node_set.insert(q);
+    }
+
+    let mut dims = HashMap::new();
+    for &n in &node_set {
+        dims.insert(n, 2);
+    }
+
+    let mut sheaf = CellularSheaf::new(dims);
+    let id2 = StalkMatrix::identity(2);
+
+    for (edge_idx, &(src, ref rel, tgt)) in triples.iter().enumerate() {
+        let theta = relation_to_rotation(rel);
+        let r_mat = StalkMatrix::rotation_2d(theta);
+        sheaf.add_edge(edge_idx, src, tgt, rel, 2, r_mat, id2.clone());
+    }
+
+    let mut boundary = HashMap::new();
+    for &q in query_nodes {
+        boundary.insert(q, StalkVector(vec![1.0, 0.0]));
+    }
+
+    let solution = sheaf.solve_harmonic_extension(&boundary);
+    sheaf.compute_dirichlet_energy(&solution)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

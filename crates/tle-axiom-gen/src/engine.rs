@@ -664,6 +664,7 @@ impl AxiomGen {
         // T1.18h C1 exclusion-cue flag (computed once per question).
         let w_excl = weight_env("AXIOM_V2_EXCL", 0.0);
         let excl_cue = w_excl > 0.0 && crate::decompose::has_exclusion_cue(query);
+        let w_sheaf = weight_env("AXIOM_W_SHEAF", 0.0);
         // T1.13 MDL differenced tiebreak (env AXIOM_V1_MDL, default off).
         // For each candidate, Δ(e) = shingle_cover(q, name) − shingle_cover(q,
         // facts(e)): how much MORE the query is explained by the entity's
@@ -850,7 +851,46 @@ impl AxiomGen {
             let w_vsa_ns = weight_env("AXIOM_VSA_NOSTRUCT", 0.0);
             let vsa_weight = rel_weight
                 + if w_vsa_ns > 0.0 && conn_avg == 0.0 { w_vsa_ns } else { 0.0 };
-            let score = (conn_avg * w_conn
+            let sheaf_score = if w_sheaf > 0.0 && !query_entities.is_empty() {
+                let mut sheaf_triples = Vec::new();
+                for &q in query_entities {
+                    for t in graph.get_triples_from(q) {
+                        if t.object_id == id {
+                            sheaf_triples.push((q, graph.relation_name(t.relation_id).to_string(), id));
+                        }
+                    }
+                    for t in graph.get_triples_to(q) {
+                        if t.subject_id == id {
+                            sheaf_triples.push((id, graph.relation_name(t.relation_id).to_string(), q));
+                        }
+                    }
+                    // 2-hop expansion
+                    for t1 in graph.get_triples_from(q) {
+                        let m = t1.object_id;
+                        for t2 in graph.get_triples_from(m) {
+                            if t2.object_id == id {
+                                sheaf_triples.push((q, graph.relation_name(t1.relation_id).to_string(), m));
+                                sheaf_triples.push((m, graph.relation_name(t2.relation_id).to_string(), id));
+                            }
+                        }
+                    }
+                }
+                if !sheaf_triples.is_empty() {
+                    let energy = crate::sheaf::evaluate_subgraph_consistency(&sheaf_triples, query_entities, id);
+                    (-energy as f32).exp()
+                } else {
+                    0.0f32
+                }
+            } else {
+                0.0f32
+            };
+            let sheaf_gate = weight_env("AXIOM_SHEAF_GATE", 0.0);
+            let conn_effective = if sheaf_gate > 0.0 && sheaf_score > 0.0 {
+                conn_avg * ((1.0 - sheaf_gate) + sheaf_gate * sheaf_score)
+            } else {
+                conn_avg
+            };
+            let score = (conn_effective * w_conn
                 + role_avg * w_role
                 + hop2_avg * w_hop2
                 + ov_eff * w_ov
@@ -858,7 +898,8 @@ impl AxiomGen {
                 + heur * w_heur
                 + ppr * w_ppr
                 + typed_avg * w_typed_env
-                + pathhd * w_pathhd) * query_penalty;
+                + pathhd * w_pathhd
+                + sheaf_score * w_sheaf) * query_penalty;
             if rrf_mode || conformal_mode {
                 cands.push((id, name.to_string(), conn_avg, role_avg, hop2_avg, ov, rel, heur, ppr, is_query_named));
             } else {
