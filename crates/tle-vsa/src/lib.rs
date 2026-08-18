@@ -28,6 +28,7 @@ pub mod hypervector;
 pub mod ops;
 pub mod phasor;
 pub mod similarity;
+pub mod whitened_phasor;
 
 pub use clifford::{Clifford3D, SyntacticRotorCodebook};
 pub use codebook::Codebook;
@@ -36,6 +37,7 @@ pub use hypervector::HyperVector;
 pub use ops::{bind, bundle, unbind};
 pub use phasor::PhasorVector;
 pub use similarity::{cosine_similarity, dot_product};
+pub use whitened_phasor::{WhitenedPhasor, WhitenedPhasorCodebook, ZcaWhitener};
 
 /// Default dimensionality for hypervectors.
 /// Must be > 10,000 for reliable VSA operations.

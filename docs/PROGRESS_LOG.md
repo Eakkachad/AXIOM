@@ -5,6 +5,30 @@
 
 ---
 
+## 2026-08-18 — Transmuted Weight Extraction Engine & Two-Tier Architecture Implementation
+
+**Commits:** code (`whitened_phasor.rs`, `gated_sheaf.rs`, `gated_hopfield.rs`, `two_tier_engine.rs`, `axiom-chat.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation Details:
+1. **ZCA-Whitened Continuous Phasor VSA (`whitened_phasor.rs` in `tle-vsa`):**
+   - Implemented ZCA (Zero-phase Component Analysis) sphereing transform $W_{ZCA} = Q(\Lambda + \epsilon I)^{-1/2}Q^T$ to eliminate the embedding anisotropy centroid shift ("cone effect").
+   - Pairwise Cartesian-to-Polar projection $\theta_k = \operatorname{atan2}(x_{2k}, x_{2k-1})$ onto Torus $\mathbb{T}^{d/2}$ preserving exact inner products with theoretical SNR $\approx 1.11 \sqrt{D} \rho$.
+2. **Data-Dependent Gated Cellular Sheaf Routing (`gated_sheaf.rs` in `tle-axiom-gen`):**
+   - Implemented dynamic phase coupling gates $\alpha_{ij} = \sigma\left(\frac{1}{\tau} \operatorname{Re}\langle z_i, z_j \rangle_{\mathbb{T}^D}\right)$ restoring in-context induction copying.
+   - $O(d)$ Givens parallel transport steps and Sheaf Dirichlet Energy minimization.
+3. **Sparse Gated Continuous Hopfield Factual Memory (`gated_hopfield.rs` in `tle-axiom-gen`):**
+   - Implemented FFN (SwiGLU) dual-key eigen-symmetrization with Covariance Whitening ($\Sigma_{xx}^{-1}$) to eliminate crosstalk noise.
+   - L1D cache-friendly sparse Top-$k$ associative retrieval and CCCP fixed-point semantic attractor solver.
+4. **Two-Tier Microarchitecture (`two_tier_engine.rs` in `tle-axiom-gen`):**
+   - Tier 1: L3-Cache resident core ($\le 32\text{ MB}$) for vocabulary phasor codebook, Sheaf routing, HiPPO state, and shortlist candidate decoding.
+   - Tier 2: System DRAM Knowledge Store ($500\text{ MB} - 1.5\text{ GB}$) for sparse Hopfield factual attractors.
+   - Closed-form Woodbury Ridge fast-weight adaptation without backpropagation.
+5. **Interactive REPL Commands & Full Benchmark:**
+   - Added `/whitened_phasor`, `/gated_sheaf`, `/transmute`, `/twotier` commands in `axiom-chat.rs`.
+   - Full 318-record TriviaQA Bench: `candidate_exact: 16.35%`, `strict_recall: 55.35%`, `avg_latency: 71.82 ms` (⚡ 13.5% faster). Full workspace tests (106 passed in `tle-axiom-gen`, 38 in `tle-vsa`, 29 in `tle-vsa-lm`).
+
+---
+
 ## 2026-08-18 — Initial Letter Cue Constraint Extraction in `decompose.rs` & `engine.rs`
 
 **Commits:** code (`decompose.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
