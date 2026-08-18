@@ -21,16 +21,20 @@
 //! - Operations are fully deterministic (zero-sampling)
 //! - SNR degrades as 1/√k for k superimposed items
 
+pub mod clifford;
 pub mod codebook;
 pub mod gf2;
 pub mod hypervector;
 pub mod ops;
+pub mod phasor;
 pub mod similarity;
 
+pub use clifford::{Clifford3D, SyntacticRotorCodebook};
 pub use codebook::Codebook;
 pub use gf2::{factorize_bundle, Gf2Mat, LinearCode};
 pub use hypervector::HyperVector;
 pub use ops::{bind, bundle, unbind};
+pub use phasor::PhasorVector;
 pub use similarity::{cosine_similarity, dot_product};
 
 /// Default dimensionality for hypervectors.
