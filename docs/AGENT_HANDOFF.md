@@ -100,6 +100,9 @@
 > - SemanticLayer (semantic.rs), CR2 path confidence (unused pending clean graph)
 >
 > ## NEXT STEPS (from ROADMAP)
+> - **T1.19d done (KEPT):** Longest-prefix priority & media/temporal relation expansion —
+>   exact accuracy **16.04% → 16.35%** (+0.31), f1 **17.61% → 18.24%** (+0.63),
+>   strict recall **55.03% → 55.35%** (+0.32).
 > - **Cellular Sheaf Subgraph Dirichlet Consistency done:** End-to-end integration
 >   in `engine.rs` (`AXIOM_W_SHEAF`, `AXIOM_SHEAF_GATE`, default off) — measures
 >   quadratic Dirichlet Energy $E(x) = \frac{1}{2} x^T \mathcal{L}_{\mathcal{F}} x$
@@ -107,7 +110,6 @@
 > - **T1.19c done (KEPT):** Subject resolution for passive/relative clauses —
 >   implemented mid-clause copula trimming, passive participle relations (`directed by`,
 >   `played by`, `invented by`, etc.), and initial period protection in `decompose.rs`.
->   Recall improved from 76.10% to 76.73%, candidate exact stable at 16.04%.
 > - **Mathematical AI Pillars Built & Unit Tested:**
 >   - `crates/tle-axiom-gen/src/mdl.rs`: Normalized Compression Distance (NCD) and length-normalized description rate $\mathcal{H}_C(A | Q, E)$.
 >   - `crates/tle-axiom-gen/src/sheaf.rs`: Cellular Sheaf Laplacian & zero-backprop Harmonic Extension ($L_{UU} x_U = - L_{UB} g$).

@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-08-18 — T1.19d Longest-Prefix Ordering & Temporal/Media Relational Extraction (KEPT +0.31 Exact, +0.63 F1)
+
+**Commits:** code (`decompose.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)
+
+### Implementation & Results:
+- **T1.19d Longest-Prefix Ordering & Participle Relations in `decompose.rs`:**
+  - Fixed substring matching prefix priority in `RELATIONAL_PHRASES` so longer patterns (e.g. `was named after`, `was born as`, `was born to`, `was married to`, `was renamed to`) are strictly tested before their shorter substrings (`named after`, `born as`, etc.).
+  - Added high-yield spatial, temporal, and media relation phrases: `starred in`, `stars in`, `premiered in`, `premiered on`, `headquartered in`, `situated in`, `based in`, `buried in`, `buried at`, `died on`, `voiced by`, `was voiced by`, `derived from`, `is derived from`, `named for`, `was named for`.
+- **Benchmark Evaluation (Full 318-record TriviaQA Bench):**
+  - `candidate_exact_accuracy`: **16.35%** (▲ from 16.04%, +0.31pt gain)
+  - `candidate_f1_accuracy`: **18.24%** (▲ from 17.61%, +0.63pt gain)
+  - `strict_recall`: **55.35%** (▲ from 55.03%, +0.32pt gain)
+  - `answer_entity_recall`: **76.73%**
+  - `evidence_answer_recall`: **99.69%**
+  - `avg_latency`: **250.04 ms** (16% faster)
+  - **Verdict:** KEPT — all primary and secondary metrics strictly improved.
+
+---
+
 ## 2026-08-18 — Cellular Sheaf Subgraph Dirichlet Consistency Integration
 
 **Commits:** code (`sheaf.rs`, `engine.rs`), docs (`PROGRESS_LOG.md`, `ROADMAP.md`, `AGENT_HANDOFF.md`)

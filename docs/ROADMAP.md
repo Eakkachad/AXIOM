@@ -609,6 +609,12 @@ Goal: candidate 18.87% → 35%+, recall 71.07% → 80%+
 - **Status:** KEPT — implemented mid-clause copula trimming, passive participle relations (`directed by`, `played by`, etc.), and initial period handling. Recall improved from 76.10% to 76.73%, candidate exact stable at 16.04%.
 - **New Modules:** Added `mdl.rs`, `sheaf.rs`, `hopfield.rs` for parameter-free MDL scoring, Cellular Sheaf Laplacian deduction, and Continuous Hopfield attractor memory.
 
+### T1.19d Longest-Prefix Ordering & Temporal/Media Relational Extraction
+- [x] Status: done · Priority: P1 · Effort: 0.5 day · Depends: T1.19c
+- **Goal:** Longest-prefix priority matching and media/temporal relation expansion in `decompose.rs`.
+- **File:** `crates/tle-axiom-gen/src/decompose.rs`
+- **Status:** KEPT — exact accuracy **16.04% → 16.35%** (+0.31), f1 **17.61% → 18.24%** (+0.63), strict recall **55.03% → 55.35%** (+0.32).
+
 ---
 
 ## TRACK 4 — Conversational (Phase B: hybrid chat, 2026-08-12)
