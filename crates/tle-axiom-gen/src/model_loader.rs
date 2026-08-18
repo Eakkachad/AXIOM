@@ -138,12 +138,14 @@ impl TwoTierEngine {
             phasors.push(WhitenedPhasor::new(angles));
         }
 
-        let vocabulary = WhitenedPhasorCodebook {
+        let mut vocabulary = WhitenedPhasorCodebook {
             token_to_id,
             id_to_token,
             phasors,
+            cartesian_cache: Vec::new(),
             whitener: None,
         };
+        vocabulary.rebuild_cartesian_cache();
 
         // 4. Initialize Sheaf Layers
         let mut sheaf_layers = Vec::with_capacity(config.sheaf_layers);

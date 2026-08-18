@@ -301,6 +301,8 @@ pub struct WhitenedPhasorCodebook {
     pub id_to_token: Vec<String>,
     /// Stored phasors per token index.
     pub phasors: Vec<WhitenedPhasor>,
+    /// Pre-computed continuous Cartesian unit coordinates ($N \times 2D$) for SIMD decode.
+    pub cartesian_cache: Vec<f32>,
     /// Optional fitted ZCA Whitener.
     pub whitener: Option<ZcaWhitener>,
 }
@@ -343,28 +345,83 @@ impl WhitenedPhasorCodebook {
             phasors.push(phasor);
         }
 
-        Ok(Self {
+        let mut book = Self {
             token_to_id,
             id_to_token,
             phasors,
+            cartesian_cache: Vec::new(),
             whitener,
-        })
+        };
+        book.rebuild_cartesian_cache();
+        Ok(book)
     }
 
-    /// Finds the nearest token to a given query phasor by maximum Torus similarity.
-    pub fn nearest_token(&self, query: &WhitenedPhasor) -> Option<(&str, f32)> {
-        let mut best_sim = -1.0f32;
-        let mut best_idx = None;
+    /// Rebuilds the flat Cartesian coordinates cache ($x_{2k} = \cos\theta_k, x_{2k+1} = \sin\theta_k$).
+    pub fn rebuild_cartesian_cache(&mut self) {
+        if self.phasors.is_empty() {
+            self.cartesian_cache.clear();
+            return;
+        }
+        let d = self.phasors[0].dim() * 2;
+        let n = self.phasors.len();
+        let mut cache = vec![0.0f32; n * d];
+        let norm_factor = 1.0 / (self.phasors[0].dim() as f32).sqrt().max(1e-6);
 
-        for (idx, p) in self.phasors.iter().enumerate() {
-            let sim = query.similarity(p);
-            if sim > best_sim {
-                best_sim = sim;
-                best_idx = Some(idx);
+        for (i, p) in self.phasors.iter().enumerate() {
+            let offset = i * d;
+            for (k, &th) in p.angles.iter().enumerate() {
+                cache[offset + 2 * k] = th.cos() * norm_factor;
+                cache[offset + 2 * k + 1] = th.sin() * norm_factor;
             }
         }
+        self.cartesian_cache = cache;
+    }
 
-        best_idx.map(|idx| (self.id_to_token[idx].as_str(), best_sim))
+    /// Finds the nearest token to a given query phasor by maximum SIMD Cartesian inner product.
+    pub fn nearest_token(&self, query: &WhitenedPhasor) -> Option<(&str, f32)> {
+        if self.phasors.is_empty() {
+            return None;
+        }
+        let dim_pairs = query.dim();
+        let d = dim_pairs * 2;
+        let norm_factor = 1.0 / (dim_pairs as f32).sqrt().max(1e-6);
+
+        // Pre-compute query unit vector
+        let mut q_cart = vec![0.0f32; d];
+        for (k, &th) in query.angles.iter().enumerate() {
+            q_cart[2 * k] = th.cos() * norm_factor;
+            q_cart[2 * k + 1] = th.sin() * norm_factor;
+        }
+
+        if !self.cartesian_cache.is_empty() && self.cartesian_cache.len() == self.phasors.len() * d {
+            let mut best_sim = -1.0f32;
+            let mut best_idx = None;
+
+            for i in 0..self.phasors.len() {
+                let offset = i * d;
+                let chunk = &self.cartesian_cache[offset..offset + d];
+                let mut dot = 0.0f32;
+                for k in 0..d {
+                    dot += q_cart[k] * chunk[k];
+                }
+                if dot > best_sim {
+                    best_sim = dot;
+                    best_idx = Some(i);
+                }
+            }
+            best_idx.map(|idx| (self.id_to_token[idx].as_str(), best_sim))
+        } else {
+            let mut best_sim = -1.0f32;
+            let mut best_idx = None;
+            for (idx, p) in self.phasors.iter().enumerate() {
+                let sim = query.similarity(p);
+                if sim > best_sim {
+                    best_sim = sim;
+                    best_idx = Some(idx);
+                }
+            }
+            best_idx.map(|idx| (self.id_to_token[idx].as_str(), best_sim))
+        }
     }
 }
 

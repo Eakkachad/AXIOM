@@ -158,14 +158,23 @@ impl TwoTierEngine {
             stalks = layer.diffuse_step(&stalks);
         }
 
-        // 3. Query Tier 2 Hopfield Memory with aggregated state
-        let last_stalk = &stalks[n - 1];
-        let mut expanded_query = vec![0.0f32; self.config.dim];
-        for k in 0..self.config.stalk_dim.min(self.config.dim) {
-            expanded_query[k] = last_stalk[k];
+        // 3. Query Tier 2 Hopfield Memory with unit-normalized Cartesian reconstruction
+        let last_p = &context_phasors[n - 1];
+        let mut query_vec = vec![0.0f32; self.config.dim];
+        for k in 0..last_p.dim() {
+            if 2 * k + 1 < self.config.dim {
+                query_vec[2 * k] = last_p.angles[k].cos();
+                query_vec[2 * k + 1] = last_p.angles[k].sin();
+            }
+        }
+        let norm_scale = 1.0 / (self.config.dim as f32 / 2.0).sqrt().max(1e-6);
+        for v in &mut query_vec {
+            *v *= norm_scale;
         }
 
-        let retrieved_state = self.factual_memory.retrieve_topk(&expanded_query, 4);
+        // Set sharp retrieval inverse temperature beta
+        self.factual_memory.beta = 16.0;
+        let retrieved_state = self.factual_memory.retrieve_topk(&query_vec, 1);
 
         // 4. Decode next token via nearest neighbor in Tier 1 Phasor Codebook
         let out_phasor = WhitenedPhasor::from_real_embedding(&retrieved_state);

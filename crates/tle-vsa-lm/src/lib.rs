@@ -401,6 +401,22 @@ impl VsaLm {
         let trigram_signal = self.trigram_prediction(context);
         let knowledge_context: Vec<String> = context.iter().rev().take(self.config.repeat_window * 3).cloned().collect();
         let knowledge = self.knowledge.candidates(&knowledge_context);
+        let w_hippo = std::env::var("AXIOM_LM_W_HIPPO")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(0.0);
+        let hippo_signal = if w_hippo > 0.0 && !context_ids.is_empty() {
+            let mut hippo = crate::hippo::HippoLegSMemory::new(4, self.config.dim, 0.1);
+            for &cid in &context_ids {
+                if let Some(v) = self.vocab.vector_by_id(cid) {
+                    hippo.update_step(v.as_slice());
+                }
+            }
+            let summary = hippo.reconstruct_at(1.0);
+            Some(tle_vsa::HyperVector::new(summary))
+        } else {
+            None
+        };
 
         let mut candidates: Vec<DecodedToken> = shortlist
             .iter()
@@ -437,9 +453,14 @@ impl VsaLm {
                 };
                 let know_c = knowledge.iter().find(|(w, _)| w == &word)
                     .map(|(_, b)| self.config.w_knowledge * b).unwrap_or(0.0);
+                let hippo_c = if let Some(ref sig) = hippo_signal {
+                    w_hippo * tle_vsa::cosine_similarity(sig, self.vocab.vector_by_id(id).unwrap())
+                } else {
+                    0.0
+                };
                 let score = match std::env::var("AXIOM_LM_FUSE").as_deref() {
-                    Ok("max") => tba_c.max(tri_c).max(eng_c).max(kn5_c).max(know_c),
-                    _ => tba_c + tri_c + eng_c + kn5_c + know_c,
+                    Ok("max") => tba_c.max(tri_c).max(eng_c).max(kn5_c).max(know_c).max(hippo_c),
+                    _ => tba_c + tri_c + eng_c + kn5_c + know_c + hippo_c,
                 };
                 DecodedToken { id, word, similarity: score }
             })
@@ -459,6 +480,9 @@ impl VsaLm {
                     }
                     if let Some((_, boost)) = knowledge.iter().find(|(w, _)| w == &word) {
                         score += self.config.w_knowledge * boost;
+                    }
+                    if let Some(ref sig) = hippo_signal {
+                        score += w_hippo * tle_vsa::cosine_similarity(sig, self.vocab.vector_by_id(id).unwrap());
                     }
                     DecodedToken { id, word, similarity: score }
                 }).collect();
